@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -28,7 +30,9 @@ from fanic.paths import DATA_ROOT
 from fanic.repository import get_work, list_work_chapters, list_work_page_rows
 
 _UPLOAD_STAGE_DIR = DATA_ROOT / "upload_staging"
+_UPLOAD_JOB_DIR = DATA_ROOT / "upload_jobs"
 _UPLOAD_TTL_SECONDS = 60 * 60
+_INGEST_WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix="fanic-ingest")
 
 
 def _csv(value: str) -> list[str]:
@@ -44,6 +48,10 @@ def _has_selected_file(upload: object | None) -> bool:
 
 def _ensure_stage_dir() -> None:
     _UPLOAD_STAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _ensure_job_dir() -> None:
+    _UPLOAD_JOB_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _cleanup_stale_uploads(now: float) -> None:
@@ -79,6 +87,53 @@ def _path_for_token(token: str) -> Path | None:
         return None
     path = _UPLOAD_STAGE_DIR / f"{token}.cbz"
     return path if path.exists() else None
+
+
+def _process_queued_ingest(
+    cbz_path: Path,
+    metadata_path: Path,
+    uploader_username: str,
+    job_dir: Path,
+) -> None:
+    try:
+        _ = ingest_cbz(cbz_path, metadata_path, uploader_username=uploader_username)
+    finally:
+        shutil.rmtree(job_dir, ignore_errors=True)
+
+
+def _enqueue_ingest_job(
+    *,
+    cbz_upload,
+    staged_path: Path | None,
+    metadata: dict[str, object],
+    uploader_username: str,
+) -> str:
+    _ensure_job_dir()
+    job_id = _new_upload_token()
+    job_dir = _UPLOAD_JOB_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=False)
+
+    cbz_path = job_dir / "upload.cbz"
+    metadata_path = job_dir / "metadata.json"
+
+    if staged_path is not None:
+        _ = shutil.copy2(staged_path, cbz_path)
+    else:
+        cbz_upload.save(cbz_path)
+
+    _ = metadata_path.write_text(
+        json.dumps(metadata, ensure_ascii=True),
+        encoding="utf-8",
+    )
+
+    _INGEST_WORKERS.submit(
+        _process_queued_ingest,
+        cbz_path,
+        metadata_path,
+        uploader_username,
+        job_dir,
+    )
+    return job_id
 
 
 def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
@@ -242,25 +297,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
 
         try:
-            with TemporaryDirectory() as temp_dir:
-                # If a staged upload token exists, always use it for ingest.
-                # This avoids browser file-input quirks overriding the staged CBZ.
-                if staged_path is not None:
-                    cbz_path = staged_path
-                else:
-                    if cbz_upload is None:
-                        raise ValueError("Upload token is missing or expired")
-                    cbz_path = (
-                        Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
-                    )
-                    cbz_upload.save(cbz_path)
+            if staged_path is None and cbz_upload is None:
+                raise ValueError("Upload token is missing or expired")
 
-                metadata_path = Path(temp_dir) / "metadata.json"
-                _ = metadata_path.write_text(
-                    json.dumps(metadata, ensure_ascii=True),
-                    encoding="utf-8",
-                )
-                result = ingest_cbz(cbz_path, metadata_path, uploader_username=username)
+            job_id = _enqueue_ingest_job(
+                cbz_upload=cbz_upload,
+                staged_path=staged_path,
+                metadata=metadata,
+                uploader_username=username,
+            )
 
             if staged_path is not None:
                 try:
@@ -274,19 +319,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 metadata=metadata,
                 show_metadata_form=True,
                 upload_token="",
-                ingest_status=(
-                    "Ingest complete."
-                    if not bool(result.get("rating_auto_elevated"))
-                    else (
-                        "Ingest complete. Rating auto-updated from "
-                        f"{result.get('rating_before')} to {result.get('rating_after')} based on moderation."
-                    )
-                ),
+                ingest_status="Comic queued for processing. It will be added as soon as it finishes processing.",
                 ingest_status_kind="success",
                 result_payload={
                     "ok": True,
+                    "queued": True,
+                    "job_id": job_id,
                     "uploaded_by": username,
-                    "result": result,
                 },
             )
         except Exception as exc:

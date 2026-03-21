@@ -355,6 +355,25 @@ a {
   display: block;
 }
 
+.upload-progress {
+  margin: 0.6rem 0 0.35rem;
+  display: none;
+  gap: 0.35rem;
+}
+
+.upload-progress.is-visible {
+  display: grid;
+}
+
+.upload-progress[hidden] {
+  display: none !important;
+}
+
+.upload-progress progress {
+  width: 100%;
+  height: 0.85rem;
+}
+
 .upload-form button {
   background: var(--accent);
   color: #fff;

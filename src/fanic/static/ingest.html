@@ -62,6 +62,12 @@
 
           <button id="loadMetadataBtn" type="submit" name="action" value="load-metadata">Load metadata from ComicInfo.xml</button>
 
+          <div id="uploadProgressWrap" class="upload-progress" hidden>
+            <label for="uploadProgressBar">Upload progress</label>
+            <progress id="uploadProgressBar" max="100" value="0"></progress>
+            <p id="uploadProgressText" class="profile-meta">Starting upload...</p>
+          </div>
+
           <section id="metadataFormCard" class="card info-card" __METADATA_FORM_HIDDEN_ATTR__>
             <h4>Metadata Entry</h4>
             <label for="metaTitle">Title</label>
@@ -196,5 +202,6 @@
       </section>
     </main>
     <script src="/static/user-menu.js"></script>
+    <script src="/static/ingest-upload-progress.js"></script>
   </body>
 </html>
