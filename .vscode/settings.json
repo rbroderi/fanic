@@ -1,0 +1,11 @@
+{
+    "python.analysis.extraPaths": [
+        "src"
+    ],
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    "mypy-type-checker.args": [
+        "--python-executable",
+        "${workspaceFolder}/.venv/Scripts/python.exe"
+    ],
+    "python.analysis.typeCheckingMode": "off"
+}
