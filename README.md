@@ -1,6 +1,6 @@
-# CO3: Fan Comic Archive MVP
+# FANIC: Fan Archive Nexus for Illustrated Comics
 
-This project is a starter implementation of an AO3-style fan comic archive:
+This project is a starter implementation of FANIC (Fan Archive Nexus for Illustrated Comics):
 
 - CBZ is the source artifact.
 - Pages are extracted server-side for fast browser delivery.
@@ -19,19 +19,19 @@ uv sync
 2. Initialize the database.
 
 ```powershell
-uv run co3 init-db
+uv run fanic init-db
 ```
 
 3. Ingest a CBZ.
 
 ```powershell
-uv run co3 ingest C:\path\to\comic.cbz --metadata C:\path\to\metadata.json
+uv run fanic ingest C:\path\to\comic.cbz --metadata C:\path\to\metadata.json
 ```
 
 4. Run the site.
 
 ```powershell
-uv run co3 serve --host 127.0.0.1 --port 8000
+uv run fanic serve --host 127.0.0.1 --port 8000
 ```
 
 Open http://127.0.0.1:8000.
@@ -40,7 +40,7 @@ Open http://127.0.0.1:8000.
 
 You can provide metadata either:
 
-- as `comic.json` or `metadata.json` inside the CBZ, or
+- via `ComicInfo.xml` inside the CBZ, or
 - as a separate JSON file passed to `--metadata`.
 
 Example metadata:
@@ -69,22 +69,21 @@ Example metadata:
 
 ## Storage Layout
 
-By default, data is stored under `src/co3/storage`:
+By default, data is stored under `src/fanic/storage`:
 
 ```text
 storage/
-	co3.db
+	fanic.db
 	cbz/
 		<work_id>.cbz
 	works/
 		<work_id>/
-			manifest.json
-			metadata.json
+			metadata.toml
 			pages/
 			thumbs/
 ```
 
-Set `CO3_DATA_DIR` to override this location.
+Set `FANIC_DATA_DIR` to override this location.
 
 ## API Surface (MVP)
 

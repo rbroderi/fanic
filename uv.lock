@@ -60,31 +60,6 @@ wheels = [
 ]
 
 [[package]]
-name = "co3"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "authlib" },
-    { name = "cylinder" },
-    { name = "pillow" },
-    { name = "pillow-avif-plugin" },
-    { name = "python-dotenv" },
-    { name = "rust-just" },
-    { name = "waitress" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "authlib", specifier = ">=1.3.0" },
-    { name = "cylinder", specifier = ">=0.1.0" },
-    { name = "pillow", specifier = ">=11.3.0" },
-    { name = "pillow-avif-plugin", specifier = ">=1.4.6" },
-    { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "rust-just", specifier = ">=1.47.1" },
-    { name = "waitress", specifier = ">=3.0.0" },
-]
-
-[[package]]
 name = "cryptography"
 version = "46.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -147,6 +122,33 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fd/2d/a36fc2544f8ce2c56213c2495770db7b1f6135aa98c25083d6caddbc16c9/cylinder-0.1.4.tar.gz", hash = "sha256:1f972402effd57b265b50933143f4ad31658c090572b7e015308dcc1504323a9", size = 10061 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/d2/7d7873fc9b992f0dfed0ff58d290cf356acd641c1f09e952354d4c4296c9/cylinder-0.1.4-py3-none-any.whl", hash = "sha256:7dc124698dd907670f75c6f15684182bf46732a34d0c65f3935f5586378aed62", size = 9481 },
+]
+
+[[package]]
+name = "fanic"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "authlib" },
+    { name = "cylinder" },
+    { name = "pillow" },
+    { name = "pillow-avif-plugin" },
+    { name = "python-dotenv" },
+    { name = "rust-just" },
+    { name = "tomli-w" },
+    { name = "waitress" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "authlib", specifier = ">=1.3.0" },
+    { name = "cylinder", specifier = ">=0.1.0" },
+    { name = "pillow", specifier = ">=11.3.0" },
+    { name = "pillow-avif-plugin", specifier = ">=1.4.6" },
+    { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "rust-just", specifier = ">=1.47.1" },
+    { name = "tomli-w", specifier = ">=1.2.0" },
+    { name = "waitress", specifier = ">=3.0.0" },
 ]
 
 [[package]]
@@ -341,6 +343,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7e/7d/721e517b92129d02cfcd22282e7b0ec04e9e8fc238ad02e2b3c19380d071/rust_just-1.47.1-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:e09f482daac84bfbdfdef70df67a47684b9f145e33e481820c32a493defc76ef", size = 1906775 },
     { url = "https://files.pythonhosted.org/packages/f7/98/fa18ba2ee26b53553ec388cde1db4b17a9bca2d566f7e478ff289639addf/rust_just-1.47.1-py3-none-win32.whl", hash = "sha256:f58693c9f12b3f512a5890ad0dcf5d5549dda7d9d6982472ab183c2ef5e3ea5a", size = 1639490 },
     { url = "https://files.pythonhosted.org/packages/72/cb/1bc3ead533eca647d7099126f60b26d2e950752b0f06648d48c19889d367/rust_just-1.47.1-py3-none-win_amd64.whl", hash = "sha256:28186a40b2681802826dafb89e43af11c72ff6df80ff3f531cf82ffdf9501e2b", size = 1810402 },
+]
+
+[[package]]
+name = "tomli-w"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675 },
 ]
 
 [[package]]

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FANIC Profile</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            <a href="/">Browse</a>
+            <a href="/ingest">Upload comic</a>
+            <a href="/profile" aria-current="page">Profile</a>
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card profile-card">
+        <h2>Your Profile</h2>
+        <p class="profile-meta">This page shows your current FANIC session state.</p>
+        <p id="profileStatus" class="profile-status __PROFILE_STATUS_CLASS__">__PROFILE_STATUS__</p>
+        <p id="profileDetails">__PROFILE_DETAILS__</p>
+        <form class="profile-preferences" method="post" action="/profile" __PROFILE_PREFS_HIDDEN_ATTR__>
+          <h3>Reading Preferences</h3>
+          <p class="profile-meta">Choose what content appears while browsing and reading.</p>
+          <label class="checkbox-row" for="viewExplicitRated">
+            <input id="viewExplicitRated" name="view_explicit_rated" type="checkbox" __PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__ />
+            <span>View explicit rated comics</span>
+          </label>
+          <button type="submit">Save preferences</button>
+          <p class="status-text __PROFILE_PREF_STATUS_CLASS__" __PROFILE_PREF_STATUS_HIDDEN_ATTR__>__PROFILE_PREF_STATUS__</p>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/user-menu.js"></script>
+  </body>
+</html>

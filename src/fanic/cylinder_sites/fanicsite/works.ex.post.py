@@ -1,0 +1,340 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from fanic.cylinder_sites.common import (
+    ADMIN_USERNAME,
+    RequestLike,
+    ResponseLike,
+    current_user,
+    route_tail,
+    text_error,
+)
+from fanic.ingest import (
+    editor_add_chapter,
+    editor_delete_chapter,
+    editor_delete_page,
+    editor_move_page,
+    editor_reorder_gallery,
+    editor_replace_page_image,
+    editor_update_chapter,
+    ingest_editor_page,
+)
+from fanic.repository import (
+    add_work_comment,
+    add_work_kudo,
+    can_view_work,
+    delete_work,
+    get_work,
+    update_work_metadata,
+)
+
+
+def _csv(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _has_selected_file(upload: object | None) -> bool:
+    if upload is None:
+        return False
+    filename = getattr(upload, "filename", None)
+    return isinstance(filename, str) and bool(filename.strip())
+
+
+def _redirect(response: ResponseLike, location: str) -> ResponseLike:
+    response.status_code = 303
+    response.content_type = "text/plain; charset=utf-8"
+    response.headers["Location"] = location
+    response.set_data(f"See Other: {location}")
+    return response
+
+
+def _can_edit_work(username: str | None, uploader_username: str) -> bool:
+    return bool(username) and (
+        username == uploader_username or username == ADMIN_USERNAME
+    )
+
+
+def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+    tail = route_tail(request, ["works"])
+    if tail is None or len(tail) != 2:
+        return text_error(response, "Not found", 404)
+
+    work_id = tail[0]
+    action = tail[1]
+    work = get_work(work_id)
+    if not work:
+        return text_error(response, "Work not found", 404)
+
+    username = current_user(request)
+
+    if action == "delete":
+        if username != ADMIN_USERNAME:
+            return text_error(response, "Forbidden", 403)
+        _ = delete_work(work_id)
+        return _redirect(response, "/")
+
+    if not can_view_work(username, work):
+        return text_error(response, "Work not found", 404)
+
+    if action == "kudos":
+        if not username:
+            return _redirect(response, f"/works/{work_id}?msg=login-required")
+        inserted = add_work_kudo(work_id, username)
+        return _redirect(
+            response,
+            f"/works/{work_id}?msg={'kudos-saved' if inserted else 'already-kudoed'}",
+        )
+
+    if action == "comments":
+        if not username:
+            return _redirect(response, f"/works/{work_id}?msg=login-required")
+
+        body = request.form.get("comment_body", "").strip()
+        if not body:
+            return _redirect(response, f"/works/{work_id}?msg=comment-empty")
+
+        chapter_raw = request.form.get("chapter_number", "").strip()
+        chapter_number: int | None
+        if chapter_raw:
+            try:
+                chapter_number = int(chapter_raw)
+            except ValueError:
+                return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
+            max_chapter = int(work.get("page_count") or 0)
+            if chapter_number < 1 or chapter_number > max_chapter:
+                return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
+        else:
+            chapter_number = None
+
+        add_work_comment(work_id, username, body, chapter_number=chapter_number)
+        return _redirect(response, f"/works/{work_id}?msg=comment-saved")
+
+    if action != "edit":
+        return text_error(response, "Not found", 404)
+
+    uploader = str(work.get("uploader_username") or "")
+    if not _can_edit_work(username, uploader):
+        return text_error(response, "Forbidden", 403)
+
+    assert username is not None
+    edit_action = request.form.get("edit_action", "").strip()
+
+    if edit_action == "editor-add-page":
+        raw_upload = request.files.get("page_image")
+        page_upload = raw_upload if _has_selected_file(raw_upload) else None
+        if page_upload is None:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
+
+        editor_metadata: dict[str, object] = {
+            "title": str(work.get("title", "Untitled")),
+            "summary": str(work.get("summary", "")),
+            "rating": str(work.get("rating", "Not Rated")),
+            "status": str(work.get("status", "in_progress")),
+            "language": str(work.get("language", "en")),
+        }
+
+        try:
+            insert_after_page_index: int | None = None
+            insert_after_raw = request.form.get("insert_after_page_index", "").strip()
+            if insert_after_raw:
+                parsed = int(insert_after_raw)
+                if parsed > 0:
+                    insert_after_page_index = parsed
+
+            with TemporaryDirectory() as temp_dir:
+                page_path = (
+                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                )
+                page_upload.save(page_path)
+                result = ingest_editor_page(
+                    image_path=page_path,
+                    metadata=editor_metadata,
+                    uploader_username=username,
+                    work_id=work_id,
+                    insert_after_page_index=insert_after_page_index,
+                )
+            msg = (
+                "page-added-rating-elevated"
+                if bool(result.get("rating_auto_elevated"))
+                else "page-added"
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+        except ValueError as exc:
+            if "Blocked image" in str(exc):
+                return _redirect(response, f"/works/{work_id}/edit?msg=page-blocked")
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
+
+    if edit_action == "editor-replace-page":
+        raw_upload = request.files.get("page_image")
+        page_upload = raw_upload if _has_selected_file(raw_upload) else None
+        if page_upload is None:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
+        try:
+            page_index = int(request.form.get("page_index", "0"))
+            with TemporaryDirectory() as temp_dir:
+                page_path = (
+                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                )
+                page_upload.save(page_path)
+                result = editor_replace_page_image(
+                    image_path=page_path,
+                    work_id=work_id,
+                    page_index=page_index,
+                    uploader_username=username,
+                )
+            msg = (
+                "page-replaced-rating-elevated"
+                if bool(result.get("rating_auto_elevated"))
+                else "page-replaced"
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+        except ValueError as exc:
+            if "Blocked image" in str(exc):
+                return _redirect(response, f"/works/{work_id}/edit?msg=page-blocked")
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
+
+    if edit_action == "editor-delete-page":
+        try:
+            page_index = int(request.form.get("page_index", "0"))
+            _ = editor_delete_page(
+                work_id=work_id,
+                page_index=page_index,
+                uploader_username=username,
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-deleted")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-delete-failed")
+
+    if edit_action == "editor-move-page":
+        try:
+            from_index = int(request.form.get("from_index", "0"))
+            to_index = int(request.form.get("to_index", "0"))
+            _ = editor_move_page(
+                work_id=work_id,
+                from_index=from_index,
+                to_index=to_index,
+                uploader_username=username,
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-moved")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-move-failed")
+
+    if edit_action == "editor-reorder-gallery":
+        try:
+            ordered_filenames_raw = request.form.get("ordered_filenames_json", "")
+            chapter_members_raw = request.form.get("chapter_members_json", "{}")
+
+            ordered_filenames = json.loads(ordered_filenames_raw)
+            chapter_members = json.loads(chapter_members_raw)
+            if not isinstance(ordered_filenames, list):
+                raise ValueError("Invalid ordered_filenames_json")
+            if not isinstance(chapter_members, dict):
+                raise ValueError("Invalid chapter_members_json")
+
+            _ = editor_reorder_gallery(
+                work_id=work_id,
+                ordered_filenames=[str(name) for name in ordered_filenames],
+                chapter_members={
+                    str(chapter_id): [str(name) for name in members]
+                    for chapter_id, members in chapter_members.items()
+                    if isinstance(members, list)
+                },
+                uploader_username=username,
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-reordered")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=page-reorder-failed")
+
+    if edit_action == "editor-add-chapter":
+        try:
+            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            start_page = int(request.form.get("chapter_start_page", "0"))
+            end_page = int(request.form.get("chapter_end_page", "0"))
+            _ = editor_add_chapter(
+                work_id=work_id,
+                title=title,
+                start_page=start_page,
+                end_page=end_page,
+                uploader_username=username,
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-added")
+        except Exception:
+            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-add-failed")
+
+    if edit_action == "editor-update-chapter":
+        try:
+            chapter_id = int(request.form.get("chapter_id", "0"))
+            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            start_page = int(request.form.get("chapter_start_page", "0"))
+            end_page = int(request.form.get("chapter_end_page", "0"))
+            updated = editor_update_chapter(
+                work_id=work_id,
+                chapter_id=chapter_id,
+                title=title,
+                start_page=start_page,
+                end_page=end_page,
+                uploader_username=username,
+            )
+            msg = "chapter-updated" if updated else "chapter-update-failed"
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+        except Exception:
+            return _redirect(
+                response, f"/works/{work_id}/edit?msg=chapter-update-failed"
+            )
+
+    if edit_action == "editor-delete-chapter":
+        try:
+            chapter_id = int(request.form.get("chapter_id", "0"))
+            deleted = editor_delete_chapter(
+                work_id=work_id,
+                chapter_id=chapter_id,
+                uploader_username=username,
+            )
+            msg = "chapter-deleted" if deleted else "chapter-delete-failed"
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+        except Exception:
+            return _redirect(
+                response, f"/works/{work_id}/edit?msg=chapter-delete-failed"
+            )
+
+    series_index_raw = request.form.get("series_index", "").strip()
+    try:
+        series_index = int(series_index_raw) if series_index_raw else None
+    except ValueError:
+        series_index = None
+
+    status = request.form.get("status", "").strip()
+    if status not in {"in_progress", "complete"}:
+        status = "in_progress"
+
+    metadata: dict[str, object] = {
+        "title": request.form.get("title", "").strip()
+        or str(work.get("title", "Untitled")),
+        "summary": request.form.get("summary", "").strip(),
+        "rating": request.form.get("rating", "").strip() or "Not Rated",
+        "warnings": _csv(request.form.get("warnings", "")),
+        "status": status,
+        "language": request.form.get("language", "").strip() or "en",
+        "series": request.form.get("series", "").strip(),
+        "series_index": series_index,
+        "published_at": request.form.get("published_at", "").strip(),
+        "fandoms": _csv(request.form.get("fandoms", "")),
+        "relationships": _csv(request.form.get("relationships", "")),
+        "characters": _csv(request.form.get("characters", "")),
+        "freeform_tags": _csv(request.form.get("freeform_tags", "")),
+    }
+
+    update_work_metadata(
+        work_id,
+        metadata,
+        editor_username=username,
+        edited_by_admin=username == ADMIN_USERNAME,
+    )
+    return _redirect(response, f"/works/{work_id}/edit?msg=saved")

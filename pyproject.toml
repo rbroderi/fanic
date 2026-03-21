@@ -1,7 +1,7 @@
 [project]
-name = "co3"
+name = "fanic"
 version = "0.1.0"
-description = "AO3-inspired fan comic archive with CBZ ingest and browser reader"
+description = "FANIC: Fan Archive Nexus for Illustrated Comics"
 readme = "README.md"
 authors = [
     { name = "rbroderi", email = "richard.broderick@gmail.com" }
@@ -15,7 +15,11 @@ dependencies = [
     "pillow>=11.3.0",
     "rust-just>=1.47.1",
     "waitress>=3.0.0",
+    "tomli-w>=1.2.0",
 ]
+
+[project.scripts]
+fanic = "fanic.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

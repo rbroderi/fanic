@@ -1,0 +1,130 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS works (
+    id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    rating TEXT NOT NULL DEFAULT 'Not Rated',
+    warnings TEXT NOT NULL DEFAULT 'No Archive Warnings Apply',
+    language TEXT NOT NULL DEFAULT 'en',
+    status TEXT NOT NULL DEFAULT 'in_progress',
+    creators TEXT NOT NULL DEFAULT '[]',
+    series_name TEXT,
+    series_index INTEGER,
+    published_at TEXT,
+    cover_page_index INTEGER NOT NULL DEFAULT 1,
+    page_count INTEGER NOT NULL DEFAULT 0,
+    cbz_path TEXT NOT NULL,
+    uploader_username TEXT,
+    last_metadata_editor TEXT,
+    last_metadata_edited_at TEXT,
+    last_metadata_edited_by_admin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN (
+        'rating',
+        'archive_warning',
+        'fandom',
+        'category',
+        'relationship',
+        'character',
+        'freeform'
+    ))
+);
+
+CREATE TABLE IF NOT EXISTS tag_synonyms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias_slug TEXT NOT NULL UNIQUE,
+    alias_name TEXT NOT NULL,
+    canonical_tag_id INTEGER NOT NULL,
+    FOREIGN KEY (canonical_tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS work_tags (
+    work_id TEXT NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (work_id, tag_id),
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    image_filename TEXT NOT NULL,
+    thumb_filename TEXT,
+    width INTEGER,
+    height INTEGER,
+    UNIQUE (work_id, page_index),
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reading_progress (
+    work_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (work_id, user_id),
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    username TEXT PRIMARY KEY,
+    view_explicit_rated INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS work_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    chapter_number INTEGER,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS work_kudos (
+    work_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (work_id, username),
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS work_chapters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id TEXT NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    start_page INTEGER NOT NULL,
+    end_page INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE,
+    UNIQUE (work_id, chapter_index)
+);
+
+CREATE TABLE IF NOT EXISTS work_chapter_pages (
+    chapter_id INTEGER NOT NULL,
+    page_image_filename TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (chapter_id, page_image_filename),
+    FOREIGN KEY (chapter_id) REFERENCES work_chapters(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_works_slug ON works(slug);
+CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type);
+CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
+CREATE INDEX IF NOT EXISTS idx_work_tags_tag ON work_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
+CREATE INDEX IF NOT EXISTS idx_work_comments_work ON work_comments(work_id);
+CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
+CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Edit Metadata</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            <a href="/">Browse</a>
+            <a href="/ingest">Upload comic</a>
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card info-card">
+        <h2>Edit Metadata</h2>
+        <p><a href="/works/__WORK_ID__">Back to comic page</a></p>
+      </section>
+
+      <section class="card info-card">
+        <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+          <label for="title">Title</label>
+          <input id="title" name="title" type="text" value="__EDIT_TITLE__" required />
+
+          <label for="summary">Summary</label>
+          <textarea id="summary" name="summary" rows="4">__EDIT_SUMMARY__</textarea>
+
+          <label for="rating">Rating</label>
+          <select id="rating" name="rating">
+            __EDIT_RATING_OPTIONS_HTML__
+          </select>
+
+          <label for="warnings">Warnings (comma-separated)</label>
+          <input id="warnings" name="warnings" type="text" value="__EDIT_WARNINGS__" list="warningSuggestions" />
+
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="in_progress" __STATUS_IN_PROGRESS_SELECTED__>In progress</option>
+            <option value="complete" __STATUS_COMPLETE_SELECTED__>Complete</option>
+          </select>
+
+          <label for="language">Language (ISO)</label>
+          <input id="language" name="language" type="text" value="__EDIT_LANGUAGE__" />
+
+          <label for="series">Series</label>
+          <input id="series" name="series" type="text" value="__EDIT_SERIES__" />
+
+          <label for="series_index">Series Index</label>
+          <input id="series_index" name="series_index" type="text" value="__EDIT_SERIES_INDEX__" />
+
+          <label for="published_at">Published Date</label>
+          <input id="published_at" name="published_at" type="date" value="__EDIT_PUBLISHED_AT__" />
+
+          <label for="fandoms">Fandoms (comma-separated)</label>
+          <input id="fandoms" name="fandoms" type="text" value="__EDIT_FANDOMS__" list="fandomSuggestions" />
+
+          <label for="relationships">Relationships (comma-separated)</label>
+          <input id="relationships" name="relationships" type="text" value="__EDIT_RELATIONSHIPS__" list="relationshipSuggestions" />
+
+          <label for="characters">Characters (comma-separated)</label>
+          <input id="characters" name="characters" type="text" value="__EDIT_CHARACTERS__" list="characterSuggestions" />
+
+          <label for="freeform_tags">Freeform Tags (comma-separated)</label>
+          <input id="freeform_tags" name="freeform_tags" type="text" value="__EDIT_FREEFORM_TAGS__" list="freeformSuggestions" />
+
+          <datalist id="warningSuggestions">__WARNINGS_OPTIONS_HTML__</datalist>
+          <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
+          <datalist id="relationshipSuggestions">__RELATIONSHIP_OPTIONS_HTML__</datalist>
+          <datalist id="characterSuggestions">__CHARACTER_OPTIONS_HTML__</datalist>
+          <datalist id="freeformSuggestions">__FREEFORM_OPTIONS_HTML__</datalist>
+
+          <button type="submit">Save metadata</button>
+        </form>
+
+        <p class="status-text __EDIT_STATUS_CLASS__" __EDIT_STATUS_HIDDEN_ATTR__>__EDIT_STATUS_TEXT__</p>
+      </section>
+
+      <section class="card info-card">
+        <h3>Page Gallery</h3>
+        <p class="profile-meta">Click a thumbnail to select a page. Drag and drop thumbnails to reorder pages and move pages between chapter galleries.</p>
+
+        <div id="editorPageGallery" class="editor-page-gallery">__EDITOR_PAGE_GALLERY_HTML__</div>
+
+        <div id="gallerySelectionPanel" class="card info-card gallery-selection-panel">
+          <p id="selectedPageLabel" class="profile-meta">No page selected.</p>
+          <p id="galleryDirtyBadge" class="status-text warning" hidden>Unsaved gallery order changes. Save gallery order before replacing or deleting pages.</p>
+
+          <form class="upload-form" method="post" enctype="multipart/form-data" action="/works/__WORK_ID__/edit">
+            <input type="hidden" name="edit_action" value="editor-add-page" />
+            <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input id="insertAfterPageIndex" type="hidden" name="insert_after_page_index" value="" />
+            <label for="editorPageImage">Insert page after selected page (or append if no page selected)</label>
+            <input id="editorPageImage" name="page_image" type="file" accept="image/*" required />
+            <button type="submit">Insert page</button>
+          </form>
+
+          <form class="upload-form" method="post" enctype="multipart/form-data" action="/works/__WORK_ID__/edit">
+            <input type="hidden" name="edit_action" value="editor-replace-page" />
+            <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input id="replacePageIndex" type="hidden" name="page_index" value="" />
+            <label for="replacePageImage">Replace selected page with image</label>
+            <input id="replacePageImage" name="page_image" type="file" accept="image/*" required />
+            <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
+          </form>
+
+          <form class="upload-form" method="post" action="/works/__WORK_ID__/edit" onsubmit="return confirm('Delete selected page?');">
+            <input type="hidden" name="edit_action" value="editor-delete-page" />
+            <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input id="deletePageIndex" type="hidden" name="page_index" value="" />
+            <button id="deleteSelectedButton" type="submit" class="button-muted" disabled>Delete selected page</button>
+          </form>
+
+          <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+            <input type="hidden" name="edit_action" value="editor-reorder-gallery" />
+            <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input id="orderedFilenamesInput" type="hidden" name="ordered_filenames_json" value="" />
+            <input id="chapterMembersInput" type="hidden" name="chapter_members_json" value="{}" />
+            <button id="saveGalleryOrderButton" type="submit">Save gallery order</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card info-card">
+        <h3>Chapters</h3>
+        <p class="profile-meta">Create chapters for reader chapter options. Chapters follow page identity during reorder/delete.</p>
+        <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+          <input type="hidden" name="edit_action" value="editor-add-chapter" />
+          <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+          <label for="editorChapterTitle">Chapter title</label>
+          <input id="editorChapterTitle" name="chapter_title" type="text" required />
+          <label for="editorChapterStart">Start page</label>
+          <input id="editorChapterStart" name="chapter_start_page" type="number" min="1" required />
+          <label for="editorChapterEnd">End page</label>
+          <input id="editorChapterEnd" name="chapter_end_page" type="number" min="1" required />
+          <button type="submit">Add chapter</button>
+        </form>
+        <div>__EDITOR_CHAPTERS_HTML__</div>
+      </section>
+    </main>
+
+    <script src="/static/user-menu.js"></script>
+    <script src="/static/work-edit.js"></script>
+  </body>
+ </html>
