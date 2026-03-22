@@ -4,7 +4,9 @@ import logging
 import os
 import sys
 import time
+from contextlib import AbstractContextManager
 from pathlib import Path
+from typing import Any, cast
 
 import open_clip
 import torch
@@ -124,13 +126,72 @@ def _call_kw(
         return None
 
 
-def _as_float_or_none(value: str | float | int | bool | None) -> float | None:
+def _call0_context_manager(
+    obj: object | None,
+    name: str,
+) -> AbstractContextManager[Any] | None:
+    value = _call0(obj, name)
+    if value is None:
+        return None
+    enter = getattr(value, "__enter__", None)
+    exit_ = getattr(value, "__exit__", None)
+    if not callable(enter) or not callable(exit_):
+        return None
+    return cast(AbstractContextManager[Any], value)
+
+
+def _as_float_or_none(value: object | None) -> float | None:
     if value is None:
         return None
     if isinstance(value, bool):
         return float(value)
     if isinstance(value, int | float):
         return float(value)
+    if not isinstance(value, str):
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _as_int_or_none(value: object | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _create_model_and_preprocess() -> tuple[object, object] | None:
+    created = _call_kw(
+        open_clip,
+        "create_model_and_transforms",
+        _MODEL_NAME,
+        pretrained=_MODEL_PRETRAINED,
+        force_quick_gelu=True,
+        cache_dir=_CACHE_DIR,
+    )
+    if not isinstance(created, tuple):
+        return None
+
+    created_tuple = cast(tuple[object, ...], created)
+    if len(created_tuple) < 3:
+        return None
+
+    model = created_tuple[0]
+    preprocess = created_tuple[2]
+
+    return model, preprocess
 
 
 def _ensure_loaded() -> bool:
@@ -170,15 +231,8 @@ def _ensure_loaded() -> bool:
         _ = progress.update(1)
         progress.set_postfix_str(f"device={_device}")
 
-        created = _call_kw(
-            open_clip_mod,
-            "create_model_and_transforms",
-            _MODEL_NAME,
-            pretrained=_MODEL_PRETRAINED,
-            force_quick_gelu=True,
-            cache_dir=_CACHE_DIR,
-        )
-        if not isinstance(created, tuple) or len(created) < 3:
+        created_model = _create_model_and_preprocess()
+        if created_model is None:
             _LOGGER.warning(
                 "Style model initialization returned invalid result (model=%s pretrained=%s cache_dir=%s)",
                 _MODEL_NAME,
@@ -192,8 +246,7 @@ def _ensure_loaded() -> bool:
         _ = progress.update(1)
         progress.set_postfix_str("model created")
 
-        model = created[0]
-        preprocess = created[2]
+        model, preprocess = created_model
         moved_model = _call1(model, "to", _device)
         if moved_model is None:
             return False
@@ -213,7 +266,7 @@ def _ensure_loaded() -> bool:
         _ = progress.update(1)
         progress.set_postfix_str("tokenizer ready")
 
-        no_grad = _call0(torch_mod, "no_grad")
+        no_grad = _call0_context_manager(torch_mod, "no_grad")
         if no_grad is None:
             _LOGGER.warning("Style torch.no_grad() unavailable during model init")
             progress.close()
@@ -361,7 +414,7 @@ def _classify_style_internal(path: str) -> tuple[str, dict[str, float]]:
         if image_tensor is None:
             return "unknown", _empty_confidences()
 
-        no_grad = _call0(_torch_mod, "no_grad")
+        no_grad = _call0_context_manager(_torch_mod, "no_grad")
         if no_grad is None:
             return "unknown", _empty_confidences()
 
@@ -417,11 +470,10 @@ def _classify_style_internal(path: str) -> tuple[str, dict[str, float]]:
             if argmaxed is None:
                 return "unknown", confidences
 
-            item = _call0(argmaxed, "item")
-            if item is None:
+            idx = _as_int_or_none(_call0(argmaxed, "item"))
+            if idx is None:
                 return "unknown", confidences
 
-            idx = int(item)
             fallback_style: str | None = None
             if idx < 0 or idx >= len(_STYLE_NAMES):
                 return "unknown", confidences
