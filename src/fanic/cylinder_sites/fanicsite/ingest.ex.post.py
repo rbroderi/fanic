@@ -140,6 +140,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     action = request.form.get("action", "").strip()
+    terms_accepted = request.form.get("agree_terms", "").strip().lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
     raw_cbz_upload = request.files.get("cbz")
     cbz_upload = raw_cbz_upload if _has_selected_file(raw_cbz_upload) else None
     raw_page_upload = request.files.get("page_image")
@@ -147,12 +153,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     upload_token = request.form.get("upload_token", "").strip()
 
     if action in {"load-metadata", "ingest"}:
-        terms_accepted = request.form.get("agree_terms", "").strip().lower() in {
-            "on",
-            "true",
-            "1",
-            "yes",
-        }
         if not terms_accepted:
             return render_ingest_page(
                 request,
@@ -308,6 +308,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     if action == "editor-add-page":
         editor_state = _editor_state_from_form(request)
+
+        is_new_editor_draft = not editor_state.get("editor_work_id", "").strip()
+        if is_new_editor_draft and not terms_accepted:
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status="You must agree to the Terms and Conditions before uploading.",
+                ingest_status_kind="error",
+            )
 
         if page_upload is None:
             return _render_editor_result(

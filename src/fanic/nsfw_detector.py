@@ -18,18 +18,30 @@ _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
         "a non-sexual drawing or artwork",
         "a fully clothed character illustration",
         "a wholesome non-explicit scene",
+        "a comic panel with no nudity and no sexual activity",
+        "an action or adventure comic scene",
+        "a portrait illustration with non-sexual pose",
+        "a romantic but non-sexual artwork",
+        "a cartoon character scene with no erotic content",
+        "a family friendly anime or manga panel",
     ],
     "explicit": [
         "a pornographic, explicit nudity image",
         "a sexually explicit adult image",
         "uncensored genital nudity",
         "graphic sexual content",
+        "visible genitals with sexual focus",
+        "oral sex or penetrative sexual act",
+        "explicit intercourse in an illustration",
+        "erotic porn scene with exposed nipples and genitals",
+        "fetish artwork with clear sexual act",
+        "adult explicit hentai or pornographic comic panel",
     ],
 }
 _NSFW_CLASS_NAMES = list(_NSFW_PROMPTS_BY_CLASS.keys())
 _SETTINGS = get_settings()
-_CACHE_DIR = _SETTINGS.fanic_openclip_cache_dir
-_DEFAULT_LOGIT_SCALE = _SETTINGS.fanic_nsfw_logit_scale
+_CACHE_DIR = _SETTINGS.openclip_cache_dir
+_DEFAULT_LOGIT_SCALE = _SETTINGS.nsfw_logit_scale
 
 _model: object | None = None
 _preprocess: object | None = None
@@ -38,7 +50,7 @@ _text_emb: object | None = None
 _torch_mod: object | None = None
 _device: str = "cpu"
 _load_attempted = False
-_VERBOSE_LOAD = _SETTINGS.fanic_model_load_logs
+_VERBOSE_LOAD = _SETTINGS.model_load_logs
 
 
 def _call0(obj: object | None, name: str) -> object | None:
@@ -414,5 +426,5 @@ def nsfw_score_with_confidences(path: str) -> tuple[float, dict[str, float]]:
     return _nsfw_score_internal(path)
 
 
-if _SETTINGS.fanic_preload_models:
+if _SETTINGS.preload_models:
     _ = _ensure_loaded()

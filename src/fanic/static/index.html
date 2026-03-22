@@ -50,7 +50,16 @@
             <option value="complete" __STATUS_COMPLETE_SELECTED__>Complete</option>
             <option value="in_progress" __STATUS_IN_PROGRESS_SELECTED__>In progress</option>
           </select>
-          <button type="submit">Apply</button>
+          <div class="filter-sort-group">
+            <label for="filterSort">Sort by</label>
+            <select id="filterSort" name="sort">
+              <option value="newest" __SORT_NEWEST_SELECTED__>Newest to oldest</option>
+              <option value="oldest" __SORT_OLDEST_SELECTED__>Oldest to newest</option>
+              <option value="title_asc" __SORT_TITLE_ASC_SELECTED__>Ascending alphabetical</option>
+              <option value="title_desc" __SORT_TITLE_DESC_SELECTED__>Descending alphabetical</option>
+            </select>
+          </div>
+          <button type="submit">Search</button>
         </form>
       </section>
       <section class="work-grid" id="workGrid">__WORK_GRID_HTML__</section>

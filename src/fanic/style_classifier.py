@@ -57,17 +57,17 @@ _STYLE_PROMPTS: dict[str, list[str]] = {
 }
 _STYLE_NAMES = list(_STYLE_PROMPTS.keys())
 _SETTINGS = get_settings()
-_CACHE_DIR = _SETTINGS.fanic_openclip_cache_dir
+_CACHE_DIR = _SETTINGS.openclip_cache_dir
 _DEFAULT_STYLE_MIN_CONFIDENCE = _SETTINGS.style_min_confidence_effective
 _MIN_CONFIDENCE_BY_STYLE = {
-    "photorealistic": _SETTINGS.fanic_style_min_confidence_photorealistic
+    "photorealistic": _SETTINGS.style_min_confidence_photorealistic
 }
 _LOW_CONFIDENCE_FALLBACK_STYLE = "comic"
-_PHOTO_BLOCK_MIN_MARGIN = _SETTINGS.fanic_photo_block_min_margin
-_STYLE_MIN_TOP_PROB = _SETTINGS.fanic_style_min_top_prob
-_STYLE_MIN_TOP_MARGIN = _SETTINGS.fanic_style_min_top_margin
-_DEFAULT_LOGIT_SCALE = _SETTINGS.fanic_style_logit_scale
-_LOAD_RETRY_SECONDS = _SETTINGS.fanic_style_load_retry_seconds
+_PHOTO_BLOCK_MIN_MARGIN = _SETTINGS.photo_block_min_margin
+_STYLE_MIN_TOP_PROB = _SETTINGS.style_min_top_prob
+_STYLE_MIN_TOP_MARGIN = _SETTINGS.style_min_top_margin
+_DEFAULT_LOGIT_SCALE = _SETTINGS.style_logit_scale
+_LOAD_RETRY_SECONDS = _SETTINGS.style_load_retry_seconds
 
 _model: object | None = None
 _preprocess: object | None = None
@@ -78,7 +78,7 @@ _device: str = "cpu"
 _last_load_failed_at = 0.0
 _last_load_error = ""
 _last_classify_error = ""
-_VERBOSE_LOAD = _SETTINGS.fanic_model_load_logs
+_VERBOSE_LOAD = _SETTINGS.model_load_logs
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -552,5 +552,5 @@ def get_style_classifier_debug_state() -> dict[str, object]:
     }
 
 
-if _SETTINGS.fanic_preload_models:
+if _SETTINGS.preload_models:
     _ = _ensure_loaded()

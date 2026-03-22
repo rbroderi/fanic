@@ -75,6 +75,7 @@ def render_ingest_page(
         "__METADATA_FORM_HIDDEN_ATTR__": "" if show_metadata_form else "hidden",
         "__UPLOAD_TOKEN__": escape(upload_token),
         "__EDITOR_WORK_ID__": escape(editor_work_id),
+        "__EDITOR_TERMS_REQUIRED_ATTR__": "required" if not editor_work_id else "",
         "__EDITOR_TITLE__": escape(editor_title),
         "__EDITOR_SUMMARY__": escape(editor_summary),
         "__EDITOR_RATING_OPTIONS_HTML__": render_options_html(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from io import BytesIO
@@ -14,6 +15,7 @@ import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: i
 from PIL import Image, UnidentifiedImageError
 from tqdm import tqdm
 
+from fanic.db import get_connection
 from fanic.moderation import (
     get_explicit_threshold,
     moderate_image,
@@ -36,21 +38,36 @@ from fanic.repository import (
     update_work_chapter,
     upsert_work,
 )
+from fanic.settings import get_settings
 from fanic.utils import slugify
 
-SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
-AVIF_QUALITY = 60
-
-_RATING_RANK = {
-    "Not Rated": 0,
-    "General Audiences": 1,
-    "Teen And Up Audiences": 2,
-    "Mature": 3,
-    "Explicit": 4,
+Image.init()
+SUPPORTED_IMAGE_EXTENSIONS = {
+    extension.lower()
+    for extension, format_name in Image.registered_extensions().items()
+    if format_name in Image.OPEN
 }
+_SETTINGS = get_settings()
+IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
+THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
 
 type ComicInfoValue = str | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
+
+
+_NATURAL_SORT_RE = re.compile(r"(\d+)")
+
+
+def _natural_member_sort_key(member: str) -> tuple[object, ...]:
+    base_name = Path(member).name
+    parts = _NATURAL_SORT_RE.split(base_name.lower())
+    key: list[object] = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        elif part:
+            key.append(part)
+    return tuple(key)
 
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
@@ -165,13 +182,9 @@ def _normalize_rating(value: str) -> str:
 
 def _elevate_rating(current: object, suggested: str | None) -> str:
     normalized_current = _normalize_rating(str(current or "Not Rated"))
-    if not suggested:
-        return normalized_current
-    normalized_suggested = _normalize_rating(suggested)
-    if _RATING_RANK.get(normalized_suggested, 0) > _RATING_RANK.get(
-        normalized_current, 0
-    ):
-        return normalized_suggested
+    normalized_suggested = _normalize_rating(str(suggested or ""))
+    if normalized_suggested == "Explicit" and normalized_current != "Explicit":
+        return "Explicit"
     return normalized_current
 
 
@@ -264,13 +277,7 @@ def _load_metadata_from_comicinfo(zip_file: ZipFile) -> ComicInfoMetadata:
 
 def _is_image_member_name(member: str) -> bool:
     suffix = Path(member).suffix.lower()
-    return suffix in {
-        *SUPPORTED_IMAGE_EXTENSIONS,
-        ".bmp",
-        ".tif",
-        ".tiff",
-        ".jfif",
-    }
+    return suffix in SUPPORTED_IMAGE_EXTENSIONS
 
 
 def _looks_like_image_bytes(data: bytes) -> bool:
@@ -347,7 +354,7 @@ def ingest_cbz(
             raise ValueError(
                 "CBZ contains no recognizable image pages. "
                 "Supported extensions include: "
-                f"{', '.join(sorted(SUPPORTED_IMAGE_EXTENSIONS))}, .bmp, .tif, .tiff, .jfif"
+                f"{', '.join(sorted(SUPPORTED_IMAGE_EXTENSIONS))}"
             )
 
         configured_order_raw = metadata.get("page_order", [])
@@ -364,11 +371,12 @@ def ingest_cbz(
                 key=lambda name: (
                     configured_order.index(Path(name).name)
                     if Path(name).name in configured_order
-                    else 999999
+                    else 999999,
+                    _natural_member_sort_key(name),
                 ),
             )
         else:
-            image_members = sorted(image_members)
+            image_members = sorted(image_members, key=_natural_member_sort_key)
 
         if progress_hook is not None:
             progress_hook(
@@ -438,7 +446,7 @@ def ingest_cbz(
                         page_bytes = _render_image_bytes(
                             page_image,
                             fmt="AVIF",
-                            quality=AVIF_QUALITY,
+                            quality=IMAGE_AVIF_QUALITY,
                         )
 
                         if progress is not None:
@@ -469,8 +477,8 @@ def ingest_cbz(
                         thumb_image.thumbnail((360, 360))
                         thumb_bytes = _render_image_bytes(
                             thumb_image,
-                            fmt="WEBP",
-                            quality=82,
+                            fmt="AVIF",
+                            quality=THUMBNAIL_AVIF_QUALITY,
                         )
 
                         if progress is not None:
@@ -485,7 +493,7 @@ def ingest_cbz(
                         thumb_name = _store_content_addressed(
                             thumbs_dir,
                             thumb_bytes,
-                            "webp",
+                            "avif",
                         )
                 except (UnidentifiedImageError, OSError, ValueError) as exc:
                     raise ValueError(
@@ -556,10 +564,100 @@ def ingest_cbz(
         "work_id": work_id,
         "slug": slug,
         "page_count": len(pages),
+        "detected_explicit_confidence": max_nsfw_score,
         "explicit_threshold": get_explicit_threshold(),
         "rating_before": rating_before,
         "rating_after": rating_after,
         "rating_auto_elevated": rating_after != rating_before,
+    }
+
+
+def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, object]:
+    ensure_storage_dirs()
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT work_id, page_index, image_filename, thumb_filename
+            FROM pages
+            ORDER BY work_id, page_index
+            """
+        ).fetchall()
+
+    scanned = 0
+    converted = 0
+    already_avif = 0
+    missing_source = 0
+    failed = 0
+    updates: list[tuple[str, str, int]] = []
+
+    for row in rows:
+        scanned += 1
+
+        work_id = str(row["work_id"])
+        page_index = int(row["page_index"])
+        image_filename = str(row["image_filename"] or "")
+        thumb_filename = str(row["thumb_filename"] or "")
+
+        thumbs_dir = WORKS_DIR / work_id / "thumbs"
+        pages_dir = WORKS_DIR / work_id / "pages"
+        thumb_path = thumbs_dir / thumb_filename if thumb_filename else None
+        image_path = pages_dir / image_filename
+
+        source_path: Path | None = None
+        if image_path.exists():
+            source_path = image_path
+        elif thumb_path is not None and thumb_path.exists():
+            source_path = thumb_path
+
+        if source_path is None:
+            missing_source += 1
+            continue
+
+        try:
+            with Image.open(source_path) as image:
+                thumb_image = _prepare_image_for_avif(image)
+                thumb_image.thumbnail((360, 360))
+                thumb_bytes = _render_image_bytes(
+                    thumb_image,
+                    fmt="AVIF",
+                    quality=THUMBNAIL_AVIF_QUALITY,
+                )
+        except (UnidentifiedImageError, OSError, ValueError):
+            failed += 1
+            continue
+
+        if dry_run:
+            new_thumb_name = _content_addressed_rel_path(thumb_bytes, "avif")
+        else:
+            new_thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
+
+        if new_thumb_name == thumb_filename:
+            already_avif += 1
+            continue
+
+        converted += 1
+        updates.append((new_thumb_name, work_id, page_index))
+
+    if not dry_run and updates:
+        with get_connection() as connection:
+            connection.executemany(
+                """
+                UPDATE pages
+                SET thumb_filename = ?
+                WHERE work_id = ? AND page_index = ?
+                """,
+                updates,
+            )
+
+    return {
+        "scanned": scanned,
+        "converted": converted,
+        "already_avif": already_avif,
+        "missing_source": missing_source,
+        "failed": failed,
+        "updated_rows": 0 if dry_run else len(updates),
+        "dry_run": dry_run,
     }
 
 
@@ -610,7 +708,7 @@ def ingest_editor_page(
             page_bytes = _render_image_bytes(
                 page_image,
                 fmt="AVIF",
-                quality=AVIF_QUALITY,
+                quality=IMAGE_AVIF_QUALITY,
             )
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
@@ -618,10 +716,10 @@ def ingest_editor_page(
             thumb_image.thumbnail((360, 360))
             thumb_bytes = _render_image_bytes(
                 thumb_image,
-                fmt="WEBP",
-                quality=82,
+                fmt="AVIF",
+                quality=THUMBNAIL_AVIF_QUALITY,
             )
-            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "webp")
+            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert page image") from exc
 
@@ -887,7 +985,7 @@ def editor_replace_page_image(
             page_bytes = _render_image_bytes(
                 page_image,
                 fmt="AVIF",
-                quality=AVIF_QUALITY,
+                quality=IMAGE_AVIF_QUALITY,
             )
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
@@ -895,10 +993,10 @@ def editor_replace_page_image(
             thumb_image.thumbnail((360, 360))
             thumb_bytes = _render_image_bytes(
                 thumb_image,
-                fmt="WEBP",
-                quality=82,
+                fmt="AVIF",
+                quality=THUMBNAIL_AVIF_QUALITY,
             )
-            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "webp")
+            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert replacement page image") from exc
 

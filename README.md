@@ -28,6 +28,13 @@ uv run fanic init-db
 uv run fanic ingest C:\path\to\comic.cbz --metadata C:\path\to\metadata.json
 ```
 
+Optional one-off: convert existing thumbnails to AVIF (q60).
+
+```powershell
+uv run fanic convert-thumbs-avif --dry-run
+uv run fanic convert-thumbs-avif
+```
+
 4. Run the site.
 
 ```powershell

@@ -22,11 +22,11 @@ STATIC_ROOT = (PACKAGE_ROOT / "static").resolve()
 _SETTINGS = get_settings()
 
 SESSION_COOKIE_NAME = "fanic_session"
-SESSION_SECRET = _SETTINGS.fanic_session_secret
-SESSION_MAX_AGE = _SETTINGS.fanic_session_max_age
-SESSION_COOKIE_SECURE = _SETTINGS.fanic_session_secure
-ADMIN_USERNAME = _SETTINGS.fanic_admin_username
-ADMIN_PASSWORD = _SETTINGS.fanic_admin_password
+SESSION_SECRET = _SETTINGS.session_secret
+SESSION_MAX_AGE = _SETTINGS.session_max_age
+SESSION_COOKIE_SECURE = _SETTINGS.session_secure
+ADMIN_USERNAME = _SETTINGS.admin_username
+ADMIN_PASSWORD = _SETTINGS.admin_password
 
 RATING_ICON_BY_NAME = {
     "General Audiences": "citrus.svg",

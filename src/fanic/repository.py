@@ -538,6 +538,15 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
         )
         params.append(slugify(fandom))
 
+    sort = filters.get("sort", "newest")
+    order_by = "w.updated_at DESC"
+    if sort == "oldest":
+        order_by = "w.created_at ASC"
+    elif sort == "title_asc":
+        order_by = "w.title COLLATE NOCASE ASC"
+    elif sort == "title_desc":
+        order_by = "w.title COLLATE NOCASE DESC"
+
     sql = """
         SELECT w.id, w.slug, w.title, w.summary, w.status, w.rating, w.warnings,
                w.page_count, w.cover_page_index, w.updated_at
@@ -547,7 +556,7 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
     if where:
         sql += " WHERE " + " AND ".join(where)
 
-    sql += " ORDER BY w.updated_at DESC"
+    sql += f" ORDER BY {order_by}, w.id ASC"
 
     with get_connection() as connection:
         rows = connection.execute(sql, params).fetchall()

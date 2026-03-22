@@ -25,7 +25,7 @@ class ModerationResult(TypedDict):
 
 
 _SETTINGS = get_settings()
-_EXPLICIT_THRESHOLD = _SETTINGS.fanic_explicit_threshold
+_EXPLICIT_THRESHOLD = _SETTINGS.explicit_threshold
 _ALLOWED_STYLES = {"comic", "illustrated", "painterly", "anime", "cgi"}
 _LOGGER = logging.getLogger(__name__)
 

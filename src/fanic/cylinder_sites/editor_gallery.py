@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+import re
 from html import escape
+from pathlib import Path
 
 from fanic.repository import list_work_chapter_members
+
+_NATURAL_SORT_RE = re.compile(r"(\d+)")
+
+
+def _natural_filename_sort_key(filename: str) -> tuple[object, ...]:
+    parts = _NATURAL_SORT_RE.split(Path(filename).name.lower())
+    key: list[object] = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        elif part:
+            key.append(part)
+    return tuple(key)
 
 
 def _chapter_seed_members_from_range(
@@ -47,9 +62,17 @@ def render_editor_page_gallery_html(
     if not pages:
         return '<p class="profile-meta">No pages uploaded yet.</p>'
 
+    ordered_pages = sorted(
+        pages,
+        key=lambda page: (
+            int(page.get("page_index", 0) or 0),
+            _natural_filename_sort_key(str(page.get("image_filename", ""))),
+        ),
+    )
+
     page_by_filename: dict[str, dict[str, object]] = {}
     page_order: list[str] = []
-    for page in pages:
+    for page in ordered_pages:
         image_filename = str(page.get("image_filename", "")).strip()
         if not image_filename:
             continue

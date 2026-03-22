@@ -161,6 +161,12 @@
 
           <label for="editorInitialPageImage">Upload first page image</label>
           <input id="editorInitialPageImage" name="page_image" type="file" accept="image/*" required />
+
+          <label for="agreeTermsEditor" class="checkbox-label">
+            <input id="agreeTermsEditor" name="agree_terms" type="checkbox" __EDITOR_TERMS_REQUIRED_ATTR__ />
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
+          </label>
+
           <button type="submit">Upload image to draft</button>
 
           <p class="profile-meta">Create or update the draft metadata above, then use the gallery controls below to insert pages and manage order.</p>

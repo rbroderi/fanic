@@ -457,9 +457,22 @@ a {
 
 .filter-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.2rem;
+}
+
+.filter-sort-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filter-sort-group label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1;
+  padding-left: 0.1rem;
 }
 
 .filter-row input,

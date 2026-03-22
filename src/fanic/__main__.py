@@ -1,27 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import logging
 from pathlib import Path
 
 from fanic.cylinder_main import serve
 from fanic.db import initialize_database
 from fanic.ingest import convert_existing_thumbs_to_avif, ingest_cbz
-from fanic.settings import get_settings
-
-
-def _enable_beartype() -> None:
-    if not get_settings().enable_beartype:
-        return
-    from beartype.claw import beartype_package
-
-    logging.getLogger(__name__).error(
-        "Enabling beartype runtime type checking for fanic"
-    )
-    beartype_package("fanic")
-
-
-_enable_beartype()
 
 
 def build_parser() -> argparse.ArgumentParser:

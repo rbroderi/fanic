@@ -79,11 +79,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     fandom = request.args.get("fandom", "").strip()
     tag = request.args.get("tag", "").strip()
     status = request.args.get("status", "").strip()
+    sort = request.args.get("sort", "newest").strip()
     filters = {
         "q": q,
         "fandom": fandom,
         "tag": tag,
         "status": status,
+        "sort": sort,
     }
     username = current_user(request)
     works = [work for work in list_works(filters) if can_view_work(username, work)]
@@ -102,6 +104,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__STATUS_ANY_SELECTED__": _selected_attr(status, ""),
             "__STATUS_COMPLETE_SELECTED__": _selected_attr(status, "complete"),
             "__STATUS_IN_PROGRESS_SELECTED__": _selected_attr(status, "in_progress"),
+            "__SORT_NEWEST_SELECTED__": _selected_attr(sort, "newest"),
+            "__SORT_OLDEST_SELECTED__": _selected_attr(sort, "oldest"),
+            "__SORT_TITLE_ASC_SELECTED__": _selected_attr(sort, "title_asc"),
+            "__SORT_TITLE_DESC_SELECTED__": _selected_attr(sort, "title_desc"),
             "__WORK_GRID_HTML__": _work_grid_html(works, can_delete),
         },
     )

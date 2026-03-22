@@ -4,7 +4,7 @@ import logging
 
 from fanic.settings import get_settings
 
-if get_settings().fanic_enable_beartype:
+if get_settings().enable_beartype:
     from beartype.claw import beartype_this_package
 
     logging.getLogger(__name__).info(
