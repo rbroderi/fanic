@@ -352,6 +352,75 @@ def test_ingest_cbz_success_with_override_and_progress(
     assert "done" in progress_events
 
 
+def test_ingest_cbz_creates_chapters_from_member_directories(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    cbz_path = tmp_path / "chapters.cbz"
+    with ingest.ZipFile(cbz_path, mode="w") as zip_file:
+        zip_file.writestr("chapter-01/page-001.png", _png_bytes((10, 8)))
+        zip_file.writestr("chapter-01/page-002.png", _png_bytes((10, 8)))
+        zip_file.writestr("chapter-02/page-003.png", _png_bytes((10, 8)))
+        zip_file.writestr("page-004.png", _png_bytes((10, 8)))
+
+    rendered_counter = {"value": 0}
+    added_chapters: list[dict[str, object]] = []
+    chapter_members: dict[int, list[str]] = {}
+
+    def render_image_bytes_stub(image: object, fmt: str, quality: int) -> bytes:
+        _ = (image, fmt, quality)
+        rendered_counter["value"] += 1
+        return f"avif-{rendered_counter['value']}".encode("utf-8")
+
+    def add_work_chapter_stub(
+        work_id: str,
+        title: str,
+        start_page: int,
+        end_page: int,
+    ) -> dict[str, object]:
+        chapter_id = len(added_chapters) + 1
+        payload = {
+            "id": chapter_id,
+            "work_id": work_id,
+            "title": title,
+            "start_page": start_page,
+            "end_page": end_page,
+        }
+        added_chapters.append(payload)
+        return {"id": chapter_id}
+
+    def replace_work_chapter_members_stub(
+        chapter_id: int,
+        members: list[str],
+    ) -> None:
+        chapter_members[chapter_id] = list(members)
+
+    monkeypatch.setattr(ingest, "_render_image_bytes", render_image_bytes_stub)
+    monkeypatch.setattr(ingest, "add_work_chapter", add_work_chapter_stub)
+    monkeypatch.setattr(
+        ingest,
+        "replace_work_chapter_members",
+        replace_work_chapter_members_stub,
+    )
+
+    result = ingest.ingest_cbz(cbz_path, uploader_username="alice")
+
+    assert result["page_count"] == 4
+    assert result["chapter_count"] == 2
+    assert [chapter["title"] for chapter in added_chapters] == [
+        "chapter-01",
+        "chapter-02",
+    ]
+    assert added_chapters[0]["start_page"] == 1
+    assert added_chapters[0]["end_page"] == 2
+    assert added_chapters[1]["start_page"] == 3
+    assert added_chapters[1]["end_page"] == 3
+    assert len(chapter_members.get(1, [])) == 2
+    assert len(chapter_members.get(2, [])) == 1
+
+
 def test_ingest_cbz_raises_when_no_recognized_images(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

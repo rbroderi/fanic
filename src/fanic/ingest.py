@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import cast
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
@@ -84,6 +85,82 @@ def _natural_member_sort_key(member: str) -> tuple[object, ...]:
         elif part:
             key.append(part)
     return tuple(key)
+
+
+def _cbz_member_directory(member: str) -> str:
+    parent = PurePosixPath(member).parent.as_posix()
+    return "" if parent == "." else parent
+
+
+def _chapter_title_from_cbz_directory(directory: str) -> str:
+    title = directory.strip().strip("/")
+    return title if title else "Untitled Chapter"
+
+
+def _group_cbz_pages_by_directory(
+    image_members: Sequence[str],
+    pages: Sequence[WorkPageRow],
+) -> list[tuple[str, list[str]]]:
+    grouped: dict[str, list[str]] = {}
+    for member, page in zip(image_members, pages):
+        directory = _cbz_member_directory(member)
+        if not directory:
+            continue
+        image_filename = _as_str(page.get("image_filename", ""), "")
+        if not image_filename:
+            continue
+        current = grouped.get(directory)
+        if current is None:
+            grouped[directory] = [image_filename]
+        else:
+            current.append(image_filename)
+    return [(directory, members) for directory, members in grouped.items() if members]
+
+
+def _replace_work_chapters_from_cbz_directories(
+    work_id: str,
+    image_members: Sequence[str],
+    pages: Sequence[WorkPageRow],
+) -> int:
+    existing_chapters = list_work_chapters(work_id)
+    for chapter in existing_chapters:
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        if chapter_id > 0:
+            _ = delete_work_chapter(work_id, chapter_id)
+
+    grouped_members = _group_cbz_pages_by_directory(image_members, pages)
+    if not grouped_members:
+        return 0
+
+    page_positions: dict[str, int] = {}
+    for page in pages:
+        image_filename = _as_str(page.get("image_filename", ""), "")
+        if not image_filename:
+            continue
+        page_positions[image_filename] = _as_int(page.get("page_index", 0), 0)
+
+    created = 0
+    for directory, members in grouped_members:
+        valid_members = [name for name in members if name in page_positions]
+        if not valid_members:
+            continue
+        positions = [page_positions[name] for name in valid_members]
+        start_page = min(positions)
+        end_page = max(positions)
+        chapter_title = _chapter_title_from_cbz_directory(directory)
+        chapter = add_work_chapter(
+            work_id,
+            title=chapter_title,
+            start_page=start_page,
+            end_page=end_page,
+        )
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        if chapter_id < 1:
+            continue
+        replace_work_chapter_members(chapter_id, valid_members)
+        created += 1
+
+    return created
 
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
@@ -679,12 +756,20 @@ def ingest_cbz(
     if progress_hook is not None:
         progress_hook("write-db", "Saving work metadata", len(pages), len(pages))
     replace_work_pages(work_id, pages)
+    imported_chapter_count = _replace_work_chapters_from_cbz_directories(
+        work_id,
+        image_members,
+        pages,
+    )
     replace_work_tags(work_id, metadata)
     _ = create_work_version_snapshot(
         work_id,
         action="ingest-cbz-editor-import",
         actor=uploader_username,
-        details={"page_count": len(pages)},
+        details={
+            "page_count": len(pages),
+            "chapter_count": imported_chapter_count,
+        },
     )
 
     if progress_hook is not None:
@@ -694,6 +779,7 @@ def ingest_cbz(
         "work_id": work_id,
         "slug": slug,
         "page_count": len(pages),
+        "chapter_count": imported_chapter_count,
         "detected_explicit_confidence": max_nsfw_score,
         "explicit_threshold": get_explicit_threshold(),
         "rating_before": rating_before,
