@@ -146,7 +146,7 @@ def test_profile_get_marks_custom_theme_checked(
     assert captured["public_link_hidden"] == ""
 
 
-def test_users_public_profile_hides_settings_and_public_link(
+def test_users_public_profile_uses_public_template(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
@@ -183,11 +183,15 @@ def test_users_public_profile_hides_settings_and_public_link(
     ) -> ResponseLike:
         _ = request
         captured["template"] = template_name
-        captured["public_link_hidden"] = replacements[
-            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"
-        ]
-        captured["settings_hidden"] = replacements["__PROFILE_SETTINGS_HIDDEN_ATTR__"]
-        captured["prefs_hidden"] = replacements["__PROFILE_PREFS_HIDDEN_ATTR__"]
+        captured["has_settings_marker"] = str(
+            "__PROFILE_SETTINGS_HIDDEN_ATTR__" in replacements
+        )
+        captured["has_prefs_marker"] = str(
+            "__PROFILE_PREFS_HIDDEN_ATTR__" in replacements
+        )
+        captured["has_public_link_marker"] = str(
+            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__" in replacements
+        )
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -200,10 +204,10 @@ def test_users_public_profile_hides_settings_and_public_link(
     result = module.main(request, response)
 
     assert result.status_code == 200
-    assert captured["template"] == "profile.html"
-    assert captured["public_link_hidden"] == "hidden"
-    assert captured["settings_hidden"] == "hidden"
-    assert captured["prefs_hidden"] == "hidden"
+    assert captured["template"] == "profile-public.html"
+    assert captured["has_public_link_marker"] == "False"
+    assert captured["has_settings_marker"] == "False"
+    assert captured["has_prefs_marker"] == "False"
 
 
 def test_profile_post_disabling_custom_theme_stops_override_injection(

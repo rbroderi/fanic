@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from wsgiref.types import WSGIApplication
 
@@ -39,17 +40,23 @@ def test_create_app_calls_startup_and_cylinder_get_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
+    captured_log_level: list[int] = []
+    captured_has_file_handler: list[bool] = []
 
     def fake_startup() -> None:
         calls.append("startup")
 
     def fake_get_app(
         app_map_fn: Callable[[], tuple[str, str, dict[str, object]]],
+        log_level: int,
+        log_handler: logging.Handler,
     ) -> WSGIApplication:
         site_path, site_name, config = app_map_fn()
         assert site_name == "fanicsite"
         assert isinstance(config, dict)
         assert site_path.endswith("cylinder_sites")
+        captured_log_level.append(log_level)
+        captured_has_file_handler.append(isinstance(log_handler, logging.FileHandler))
         calls.append("get_app")
 
         def fake_wsgi_app(
@@ -68,6 +75,8 @@ def test_create_app_calls_startup_and_cylinder_get_app(
 
     assert callable(app)
     assert calls == ["startup", "get_app"]
+    assert captured_log_level == [logging.DEBUG]
+    assert captured_has_file_handler == [True]
 
 
 def test_serve_invokes_waitress(monkeypatch: pytest.MonkeyPatch) -> None:

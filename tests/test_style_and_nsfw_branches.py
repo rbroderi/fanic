@@ -147,7 +147,7 @@ class _FakeTorchNoGradOnly:
 
 
 class _FakeNsfwModelNoneEncode:
-    logit_scale = _FakeModelLogitScale(5.0)
+    logit_scale: _FakeModelLogitScale = _FakeModelLogitScale(5.0)
 
     @staticmethod
     def encode_image(img: object) -> None:
@@ -156,7 +156,7 @@ class _FakeNsfwModelNoneEncode:
 
 
 class _FakeNsfwModelClamped:
-    logit_scale = _FakeModelLogitScale(3.0)
+    logit_scale: _FakeModelLogitScale = _FakeModelLogitScale(3.0)
 
     @staticmethod
     def encode_image(img: object) -> _FakeImageEmbedding:

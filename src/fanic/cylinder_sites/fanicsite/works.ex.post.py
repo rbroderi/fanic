@@ -60,6 +60,10 @@ def _can_edit_work(username: str | None, uploader_username: str) -> bool:
     )
 
 
+def _is_explicit_rating(value: object) -> bool:
+    return str(value).strip().casefold() == "explicit"
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tail = route_tail(request, ["works"])
     if tail is None or len(tail) != 2:
@@ -439,6 +443,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         "characters": _csv(request.form.get("characters", "")),
         "freeform_tags": _csv(request.form.get("freeform_tags", "")),
     }
+
+    current_rating = work.get("rating", "Not Rated")
+    requested_rating = metadata.get("rating", "Not Rated")
+    if (
+        username != ADMIN_USERNAME
+        and _is_explicit_rating(current_rating)
+        and not _is_explicit_rating(requested_rating)
+    ):
+        return _redirect(response, f"/works/{work_id}/edit?msg=explicit-rating-locked")
 
     update_work_metadata(
         work_id,

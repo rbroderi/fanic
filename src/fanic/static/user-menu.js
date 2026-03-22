@@ -103,6 +103,7 @@ function bindCustomThemePreferenceToggle() {
   if (!customThemeToggle || !(customThemeToggle instanceof HTMLInputElement)) {
     return;
   }
+  const customThemeForm = customThemeToggle.form;
   if (customThemeToggle.dataset.themeBound === "true") {
     syncCustomThemeOverrideState(customThemeToggle.checked);
     return;
@@ -111,6 +112,13 @@ function bindCustomThemePreferenceToggle() {
   syncCustomThemeOverrideState(customThemeToggle.checked);
   customThemeToggle.addEventListener("change", () => {
     syncCustomThemeOverrideState(customThemeToggle.checked);
+    if (customThemeForm && customThemeForm instanceof HTMLFormElement) {
+      if (typeof customThemeForm.requestSubmit === "function") {
+        customThemeForm.requestSubmit();
+        return;
+      }
+      customThemeForm.submit();
+    }
   });
   customThemeToggle.dataset.themeBound = "true";
 }

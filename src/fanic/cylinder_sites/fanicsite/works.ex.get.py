@@ -252,6 +252,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             status_text = "Upload blocked by moderation policy (photorealistic images are not allowed)."
             status_class = "error"
             status_hidden = ""
+        elif save_msg == "explicit-rating-locked":
+            status_text = (
+                "Only admins can lower a work from Explicit to a lower rating."
+            )
+            status_class = "error"
+            status_hidden = ""
         else:
             status_text = ""
             status_class = ""

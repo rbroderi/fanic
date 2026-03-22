@@ -290,6 +290,129 @@ def test_work_edit_route_renders_editor_with_success_status(
     assert rendered["gallery"] == "<div>gallery</div>"
 
 
+def test_work_edit_route_renders_explicit_rating_lock_error(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "fanicsite_works_edit_explicit_lock_msg_test",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    def fake_get_work(work_id: str) -> dict[str, Any]:
+        return {
+            "id": work_id,
+            "title": "Editable Work",
+            "summary": "Summary",
+            "rating": "Explicit",
+            "status": "in_progress",
+            "page_count": 5,
+            "cover_page_index": 1,
+            "uploader_username": "alice",
+            "language": "en",
+            "warnings": "",
+            "tags": [],
+        }
+
+    def fake_list_work_page_rows(work_id: str) -> list[dict[str, Any]]:
+        _ = work_id
+        return []
+
+    def fake_list_work_chapters(work_id: str) -> list[dict[str, Any]]:
+        _ = work_id
+        return []
+
+    def fake_render_options_html(options: list[str], selected: str) -> str:
+        _ = (options, selected)
+        return "<option>Explicit</option>"
+
+    def fake_render_editor_page_gallery_html(
+        work_id: str,
+        pages: list[dict[str, Any]],
+        chapters: list[dict[str, Any]],
+    ) -> str:
+        _ = (work_id, pages, chapters)
+        return "<div></div>"
+
+    def fake_render_editor_chapters_html(
+        work_id: str,
+        chapters: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> str:
+        _ = (work_id, chapters, kwargs)
+        return "<div></div>"
+
+    def fake_render_common_tag_datalist_replacements() -> dict[str, str]:
+        return {
+            "__COMMON_FANDOM_OPTIONS__": "",
+            "__COMMON_RELATIONSHIP_OPTIONS__": "",
+            "__COMMON_CHARACTER_OPTIONS__": "",
+            "__COMMON_FREEFORM_OPTIONS__": "",
+        }
+
+    rendered: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        rendered["status_text"] = replacements["__EDIT_STATUS_TEXT__"]
+        rendered["status_class"] = replacements["__EDIT_STATUS_CLASS__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    monkeypatch.setattr(module, "get_work", fake_get_work)
+    monkeypatch.setattr(module, "list_work_page_rows", fake_list_work_page_rows)
+    monkeypatch.setattr(module, "list_work_chapters", fake_list_work_chapters)
+    monkeypatch.setattr(module, "render_options_html", fake_render_options_html)
+    monkeypatch.setattr(
+        module,
+        "render_editor_page_gallery_html",
+        fake_render_editor_page_gallery_html,
+    )
+    monkeypatch.setattr(
+        module,
+        "render_editor_chapters_html",
+        fake_render_editor_chapters_html,
+    )
+    monkeypatch.setattr(
+        module,
+        "render_common_tag_datalist_replacements",
+        fake_render_common_tag_datalist_replacements,
+    )
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(
+        path="/works/work-1/edit", args={"msg": "explicit-rating-locked"}
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert rendered["status_class"] == "error"
+    assert (
+        rendered["status_text"]
+        == "Only admins can lower a work from Explicit to a lower rating."
+    )
+
+
 def test_work_versions_route_renders_selected_version(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

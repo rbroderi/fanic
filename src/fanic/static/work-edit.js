@@ -1,4 +1,25 @@
 (function () {
+  const ratingSelect = document.getElementById("rating");
+  if (ratingSelect && ratingSelect instanceof HTMLSelectElement) {
+    let previousRating = ratingSelect.value;
+    ratingSelect.addEventListener("change", () => {
+      const nextRating = ratingSelect.value;
+      const switchedToExplicit =
+        nextRating.trim().toLowerCase() === "explicit" &&
+        previousRating.trim().toLowerCase() !== "explicit";
+      if (switchedToExplicit) {
+        const confirmed = window.confirm(
+          "Setting this work to Explicit is irreversible for normal users. Only admins can lower it later. Continue?"
+        );
+        if (!confirmed) {
+          ratingSelect.value = previousRating;
+          return;
+        }
+      }
+      previousRating = ratingSelect.value;
+    });
+  }
+
   const galleryRoot = document.getElementById("editorPageGallery");
   if (!galleryRoot) {
     return;
