@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-
-# pyright: reportMissingImports=false, reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportGeneralTypeIssues=false, reportArgumentType=false, reportAny=false
 import os
 import sys
 import time
@@ -126,13 +124,13 @@ def _call_kw(
         return None
 
 
-def _as_float_or_none(value: object | None) -> float | None:
+def _as_float_or_none(value: str | float | int | bool | None) -> float | None:
     if value is None:
         return None
-    try:
+    if isinstance(value, bool):
         return float(value)
-    except Exception:
-        return None
+    if isinstance(value, int | float):
+        return float(value)
 
 
 def _ensure_loaded() -> bool:

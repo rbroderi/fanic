@@ -42,17 +42,17 @@
       <aside class="sidebar" id="thumbs"></aside>
       <section class="reader-stage">
         <div class="reader-ui">
-          <div>
-            <button id="prevBtn" type="button">Prev</button>
-            <button id="nextBtn" type="button">Next</button>
+          <div class="reader-nav-group">
+            <div class="reader-nav-buttons">
+              <button id="prevBtn" type="button">Prev</button>
+              <button id="nextBtn" type="button">Next</button>
+            </div>
+            <div id="counter" class="reader-page-count" aria-live="polite"></div>
           </div>
           <div class="reader-zoom-controls" aria-label="Zoom controls">
             <button id="zoomOutBtn" type="button" aria-label="Zoom out">-</button>
             <button id="zoomResetBtn" type="button" aria-label="Reset zoom">100%</button>
             <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
-          </div>
-          <div>
-            <span id="counter"></span>
           </div>
           <div>
             <label for="chapterSelect" class="sr-only">Select chapter</label>

@@ -13,16 +13,12 @@ from fanic.ingest import ingest_cbz
 def _enable_beartype() -> None:
     if os.getenv("FANIC_ENABLE_BEARTYPE", "1") == "0":
         return
-    try:
-        from beartype.claw import beartype_package
+    from beartype.claw import beartype_package
 
-        logging.getLogger(__name__).info(
-            "Enabling beartype runtime type checking for fanic"
-        )
-        beartype_package("fanic")
-    except Exception:
-        # Be resilient when beartype is unavailable at runtime.
-        pass
+    logging.getLogger(__name__).error(
+        "Enabling beartype runtime type checking for fanic"
+    )
+    beartype_package("fanic")
 
 
 _enable_beartype()

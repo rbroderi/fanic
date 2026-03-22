@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from html import escape
 
 from fanic.cylinder_sites.common import (
@@ -10,10 +11,10 @@ from fanic.cylinder_sites.common import (
     route_tail,
     text_error,
 )
-from fanic.repository import can_view_work, list_works_by_uploader
+from fanic.repository import WorkListItem, can_view_work, list_works_by_uploader
 
 
-def _uploaded_works_html(works: list[dict[str, object]]) -> str:
+def _uploaded_works_html(works: Sequence[WorkListItem]) -> str:
     if not works:
         return '<p class="profile-meta">No uploaded works yet.</p>'
 
