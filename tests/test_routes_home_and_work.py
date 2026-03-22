@@ -149,6 +149,7 @@ def test_work_detail_route_renders_work_page(
         _ = request
         rendered["template"] = template_name
         rendered["title"] = replacements["__WORK_TITLE__"]
+        rendered["report_options"] = replacements["__REPORT_ISSUE_OPTIONS_HTML__"]
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -163,6 +164,7 @@ def test_work_detail_route_renders_work_page(
     assert result.status_code == 200
     assert rendered["template"] == "work.html"
     assert rendered["title"] == "Test Work"
+    assert "Illegal content" in rendered["report_options"]
 
 
 def test_work_edit_route_renders_editor_with_success_status(

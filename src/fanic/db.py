@@ -135,6 +135,33 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS dmca_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_id TEXT,
+            work_title TEXT NOT NULL DEFAULT '',
+            issue_type TEXT NOT NULL DEFAULT 'copyright-dmca',
+            reporter_name TEXT NOT NULL,
+            reporter_email TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            claimed_url TEXT NOT NULL,
+            evidence_url TEXT NOT NULL DEFAULT '',
+            details TEXT NOT NULL,
+            reporter_username TEXT,
+            source_path TEXT NOT NULL DEFAULT '/dmca',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    dmca_columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(dmca_reports)").fetchall()
+    }
+    if "issue_type" not in dmca_columns:
+        connection.execute(
+            "ALTER TABLE dmca_reports ADD COLUMN issue_type TEXT NOT NULL DEFAULT 'copyright-dmca'"
+        )
 
 
 def get_connection() -> sqlite3.Connection:

@@ -27,11 +27,12 @@ def once_only(func: Callable[..., int]) -> Callable[..., int]:
     def wrapper(*args: object, **kwargs: object) -> int:
         nonlocal called
         nonlocal result
+        _ = (args, kwargs)
 
         if called:
             return result
 
-        result = func(*args, **kwargs)
+        result = func()
         called = True
         return result
 

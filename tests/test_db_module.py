@@ -106,6 +106,12 @@ def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
         assert table_exists(connection, "work_kudos") is True
         assert table_exists(connection, "work_chapters") is True
         assert table_exists(connection, "work_chapter_pages") is True
+        assert table_exists(connection, "dmca_reports") is True
+        dmca_columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(dmca_reports)").fetchall()
+        }
+        assert "issue_type" in dmca_columns
     finally:
         connection.close()
 

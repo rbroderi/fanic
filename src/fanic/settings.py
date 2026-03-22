@@ -220,7 +220,7 @@ class FanicSettings(BaseSettings):
         alias="FANIC_UPLOAD_RATE_MAX_REQUESTS",
     )
     upload_max_concurrent_per_user: int = Field(
-        default=2,
+        default=1,
         alias="FANIC_UPLOAD_MAX_CONCURRENT_PER_USER",
     )
 
@@ -245,7 +245,7 @@ class FanicSettings(BaseSettings):
         alias="FANIC_MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES",
     )
     max_upload_image_pixels: int = Field(
-        default=40_000,
+        default=100_000_000,
         alias="FANIC_MAX_UPLOAD_IMAGE_PIXELS",
     )
     user_page_soft_cap: int = Field(

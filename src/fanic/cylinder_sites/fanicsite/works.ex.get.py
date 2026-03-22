@@ -17,6 +17,7 @@ from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
 from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.editor_metadata import render_options_html
 from fanic.cylinder_sites.editor_metadata import selected_attr
+from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.repository import can_view_work
 from fanic.repository import get_work
 from fanic.repository import get_work_version_manifest
@@ -492,5 +493,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_STATUS_CLASS__": work_status_class,
             "__WORK_STATUS_HIDDEN_ATTR__": work_status_hidden,
             "__COMMENTS_HTML__": _comment_cards_html(comments),
+            "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html(
+                "copyright-dmca"
+            ),
+            "__DMCA_WORK_ID__": escape(work_id),
+            "__DMCA_WORK_TITLE__": title,
+            "__DMCA_CLAIMED_URL__": f"/works/{escape(work_id)}",
         },
     )

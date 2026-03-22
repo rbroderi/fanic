@@ -10,6 +10,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .report-modal {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 50;
+      }
+
+      .report-modal[hidden] {
+        display: none;
+      }
+
+      .report-modal-card {
+        width: min(520px, 94vw);
+        max-height: 88vh;
+        overflow: auto;
+      }
+    </style>
   </head>
   <body>
     <header class="site-header">
@@ -47,6 +67,8 @@
           <a id="downloadLink" href="__WORK_DOWNLOAD_HREF__">Download CBZ</a>
           |
           <a id="versionsLink" href="__WORK_VERSIONS_HREF__">Previous versions</a>
+          |
+          <button id="reportWorkButton" type="button">Report</button>
         </p>
         <p __EDIT_METADATA_HIDDEN_ATTR__>
           <a id="editMetadataLink" href="__EDIT_METADATA_HREF__">Edit metadata</a>
@@ -89,6 +111,57 @@
         </section>
       </section>
     </main>
+
+    <div id="reportModal" class="report-modal" hidden>
+      <section class="card report-modal-card" aria-labelledby="reportModalTitle">
+        <h3 id="reportModalTitle">Report this work</h3>
+        <p class="profile-meta">Choose the issue type, then continue to the report form.</p>
+        <form method="get" action="/dmca" class="upload-form">
+          <input type="hidden" name="work_id" value="__DMCA_WORK_ID__" />
+          <input type="hidden" name="work_title" value="__DMCA_WORK_TITLE__" />
+          <input type="hidden" name="claimed_url" value="__DMCA_CLAIMED_URL__" />
+
+          <label for="reportIssueType">Issue type</label>
+          <select id="reportIssueType" name="issue_type" required>
+            __REPORT_ISSUE_OPTIONS_HTML__
+          </select>
+
+          <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-top: 0.75rem;">
+            <button type="submit">Continue to report form</button>
+            <button id="reportModalCancel" type="button">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <script src="/static/user-menu.js"></script>
+    <script>
+      (function () {
+        var openButton = document.getElementById("reportWorkButton");
+        var modal = document.getElementById("reportModal");
+        var cancelButton = document.getElementById("reportModalCancel");
+        if (!openButton || !modal) {
+          return;
+        }
+
+        function closeModal() {
+          modal.hidden = true;
+        }
+
+        openButton.addEventListener("click", function () {
+          modal.hidden = false;
+        });
+
+        if (cancelButton) {
+          cancelButton.addEventListener("click", closeModal);
+        }
+
+        modal.addEventListener("click", function (event) {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

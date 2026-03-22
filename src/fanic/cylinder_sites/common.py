@@ -138,7 +138,7 @@ SITE_FOOTER_HTML = (
     '<span class="site-footer-sep" aria-hidden="true"> | </span>'
     '<a class="site-footer-link" href="/faq">FAQ</a>'
     '<span class="site-footer-sep" aria-hidden="true"> | </span>'
-    '<a class="site-footer-link" href="/dcma">DMCA Policy</a>'
+    '<a class="site-footer-link" href="/dmca">DMCA Policy</a>'
     "</div>"
     "</footer>"
 )

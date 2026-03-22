@@ -367,6 +367,92 @@ def test_ingest_cbz_raises_when_no_recognized_images(
         ingest.ingest_cbz(cbz_path)
 
 
+def test_validate_zip_archive_limits_rejects_member_too_large(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    cbz_path = tmp_path / "member-too-large.cbz"
+    with ingest.ZipFile(cbz_path, mode="w") as zip_file:
+        zip_file.writestr("page01.png", b"x" * 12)
+
+    monkeypatch.setattr(ingest, "MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES", 10)
+    monkeypatch.setattr(ingest, "MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES", 100)
+
+    with ingest.ZipFile(cbz_path) as zip_file:
+        with pytest.raises(ValueError, match="member exceeds maximum allowed"):
+            ingest._validate_zip_archive_limits(zip_file)
+
+
+def test_validate_zip_archive_limits_rejects_total_too_large(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    cbz_path = tmp_path / "total-too-large.cbz"
+    with ingest.ZipFile(cbz_path, mode="w") as zip_file:
+        zip_file.writestr("page01.png", b"x" * 8)
+        zip_file.writestr("page02.png", b"y" * 8)
+
+    monkeypatch.setattr(ingest, "MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES", 100)
+    monkeypatch.setattr(ingest, "MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES", 10)
+
+    with ingest.ZipFile(cbz_path) as zip_file:
+        with pytest.raises(ValueError, match="total uncompressed size"):
+            ingest._validate_zip_archive_limits(zip_file)
+
+
+def test_ingest_cbz_rejects_when_page_count_exceeds_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    cbz_path = tmp_path / "too-many-pages.cbz"
+    with ingest.ZipFile(cbz_path, mode="w") as zip_file:
+        zip_file.writestr("page01.png", _png_bytes((8, 8)))
+        zip_file.writestr("page02.png", _png_bytes((8, 8)))
+        zip_file.writestr("page03.png", _png_bytes((8, 8)))
+
+    monkeypatch.setattr(ingest, "MAX_INGEST_PAGES", 2)
+
+    with pytest.raises(ValueError, match="maximum allowed page count"):
+        ingest.ingest_cbz(cbz_path)
+
+
+def test_ingest_cbz_rejects_when_image_pixel_count_exceeds_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    cbz_path = tmp_path / "too-many-pixels.cbz"
+    with ingest.ZipFile(cbz_path, mode="w") as zip_file:
+        zip_file.writestr("page01.png", _png_bytes((10, 8)))
+
+    monkeypatch.setattr(ingest, "MAX_UPLOAD_IMAGE_PIXELS", 10)
+
+    with pytest.raises(ValueError, match="Failed to convert page to AVIF"):
+        ingest.ingest_cbz(cbz_path)
+
+
+def test_ingest_editor_page_rejects_when_image_pixel_count_exceeds_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+
+    image_path = tmp_path / "page.png"
+    image_path.write_bytes(_png_bytes((10, 8)))
+
+    monkeypatch.setattr(ingest, "MAX_UPLOAD_IMAGE_PIXELS", 10)
+
+    with pytest.raises(ValueError, match="Failed to convert page image"):
+        ingest.ingest_editor_page(image_path, {}, "alice")
+
+
 def test_convert_existing_thumbs_to_avif_counters(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

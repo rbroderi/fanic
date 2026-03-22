@@ -120,6 +120,22 @@ CREATE TABLE IF NOT EXISTS work_chapter_pages (
     FOREIGN KEY (chapter_id) REFERENCES work_chapters(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dmca_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id TEXT,
+    work_title TEXT NOT NULL DEFAULT '',
+    issue_type TEXT NOT NULL DEFAULT 'copyright-dmca',
+    reporter_name TEXT NOT NULL,
+    reporter_email TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    claimed_url TEXT NOT NULL,
+    evidence_url TEXT NOT NULL DEFAULT '',
+    details TEXT NOT NULL,
+    reporter_username TEXT,
+    source_path TEXT NOT NULL DEFAULT '/dmca',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_works_slug ON works(slug);
 CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type);
 CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
@@ -128,3 +144,5 @@ CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_comments_work ON work_comments(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at);
+CREATE INDEX IF NOT EXISTS idx_dmca_reports_work_id ON dmca_reports(work_id);
