@@ -1,11 +1,31 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 from pathlib import Path
 
 from fanic.cylinder_main import serve
 from fanic.db import initialize_database
 from fanic.ingest import ingest_cbz
+
+
+def _enable_beartype() -> None:
+    if os.getenv("FANIC_ENABLE_BEARTYPE", "1") == "0":
+        return
+    try:
+        from beartype.claw import beartype_package
+
+        logging.getLogger(__name__).info(
+            "Enabling beartype runtime type checking for fanic"
+        )
+        beartype_package("fanic")
+    except Exception:
+        # Be resilient when beartype is unavailable at runtime.
+        pass
+
+
+_enable_beartype()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,8 +58,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "init-db":
-        initialize_database()
-        print("Database initialized")
+        initialize_database(reset=True)
+        print("Database and storage reset, then schema initialized")
         return
 
     if args.command == "ingest":

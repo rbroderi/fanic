@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 import tomli_w
 
@@ -18,6 +19,36 @@ TAG_FIELD_TO_TYPE = {
     "characters": "character",
     "freeform_tags": "freeform",
 }
+
+
+class WorkComment(TypedDict):
+    id: int
+    username: str
+    chapter_number: int | None
+    body: str
+    created_at: str
+
+
+class WorkListItem(TypedDict):
+    id: str
+    slug: str
+    title: str
+    summary: str
+    status: str
+    rating: str
+    warnings: str
+    page_count: int
+    cover_page_index: int
+    updated_at: str
+    uploader_username: NotRequired[str]
+
+
+class WorkVersionSummary(TypedDict):
+    version_id: str
+    created_at: str
+    action: str
+    actor: str
+    page_count: int
 
 
 def _versions_dir_for_work(work_id: str) -> Path:
@@ -142,7 +173,7 @@ def sync_work_metadata_toml(work_id: str) -> None:
             pass
 
 
-def work_is_explicit(work: dict[str, Any]) -> bool:
+def work_is_explicit(work: Mapping[str, object]) -> bool:
     return str(work.get("rating", "")).strip().lower() == "explicit"
 
 
@@ -174,7 +205,7 @@ def set_user_prefers_explicit(username: str, enabled: bool) -> None:
         )
 
 
-def can_view_work(username: str | None, work: dict[str, Any]) -> bool:
+def can_view_work(username: str | None, work: Mapping[str, object]) -> bool:
     if work_is_explicit(work):
         return user_prefers_explicit(username)
     return True
@@ -197,7 +228,7 @@ def add_work_comment(
     sync_work_metadata_toml(work_id)
 
 
-def list_work_comments(work_id: str) -> list[dict[str, Any]]:
+def list_work_comments(work_id: str) -> list[WorkComment]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -208,7 +239,22 @@ def list_work_comments(work_id: str) -> list[dict[str, Any]]:
             """,
             (work_id,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    comments: list[WorkComment] = []
+    for row in rows:
+        chapter_number_raw = row["chapter_number"]
+        chapter_number = (
+            int(chapter_number_raw) if chapter_number_raw is not None else None
+        )
+        comments.append(
+            {
+                "id": int(row["id"]),
+                "username": str(row["username"]),
+                "chapter_number": chapter_number,
+                "body": str(row["body"]),
+                "created_at": str(row["created_at"]),
+            }
+        )
+    return comments
 
 
 def add_work_kudo(work_id: str, username: str) -> bool:
@@ -264,7 +310,7 @@ def list_tag_names(tag_type: str, limit: int = 200) -> list[str]:
     return [str(row["name"]) for row in rows]
 
 
-def upsert_work(work: dict[str, Any]) -> None:
+def upsert_work(work: dict[str, object]) -> None:
     warnings_value = work.get("warnings", "No Archive Warnings Apply")
     if isinstance(warnings_value, list):
         warnings_text = ", ".join(
@@ -332,7 +378,7 @@ def set_work_cbz_path(work_id: str, cbz_path: str) -> None:
 
 def update_work_metadata(
     work_id: str,
-    metadata: dict[str, Any],
+    metadata: dict[str, object],
     editor_username: str,
     edited_by_admin: bool,
 ) -> None:
@@ -384,7 +430,7 @@ def update_work_metadata(
     sync_work_metadata_toml(work_id)
 
 
-def replace_work_pages(work_id: str, pages: list[dict[str, Any]]) -> None:
+def replace_work_pages(work_id: str, pages: list[dict[str, object]]) -> None:
     with get_connection() as connection:
         connection.execute("DELETE FROM pages WHERE work_id = ?", (work_id,))
         for page in pages:
@@ -424,7 +470,7 @@ def _ensure_tag(name: str, tag_type: str) -> int:
         return int(cursor.lastrowid)
 
 
-def replace_work_tags(work_id: str, metadata: dict[str, Any]) -> None:
+def replace_work_tags(work_id: str, metadata: dict[str, object]) -> None:
     tag_pairs: list[tuple[str, str]] = []
 
     for field_name, tag_type in TAG_FIELD_TO_TYPE.items():
@@ -459,9 +505,9 @@ def replace_work_tags(work_id: str, metadata: dict[str, Any]) -> None:
     sync_work_metadata_toml(work_id)
 
 
-def list_works(filters: dict[str, str]) -> list[dict[str, Any]]:
+def list_works(filters: dict[str, str]) -> list[WorkListItem]:
     where = []
-    params: list[Any] = []
+    params: list[object] = []
 
     search = filters.get("q")
     if search:
@@ -505,10 +551,26 @@ def list_works(filters: dict[str, str]) -> list[dict[str, Any]]:
 
     with get_connection() as connection:
         rows = connection.execute(sql, params).fetchall()
-        return [dict(row) for row in rows]
+        works: list[WorkListItem] = []
+        for row in rows:
+            works.append(
+                {
+                    "id": str(row["id"]),
+                    "slug": str(row["slug"]),
+                    "title": str(row["title"]),
+                    "summary": str(row["summary"]),
+                    "status": str(row["status"]),
+                    "rating": str(row["rating"]),
+                    "warnings": str(row["warnings"]),
+                    "page_count": int(row["page_count"]),
+                    "cover_page_index": int(row["cover_page_index"]),
+                    "updated_at": str(row["updated_at"]),
+                }
+            )
+        return works
 
 
-def list_works_by_uploader(username: str) -> list[dict[str, Any]]:
+def list_works_by_uploader(username: str) -> list[WorkListItem]:
     if not username.strip():
         return []
 
@@ -523,10 +585,27 @@ def list_works_by_uploader(username: str) -> list[dict[str, Any]]:
             """,
             (username.strip(),),
         ).fetchall()
-    return [dict(row) for row in rows]
+    works: list[WorkListItem] = []
+    for row in rows:
+        works.append(
+            {
+                "id": str(row["id"]),
+                "slug": str(row["slug"]),
+                "title": str(row["title"]),
+                "summary": str(row["summary"]),
+                "status": str(row["status"]),
+                "rating": str(row["rating"]),
+                "warnings": str(row["warnings"]),
+                "page_count": int(row["page_count"]),
+                "cover_page_index": int(row["cover_page_index"]),
+                "updated_at": str(row["updated_at"]),
+                "uploader_username": str(row["uploader_username"]),
+            }
+        )
+    return works
 
 
-def get_work(work_id: str) -> dict[str, Any] | None:
+def get_work(work_id: str) -> dict[str, object] | None:
     with get_connection() as connection:
         row = connection.execute(
             "SELECT * FROM works WHERE id = ?", (work_id,)
@@ -551,7 +630,7 @@ def get_work(work_id: str) -> dict[str, Any] | None:
         return work
 
 
-def get_manifest(work_id: str) -> dict[str, Any] | None:
+def get_manifest(work_id: str) -> dict[str, object] | None:
     work = get_work(work_id)
     if not work:
         return None
@@ -588,15 +667,15 @@ def create_work_version_snapshot(
     *,
     action: str,
     actor: str | None = None,
-    details: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
+    details: dict[str, object] | None = None,
+) -> dict[str, object] | None:
     work = get_work(work_id)
     if not work:
         return None
 
     pages = list_work_page_rows(work_id)
     chapters = list_work_chapters(work_id)
-    chapters_with_members: list[dict[str, Any]] = []
+    chapters_with_members: list[dict[str, object]] = []
     for chapter in chapters:
         chapter_copy = dict(chapter)
         chapter_id = int(chapter_copy.get("id", 0) or 0)
@@ -637,7 +716,9 @@ def create_work_version_snapshot(
     return manifest
 
 
-def get_work_version_manifest(work_id: str, version_id: str) -> dict[str, Any] | None:
+def get_work_version_manifest(
+    work_id: str, version_id: str
+) -> dict[str, object] | None:
     if not version_id or "/" in version_id or "\\" in version_id:
         return None
     manifest_path = _versions_dir_for_work(work_id) / version_id / "manifest.json"
@@ -652,7 +733,7 @@ def get_work_version_manifest(work_id: str, version_id: str) -> dict[str, Any] |
     return raw
 
 
-def list_work_versions(work_id: str, limit: int = 50) -> list[dict[str, Any]]:
+def list_work_versions(work_id: str, limit: int = 50) -> list[WorkVersionSummary]:
     if limit < 1:
         return []
 
@@ -660,7 +741,7 @@ def list_work_versions(work_id: str, limit: int = 50) -> list[dict[str, Any]]:
     if not root.exists() or not root.is_dir():
         return []
 
-    versions: list[dict[str, Any]] = []
+    versions: list[WorkVersionSummary] = []
     candidates = sorted(
         [path for path in root.iterdir() if path.is_dir()],
         key=lambda path: path.name,
@@ -712,7 +793,7 @@ def get_page_files(work_id: str, page_index: int) -> dict[str, str] | None:
         return {"image": row["image_filename"], "thumb": row["thumb_filename"]}
 
 
-def list_work_page_rows(work_id: str) -> list[dict[str, Any]]:
+def list_work_page_rows(work_id: str) -> list[dict[str, object]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -730,7 +811,7 @@ def list_work_page_image_names(work_id: str) -> list[str]:
     return [str(row.get("image_filename", "")) for row in list_work_page_rows(work_id)]
 
 
-def list_work_chapters(work_id: str) -> list[dict[str, Any]]:
+def list_work_chapters(work_id: str) -> list[dict[str, object]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -749,7 +830,7 @@ def add_work_chapter(
     title: str,
     start_page: int,
     end_page: int,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     with get_connection() as connection:
         row = connection.execute(
             "SELECT COALESCE(MAX(chapter_index), 0) + 1 AS next_idx FROM work_chapters WHERE work_id = ?",

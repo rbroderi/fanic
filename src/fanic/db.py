@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from pathlib import Path
 
-from fanic.paths import DB_PATH, PACKAGE_ROOT, ensure_storage_dirs
+from fanic.paths import DATA_ROOT, DB_PATH, PACKAGE_ROOT, ensure_storage_dirs
 
 SCHEMA_PATH = PACKAGE_ROOT / "sql" / "schema.sql"
 
@@ -103,7 +104,16 @@ def get_connection() -> sqlite3.Connection:
     return connection
 
 
-def initialize_database(schema_path: Path = SCHEMA_PATH) -> None:
+def _reset_runtime_data() -> None:
+    if DATA_ROOT.exists():
+        shutil.rmtree(DATA_ROOT)
+
+
+def initialize_database(
+    schema_path: Path = SCHEMA_PATH, *, reset: bool = False
+) -> None:
+    if reset:
+        _reset_runtime_data()
     ensure_storage_dirs()
     sql = schema_path.read_text(encoding="utf-8")
     with sqlite3.connect(DB_PATH) as connection:

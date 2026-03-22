@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from threading import Lock
-from typing import TypedDict, cast
+from typing import TypedDict
 
 
 class IngestProgress(TypedDict):
@@ -68,4 +68,12 @@ def get_progress(token: str) -> IngestProgress | None:
         value = _PROGRESS.get(token)
         if value is None:
             return None
-        return cast(IngestProgress, cast(object, dict(value)))
+        return {
+            "stage": value["stage"],
+            "message": value["message"],
+            "current": value["current"],
+            "total": value["total"],
+            "done": value["done"],
+            "ok": value["ok"],
+            "updated_at": value["updated_at"],
+        }

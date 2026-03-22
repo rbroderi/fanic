@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-# pyright: reportMissingImports=false, reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportGeneralTypeIssues=false, reportArgumentType=false, reportAny=false
 import os
 from pathlib import Path
+from typing import Any, cast
 
 import open_clip
+import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 import torch
 from tqdm import tqdm
-
-try:
-    # Ensure PIL AVIF codec is registered when available.
-    import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
-except Exception:
-    pillow_avif = None
 
 _MODEL_NAME = "ViT-L-14"
 _MODEL_PRETRAINED = "openai"
@@ -85,12 +80,66 @@ def _call_kw(
         return None
 
 
+def _as_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _as_prob_0_1(value: object) -> float:
-    try:
-        score = float(value)
-    except Exception:
+    parsed = _as_float(value)
+    if parsed is None:
         return 0.0
-    return max(0.0, min(1.0, score))
+    return max(0.0, min(1.0, parsed))
+
+
+def _enter_context(manager: object | None) -> bool:
+    if manager is None:
+        return False
+    member = getattr(manager, "__enter__", None)
+    if not callable(member):
+        return False
+    try:
+        _ = member()
+    except Exception:
+        return False
+    return True
+
+
+def _exit_context(manager: object | None) -> None:
+    if manager is None:
+        return
+    _ = _call_kw(manager, "__exit__", None, None, None)
+
+
+def _get_no_grad_context(torch_mod: object | None) -> object | None:
+    no_grad_factory = getattr(torch_mod, "no_grad", None)
+    if not callable(no_grad_factory):
+        return None
+    try:
+        return no_grad_factory()
+    except Exception:
+        return None
+
+
+def _extract_model_and_preprocess(
+    created: object | None,
+) -> tuple[object, object] | None:
+    if not isinstance(created, tuple):
+        return None
+    try:
+        model: Any = cast(Any, created[0])
+        preprocess: Any = cast(Any, created[2])
+    except IndexError:
+        return None
+    return model, preprocess
 
 
 def _empty_nsfw_confidences() -> dict[str, float]:
@@ -138,14 +187,14 @@ def _ensure_loaded() -> bool:
             force_quick_gelu=True,
             cache_dir=_CACHE_DIR,
         )
-        if not isinstance(created, tuple) or len(created) < 3:
+        extracted = _extract_model_and_preprocess(created)
+        if extracted is None:
             progress.close()
             return False
+        model, preprocess = extracted
         _ = progress.update(1)
         progress.set_postfix_str("model created")
 
-        model = created[0]
-        preprocess = created[2]
         moved_model = _call1(model, "to", _device)
         if moved_model is None:
             return False
@@ -160,12 +209,15 @@ def _ensure_loaded() -> bool:
         _ = progress.update(1)
         progress.set_postfix_str("tokenizer ready")
 
-        no_grad = _call0(torch_mod, "no_grad")
+        no_grad = _get_no_grad_context(torch_mod)
         if no_grad is None:
             progress.close()
             return False
 
-        with no_grad:
+        if not _enter_context(no_grad):
+            progress.close()
+            return False
+        try:
             all_prompts: list[str] = []
             class_ranges: list[tuple[str, int, int]] = []
             cursor = 0
@@ -245,6 +297,8 @@ def _ensure_loaded() -> bool:
             _torch_mod = torch_mod
             _ = progress.update(1)
             progress.set_postfix_str("class prototypes ready")
+        finally:
+            _exit_context(no_grad)
     except Exception:
         _model = None
         _preprocess = None
@@ -282,11 +336,13 @@ def _nsfw_score_internal(path: str) -> tuple[float, dict[str, float]]:
         if image_tensor is None:
             return 0.0, _empty_nsfw_confidences()
 
-        no_grad = _call0(_torch_mod, "no_grad")
+        no_grad = _get_no_grad_context(_torch_mod)
         if no_grad is None:
             return 0.0, _empty_nsfw_confidences()
 
-        with no_grad:
+        if not _enter_context(no_grad):
+            return 0.0, _empty_nsfw_confidences()
+        try:
             image_emb = _call1(_model, "encode_image", image_tensor)
             if image_emb is None:
                 return 0.0, _empty_nsfw_confidences()
@@ -311,10 +367,7 @@ def _nsfw_score_internal(path: str) -> tuple[float, dict[str, float]]:
             model_logit_scale = getattr(_model, "logit_scale", None)
             model_logit_scale_exp = _call0(model_logit_scale, "exp")
             model_logit_scale_item = _call0(model_logit_scale_exp, "item")
-            try:
-                extracted_scale = float(model_logit_scale_item)
-            except Exception:
-                extracted_scale = None
+            extracted_scale = _as_float(model_logit_scale_item)
             if extracted_scale is not None and extracted_scale > 0:
                 logit_scale_value = extracted_scale
 
@@ -342,6 +395,8 @@ def _nsfw_score_internal(path: str) -> tuple[float, dict[str, float]]:
 
             explicit_prob = confidences.get("explicit", 0.0)
             return explicit_prob, confidences
+        finally:
+            _exit_context(no_grad)
     except Exception:
         return 0.0, _empty_nsfw_confidences()
 

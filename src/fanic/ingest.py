@@ -3,21 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from io import BytesIO
 from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
+import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 from PIL import Image, UnidentifiedImageError
 from tqdm import tqdm
-
-try:
-    # Ensure PIL AVIF codec is registered when available.
-    import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
-except Exception:
-    pillow_avif = None
 
 from fanic.moderation import (
     get_explicit_threshold,
@@ -54,6 +49,9 @@ _RATING_RANK = {
     "Explicit": 4,
 }
 
+type ComicInfoValue = str | list[str]
+type ComicInfoMetadata = dict[str, ComicInfoValue]
+
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
     buffer = BytesIO()
@@ -84,11 +82,15 @@ def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str
 
 
 class ModerationBlockedError(ValueError):
+    moderation: dict[str, object]
+
     def __init__(self, moderation: dict[str, object]) -> None:
         reasons_obj = moderation.get("reasons")
         reasons: list[str] = []
-        if isinstance(reasons_obj, list):
-            reasons = [str(reason) for reason in reasons_obj]
+        if isinstance(reasons_obj, str):
+            reasons = [reasons_obj]
+        elif reasons_obj is not None:
+            reasons = [str(reasons_obj)]
 
         reason_text = "; ".join(reasons) if reasons else "blocked by moderation"
         super().__init__(f"Blocked image: {reason_text}")
@@ -177,8 +179,8 @@ def _clean_xml_value(value: str | None) -> str:
     return (value or "").strip()
 
 
-def parse_comicinfo_xml(xml_text: str) -> dict[str, object]:
-    metadata: dict[str, object] = {}
+def parse_comicinfo_xml(xml_text: str) -> ComicInfoMetadata:
+    metadata: ComicInfoMetadata = {}
 
     try:
         root = ET.fromstring(xml_text)
@@ -229,7 +231,7 @@ def parse_comicinfo_xml(xml_text: str) -> dict[str, object]:
     return metadata
 
 
-def extract_comicinfo_metadata_from_cbz(cbz_path: Path) -> dict[str, object]:
+def extract_comicinfo_metadata_from_cbz(cbz_path: Path) -> ComicInfoMetadata:
     cbz_path = cbz_path.resolve()
     if not cbz_path.exists():
         return {}
@@ -247,7 +249,7 @@ def extract_comicinfo_metadata_from_cbz(cbz_path: Path) -> dict[str, object]:
         return parse_comicinfo_xml(xml_text)
 
 
-def _load_metadata_from_comicinfo(zip_file: ZipFile) -> dict[str, object]:
+def _load_metadata_from_comicinfo(zip_file: ZipFile) -> ComicInfoMetadata:
     candidates = [
         member
         for member in zip_file.namelist()
@@ -287,7 +289,7 @@ def ingest_cbz(
     *,
     show_progress: bool = False,
     progress_desc: str = "Ingesting CBZ pages",
-    progress_hook: (callable[[str, str, int, int], None] | None) = None,
+    progress_hook: Callable[[str, str, int, int], None] | None = None,
 ) -> dict[str, object]:
     ensure_storage_dirs()
     cbz_path = cbz_path.resolve()
@@ -297,17 +299,18 @@ def ingest_cbz(
     with ZipFile(cbz_path) as zip_file:
         if progress_hook is not None:
             progress_hook("read-metadata", "Reading metadata", 0, 0)
-        metadata: dict[str, object] = _load_metadata_from_comicinfo(zip_file)
+        metadata: dict[str, object] = {
+            key: value for key, value in _load_metadata_from_comicinfo(zip_file).items()
+        }
         if metadata_override_path:
-            override_obj = cast(
-                object,
-                json.loads(metadata_override_path.read_text(encoding="utf-8")),
+            override_obj = json.loads(
+                metadata_override_path.read_text(encoding="utf-8")
             )
             if isinstance(override_obj, Mapping):
-                override_map = cast(dict[object, object], override_obj)
+                override_map = cast(Mapping[object, object], override_obj)
                 normalized_override: dict[str, object] = {}
-                for key in override_map:
-                    normalized_override[str(key)] = override_map[key]
+                for key, value in override_map.items():
+                    normalized_override[str(key)] = value
                 metadata.update(normalized_override)
 
         title = str(metadata.get("title") or cbz_path.stem)
@@ -622,7 +625,7 @@ def ingest_editor_page(
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert page image") from exc
 
-    inserted_page = {
+    inserted_page: dict[str, object] = {
         "page_index": 0,
         "image_filename": image_name,
         "thumb_filename": thumb_name,
@@ -819,10 +822,8 @@ def _reconcile_chapters_after_page_changes(
     chapters = list_work_chapters(work_id)
 
     for chapter in chapters:
-        chapter_id = _as_int(cast(object, chapter.get("id", 0)), 0)
-        title = _as_str(
-            cast(object, chapter.get("title", "Untitled Chapter")), "Untitled Chapter"
-        )
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        title = _as_str(chapter.get("title", "Untitled Chapter"), "Untitled Chapter")
 
         members = list_work_chapter_members(chapter_id)
         if not members:
@@ -867,11 +868,7 @@ def editor_replace_page_image(
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
     current_page = next(
-        (
-            p
-            for p in pages
-            if _as_int(cast(object, p.get("page_index", 0)), 0) == page_index
-        ),
+        (p for p in pages if _as_int(p.get("page_index", 0), 0) == page_index),
         None,
     )
     if not current_page:
@@ -879,7 +876,7 @@ def editor_replace_page_image(
 
     pages_dir = WORKS_DIR / work_id / "pages"
     thumbs_dir = WORKS_DIR / work_id / "thumbs"
-    old_image_name = _as_str(cast(object, current_page.get("image_filename", "")))
+    old_image_name = _as_str(current_page.get("image_filename", ""))
 
     width: int | None = None
     height: int | None = None
@@ -907,7 +904,7 @@ def editor_replace_page_image(
 
     updated_pages: list[dict[str, object]] = []
     for page in pages:
-        if _as_int(cast(object, page.get("page_index", 0)), 0) == page_index:
+        if _as_int(page.get("page_index", 0), 0) == page_index:
             updated_pages.append(
                 {
                     "page_index": page_index,
@@ -924,7 +921,7 @@ def editor_replace_page_image(
 
     chapters = list_work_chapters(work_id)
     for chapter in chapters:
-        chapter_id = _as_int(cast(object, chapter.get("id", 0)), 0)
+        chapter_id = _as_int(chapter.get("id", 0), 0)
         members = list_work_chapter_members(chapter_id)
         remapped_members = [
             image_name if name == old_image_name else name for name in members
@@ -963,23 +960,15 @@ def editor_delete_page(
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
     current_page = next(
-        (
-            p
-            for p in pages
-            if _as_int(cast(object, p.get("page_index", 0)), 0) == page_index
-        ),
+        (p for p in pages if _as_int(p.get("page_index", 0), 0) == page_index),
         None,
     )
     if not current_page:
         raise FileNotFoundError(f"Page index not found: {page_index}")
 
-    image_name = _as_str(cast(object, current_page.get("image_filename", "")))
+    image_name = _as_str(current_page.get("image_filename", ""))
 
-    remaining = [
-        p
-        for p in pages
-        if _as_int(cast(object, p.get("page_index", 0)), 0) != page_index
-    ]
+    remaining = [p for p in pages if _as_int(p.get("page_index", 0), 0) != page_index]
     renumbered: list[dict[str, object]] = []
     for idx, page in enumerate(remaining, start=1):
         renumbered.append(
@@ -1069,7 +1058,7 @@ def editor_reorder_gallery(
 
     by_filename: dict[str, dict[str, object]] = {}
     for page in pages:
-        name = _as_str(cast(object, page.get("image_filename", "")))
+        name = _as_str(page.get("image_filename", ""))
         if name:
             by_filename[name] = page
 
@@ -1103,8 +1092,8 @@ def editor_reorder_gallery(
     chapters = list_work_chapters(work_id)
 
     for chapter in chapters:
-        chapter_id = _as_int(cast(object, chapter.get("id", 0)), 0)
-        title = _as_str(cast(object, chapter.get("title", "Untitled Chapter")))
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        title = _as_str(chapter.get("title", "Untitled Chapter"))
         requested = chapter_members.get(str(chapter_id))
 
         if requested is None:

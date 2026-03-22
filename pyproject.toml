@@ -20,11 +20,24 @@ dependencies = [
     "torch>=2.10.0",
     "tqdm>=4.67.3",
     "pathvalidate>=3.3.1",
+    "beartype>=0.22.9",
 ]
 
-[project.scripts]
-fanic = "fanic.__main__:main"
+[project.optional-dependencies]
+dev = [
+    "autopep695>=1.1.4",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+pythonVersion = "3.13"
+reportUnusedCallResult = "none"
+reportAny = "none"
+reportExplicitAny = "none"
+reportImplicitStringConcatenation = "none"

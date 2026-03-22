@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from html import escape
-from typing import Any
 
 from fanic.cylinder_sites.common import (
     STATIC_ROOT,
@@ -23,7 +22,7 @@ from fanic.cylinder_sites.editor_metadata import (
 )
 
 
-def _as_csv(value: Any) -> str:
+def _as_csv(value: object) -> str:
     if isinstance(value, list):
         return ", ".join(str(item) for item in value if str(item).strip())
     if isinstance(value, str):

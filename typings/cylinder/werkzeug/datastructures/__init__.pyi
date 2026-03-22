@@ -12,16 +12,13 @@ from .mixins import ImmutableDictMixin, ImmutableListMixin, ImmutableMultiDictMi
 
 if t.TYPE_CHECKING:
     ...
-K = t.TypeVar("K")
-V = t.TypeVar("V")
-T = t.TypeVar("T")
-def iter_multi_items(mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]])) -> cabc.Iterator[tuple[K, V]]:
+def iter_multi_items[K, V](mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]])) -> cabc.Iterator[tuple[K, V]]:
     """Iterates over the items of a mapping yielding keys and values
     without dropping any from more complex structures.
     """
     ...
 
-class ImmutableList(ImmutableListMixin, list[V]):
+class ImmutableList[V](ImmutableListMixin, list[V]):
     """An immutable :class:`list`.
 
     .. versionadded:: 0.5
@@ -33,7 +30,7 @@ class ImmutableList(ImmutableListMixin, list[V]):
     
 
 
-class TypeConversionDict(dict[K, V]):
+class TypeConversionDict[K, V](dict[K, V]):
     """Works like a regular dict but the :meth:`get` method can perform
     type conversions.  :class:`MultiDict` and :class:`CombinedMultiDict`
     are subclasses of this class and provide the same feature.
@@ -49,18 +46,18 @@ class TypeConversionDict(dict[K, V]):
         ...
     
     @t.overload
-    def get(self, key: K, default: T) -> V | T:
+    def get[T](self, key: K, default: T) -> V | T:
         ...
     
     @t.overload
-    def get(self, key: str, type: cabc.Callable[[V], T]) -> T | None:
+    def get[T](self, key: str, type: cabc.Callable[[V], T]) -> T | None:
         ...
     
     @t.overload
-    def get(self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
+    def get[T](self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
         ...
     
-    def get(self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
+    def get[T](self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
         """Return the default value if the requested data doesn't exist.
         If `type` is provided and is a callable it should convert the value,
         return it or raise a :exc:`ValueError` if that is not possible.  In
@@ -89,7 +86,7 @@ class TypeConversionDict(dict[K, V]):
     
 
 
-class ImmutableTypeConversionDict(ImmutableDictMixin[K, V], TypeConversionDict[K, V]):
+class ImmutableTypeConversionDict[K, V](ImmutableDictMixin[K, V], TypeConversionDict[K, V]):
     """Works like a :class:`TypeConversionDict` but does not support
     modifications.
 
@@ -107,7 +104,7 @@ class ImmutableTypeConversionDict(ImmutableDictMixin[K, V], TypeConversionDict[K
     
 
 
-class MultiDict(TypeConversionDict[K, V]):
+class MultiDict[K, V](TypeConversionDict[K, V]):
     """A :class:`MultiDict` is a dictionary subclass customized to deal with
     multiple values for the same key which is for example used by the parsing
     functions in the wrappers.  This is necessary because some HTML form
@@ -194,10 +191,10 @@ class MultiDict(TypeConversionDict[K, V]):
         ...
     
     @t.overload
-    def getlist(self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
     
-    def getlist(self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         """Return the list of items for a given key. If that key is not in the
         `MultiDict`, the return value will be an empty list.  Just like `get`,
         `getlist` accepts a `type` parameter.  All items will be converted
@@ -359,10 +356,10 @@ class MultiDict(TypeConversionDict[K, V]):
         ...
     
     @t.overload
-    def pop(self, key: K, default: T) -> V | T:
+    def pop[T](self, key: K, default: T) -> V | T:
         ...
     
-    def pop(self, key: K, default: V | T = ...) -> V | T:
+    def pop[T](self, key: K, default: V | T = ...) -> V | T:
         """Pop the first item for a list on the dict.  Afterwards the
         key is removed from the dict, so additional values are discarded:
 
@@ -407,7 +404,7 @@ class MultiDict(TypeConversionDict[K, V]):
     
 
 
-class _omd_bucket(t.Generic[K, V]):
+class _omd_bucket[K, V]():
     """Wraps values in the :class:`OrderedMultiDict`.  This makes it
     possible to keep an order over multiple different keys.  It requires
     a lot of extra memory and slows down access a lot, but makes it
@@ -422,7 +419,7 @@ class _omd_bucket(t.Generic[K, V]):
     
 
 
-class _OrderedMultiDict(MultiDict[K, V]):
+class _OrderedMultiDict[K, V](MultiDict[K, V]):
     """Works like a regular :class:`MultiDict` but preserves the
     order of the fields.  To convert the ordered multi dict into a
     list you can use the :meth:`items` method and pass it ``multi=True``.
@@ -491,10 +488,10 @@ class _OrderedMultiDict(MultiDict[K, V]):
         ...
     
     @t.overload
-    def getlist(self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
     
-    def getlist(self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         ...
     
     def setlist(self, key: K, new_list: cabc.Iterable[V]) -> None:
@@ -518,10 +515,10 @@ class _OrderedMultiDict(MultiDict[K, V]):
         ...
     
     @t.overload
-    def pop(self, key: K, default: T) -> V | T:
+    def pop[T](self, key: K, default: T) -> V | T:
         ...
     
-    def pop(self, key: K, default: V | T = ...) -> V | T:
+    def pop[T](self, key: K, default: V | T = ...) -> V | T:
         ...
     
     def popitem(self) -> tuple[K, V]:
@@ -532,7 +529,7 @@ class _OrderedMultiDict(MultiDict[K, V]):
     
 
 
-class CombinedMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
+class CombinedMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
     """A read only :class:`MultiDict` that you can pass multiple :class:`MultiDict`
     instances as sequence and it will combine the return values of all wrapped
     dicts:
@@ -576,18 +573,18 @@ class CombinedMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
         ...
     
     @t.overload
-    def get(self, key: K, default: T) -> V | T:
+    def get[T](self, key: K, default: T) -> V | T:
         ...
     
     @t.overload
-    def get(self, key: str, type: cabc.Callable[[V], T]) -> T | None:
+    def get[T](self, key: str, type: cabc.Callable[[V], T]) -> T | None:
         ...
     
     @t.overload
-    def get(self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
+    def get[T](self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
         ...
     
-    def get(self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
+    def get[T](self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
         ...
     
     @t.overload
@@ -595,10 +592,10 @@ class CombinedMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
         ...
     
     @t.overload
-    def getlist(self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
     
-    def getlist(self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
+    def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         ...
     
     def keys(self) -> cabc.Iterable[K]:
@@ -650,7 +647,7 @@ class CombinedMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
     
 
 
-class ImmutableDict(ImmutableDictMixin[K, V], dict[K, V]):
+class ImmutableDict[K, V](ImmutableDictMixin[K, V], dict[K, V]):
     """An immutable :class:`dict`.
 
     .. versionadded:: 0.5
@@ -670,7 +667,7 @@ class ImmutableDict(ImmutableDictMixin[K, V], dict[K, V]):
     
 
 
-class ImmutableMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
+class ImmutableMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
     """An immutable :class:`MultiDict`.
 
     .. versionadded:: 0.5
@@ -687,7 +684,7 @@ class ImmutableMultiDict(ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
     
 
 
-class _ImmutableOrderedMultiDict(ImmutableMultiDictMixin[K, V], _OrderedMultiDict[K, V]):
+class _ImmutableOrderedMultiDict[K, V](ImmutableMultiDictMixin[K, V], _OrderedMultiDict[K, V]):
     """An immutable :class:`OrderedMultiDict`.
 
     .. deprecated:: 3.1
@@ -710,7 +707,7 @@ class _ImmutableOrderedMultiDict(ImmutableMultiDictMixin[K, V], _OrderedMultiDic
     
 
 
-class CallbackDict(UpdateDictMixin[K, V], dict[K, V]):
+class CallbackDict[K, V](UpdateDictMixin[K, V], dict[K, V]):
     """A dict that calls a function passed every time something is changed.
     The function is passed the dict instance.
     """
