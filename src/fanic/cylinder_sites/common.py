@@ -38,6 +38,8 @@ RATING_ICON_BY_NAME = {
 SITE_FOOTER_HTML = (
     '<footer class="site-footer" role="contentinfo">'
     '<div class="site-footer-inner">'
+    '<a class="site-footer-link" href="/terms">Terms and Conditions</a>'
+    '<span class="site-footer-sep" aria-hidden="true"> | </span>'
     '<a class="site-footer-link" href="/faq">FAQ</a>'
     '<span class="site-footer-sep" aria-hidden="true"> | </span>'
     '<a class="site-footer-link" href="/dcma">DMCA Policy</a>'

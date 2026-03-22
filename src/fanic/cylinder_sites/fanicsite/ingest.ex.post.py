@@ -147,6 +147,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     upload_token = request.form.get("upload_token", "").strip()
 
     if action in {"load-metadata", "ingest"}:
+        terms_accepted = request.form.get("agree_terms", "").strip().lower() in {
+            "on",
+            "true",
+            "1",
+            "yes",
+        }
+        if not terms_accepted:
+            return render_ingest_page(
+                request,
+                response,
+                ingest_status="You must agree to the Terms and Conditions before uploading.",
+                ingest_status_kind="error",
+            )
+
         if cbz_upload is None:
             return render_ingest_page(
                 request,

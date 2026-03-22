@@ -60,6 +60,11 @@
           <label for="cbzFile">Comic Archive (.cbz)</label>
           <input id="cbzFile" name="cbz" type="file" accept=".cbz" />
 
+          <label for="agreeTerms" class="checkbox-label">
+            <input id="agreeTerms" name="agree_terms" type="checkbox" required />
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
+          </label>
+
           <button id="loadMetadataBtn" type="submit" name="action" value="load-metadata">Import CBZ into editor draft</button>
 
           <div id="uploadProgressWrap" class="upload-progress" hidden>
