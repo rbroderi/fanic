@@ -329,7 +329,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "autopep695" },
-    { name = "git-filter-repo" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -340,7 +339,6 @@ requires-dist = [
     { name = "autopep695", marker = "extra == 'dev'", specifier = ">=1.1.4" },
     { name = "beartype", specifier = ">=0.22.9" },
     { name = "cylinder", specifier = ">=0.1.0" },
-    { name = "git-filter-repo", marker = "extra == 'dev'", specifier = ">=2.47.0" },
     { name = "lazi", specifier = ">=1.9.161" },
     { name = "open-clip-torch", specifier = ">=3.3.0" },
     { name = "pathvalidate", specifier = ">=3.3.1" },
@@ -388,15 +386,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a5/d3/8650919bc3c7c6e90ee3fa7fd618bf373cbbe55dff043bd67353dbb20cd8/ftfy-6.3.1.tar.gz", hash = "sha256:9b3c3d90f84fb267fe64d375a07b7f8912d817cf86009ae134aa03e1819506ec", size = 308927 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ab/6e/81d47999aebc1b155f81eca4477a616a70f238a2549848c38983f3c22a82/ftfy-6.3.1-py3-none-any.whl", hash = "sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083", size = 44821 },
-]
-
-[[package]]
-name = "git-filter-repo"
-version = "2.47.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b9/bb/7a283f568af6b0528ade65e8ace84bd6ba46003e429101bcd62c232d01a5/git_filter_repo-2.47.0.tar.gz", hash = "sha256:411b27e68a080c07a69c233cb526dbc2d848b09a72f10477f4444dd0822cf290", size = 275743 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/60/d3943f0880ebcb7e0bdf79254d10dddd39c7b656eeecae32b8806ff66dec/git_filter_repo-2.47.0-py3-none-any.whl", hash = "sha256:2cd04929b9024e83e65db571cbe36aec65ead0cb5f9ec5abe42158654af5ad83", size = 76282 },
 ]
 
 [[package]]
