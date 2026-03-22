@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 from fanic.cylinder_main import serve
 from fanic.db import initialize_database
 from fanic.ingest import ingest_cbz
+from fanic.settings import get_settings
 
 
 def _enable_beartype() -> None:
-    if os.getenv("FANIC_ENABLE_BEARTYPE", "1") == "0":
+    if not get_settings().fanic_enable_beartype:
         return
     from beartype.claw import beartype_package
 

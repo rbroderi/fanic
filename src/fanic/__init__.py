@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-import os
 
-if os.getenv("FANIC_ENABLE_BEARTYPE", "1") != "0":
+from fanic.settings import get_settings
+
+if get_settings().fanic_enable_beartype:
     from beartype.claw import beartype_this_package
 
     logging.getLogger(__name__).info(

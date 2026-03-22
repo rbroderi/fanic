@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
 import time
 from html import escape
 from pathlib import Path
@@ -11,24 +10,23 @@ from typing import Callable, Protocol, cast
 
 from authlib.jose import jwt
 from authlib.jose.errors import JoseError
-from dotenv import load_dotenv
 
 from fanic.ingest import ingest_cbz
 from fanic.paths import WORKS_DIR
+from fanic.settings import get_settings
 
 mimetypes.add_type("image/avif", ".avif")
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = (PACKAGE_ROOT / "static").resolve()
-
-_ = load_dotenv()
+_SETTINGS = get_settings()
 
 SESSION_COOKIE_NAME = "fanic_session"
-SESSION_SECRET = os.getenv("FANIC_SESSION_SECRET", "fanic-dev-secret-change-me")
-SESSION_MAX_AGE = int(os.getenv("FANIC_SESSION_MAX_AGE", "43200"))
-SESSION_COOKIE_SECURE = os.getenv("FANIC_SESSION_SECURE", "0") == "1"
-ADMIN_USERNAME = os.getenv("FANIC_ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("FANIC_ADMIN_PASSWORD", "admin")
+SESSION_SECRET = _SETTINGS.fanic_session_secret
+SESSION_MAX_AGE = _SETTINGS.fanic_session_max_age
+SESSION_COOKIE_SECURE = _SETTINGS.fanic_session_secure
+ADMIN_USERNAME = _SETTINGS.fanic_admin_username
+ADMIN_PASSWORD = _SETTINGS.fanic_admin_password
 
 RATING_ICON_BY_NAME = {
     "General Audiences": "citrus.svg",
@@ -36,6 +34,16 @@ RATING_ICON_BY_NAME = {
     "Mature": "lime.svg",
     "Explicit": "lemon.svg",
 }
+
+SITE_FOOTER_HTML = (
+    '<footer class="site-footer" role="contentinfo">'
+    '<div class="site-footer-inner">'
+    '<a class="site-footer-link" href="/faq">FAQ</a>'
+    '<span class="site-footer-sep" aria-hidden="true"> | </span>'
+    '<a class="site-footer-link" href="/dcma">DMCA Policy</a>'
+    "</div>"
+    "</footer>"
+)
 
 JWTEncode = Callable[[object, object, object], bytes]
 JWTDecode = Callable[[str | bytes, object], dict[str, object]]
@@ -249,6 +257,10 @@ def render_html_template(
 
     for marker, value in merged.items():
         html = html.replace(marker, value)
+
+    # Add the global footer to styled site pages without editing each template.
+    if "/static/styles.css" in html and "</body>" in html:
+        html = html.replace("</body>", f"{SITE_FOOTER_HTML}\n  </body>", 1)
 
     response.status_code = 200
     response.content_type = "text/html; charset=utf-8"

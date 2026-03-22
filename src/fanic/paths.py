@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from fanic.settings import get_settings
+
 PACKAGE_ROOT = Path(__file__).resolve().parent
-DATA_ROOT = Path(os.getenv("FANIC_DATA_DIR", PACKAGE_ROOT / "storage"))
+_SETTINGS = get_settings()
+DATA_ROOT = _SETTINGS.data_root
 DB_PATH = DATA_ROOT / "fanic.db"
 CBZ_DIR = DATA_ROOT / "cbz"
 WORKS_DIR = DATA_ROOT / "works"

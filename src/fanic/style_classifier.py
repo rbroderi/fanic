@@ -5,12 +5,13 @@ import os
 import sys
 import time
 from contextlib import AbstractContextManager
-from pathlib import Path
 from typing import Any, cast
 
 import open_clip
 import torch
 from tqdm import tqdm
+
+from fanic.settings import get_settings
 
 try:
     # Ensure PIL AVIF codec is registered when available.
@@ -55,25 +56,18 @@ _STYLE_PROMPTS: dict[str, list[str]] = {
     ],
 }
 _STYLE_NAMES = list(_STYLE_PROMPTS.keys())
-_CACHE_DIR = os.getenv("FANIC_OPENCLIP_CACHE_DIR", str(Path.home() / ".cache" / "clip"))
-_DEFAULT_STYLE_MIN_CONFIDENCE: str = os.getenv(
-    "FANIC_STYLE_MIN_CONFIDENCE",
-    os.getenv("FANIC_PHOTOREAL_MIN_CONFIDENCE", "0.6"),
-)
+_SETTINGS = get_settings()
+_CACHE_DIR = _SETTINGS.fanic_openclip_cache_dir
+_DEFAULT_STYLE_MIN_CONFIDENCE = _SETTINGS.style_min_confidence_effective
 _MIN_CONFIDENCE_BY_STYLE = {
-    "photorealistic": float(
-        os.getenv(
-            "FANIC_STYLE_MIN_CONFIDENCE_PHOTOREALISTIC",
-            "0.90",
-        )
-    )
+    "photorealistic": _SETTINGS.fanic_style_min_confidence_photorealistic
 }
 _LOW_CONFIDENCE_FALLBACK_STYLE = "comic"
-_PHOTO_BLOCK_MIN_MARGIN = float(os.getenv("FANIC_PHOTO_BLOCK_MIN_MARGIN", "0.01"))
-_STYLE_MIN_TOP_PROB = float(os.getenv("FANIC_STYLE_MIN_TOP_PROB", "0.34"))
-_STYLE_MIN_TOP_MARGIN = float(os.getenv("FANIC_STYLE_MIN_TOP_MARGIN", "0.05"))
-_DEFAULT_LOGIT_SCALE = float(os.getenv("FANIC_STYLE_LOGIT_SCALE", "100.0"))
-_LOAD_RETRY_SECONDS = float(os.getenv("FANIC_STYLE_LOAD_RETRY_SECONDS", "5.0"))
+_PHOTO_BLOCK_MIN_MARGIN = _SETTINGS.fanic_photo_block_min_margin
+_STYLE_MIN_TOP_PROB = _SETTINGS.fanic_style_min_top_prob
+_STYLE_MIN_TOP_MARGIN = _SETTINGS.fanic_style_min_top_margin
+_DEFAULT_LOGIT_SCALE = _SETTINGS.fanic_style_logit_scale
+_LOAD_RETRY_SECONDS = _SETTINGS.fanic_style_load_retry_seconds
 
 _model: object | None = None
 _preprocess: object | None = None
@@ -84,7 +78,7 @@ _device: str = "cpu"
 _last_load_failed_at = 0.0
 _last_load_error = ""
 _last_classify_error = ""
-_VERBOSE_LOAD = os.getenv("FANIC_MODEL_LOAD_LOGS", "1") != "0"
+_VERBOSE_LOAD = _SETTINGS.fanic_model_load_logs
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -558,5 +552,5 @@ def get_style_classifier_debug_state() -> dict[str, object]:
     }
 
 
-if os.getenv("FANIC_PRELOAD_MODELS", "1") != "0":
+if _SETTINGS.fanic_preload_models:
     _ = _ensure_loaded()

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TypedDict
 
 from fanic.nsfw_detector import nsfw_score_with_confidences
+from fanic.settings import get_settings
 from fanic.style_classifier import (
     classify_style_with_confidences,
     get_style_classifier_debug_state,
@@ -24,7 +24,8 @@ class ModerationResult(TypedDict):
     reasons: list[str]
 
 
-_EXPLICIT_THRESHOLD = float(os.getenv("FANIC_EXPLICIT_THRESHOLD", "0.5"))
+_SETTINGS = get_settings()
+_EXPLICIT_THRESHOLD = _SETTINGS.fanic_explicit_threshold
 _ALLOWED_STYLES = {"comic", "illustrated", "painterly", "anime", "cgi"}
 _LOGGER = logging.getLogger(__name__)
 

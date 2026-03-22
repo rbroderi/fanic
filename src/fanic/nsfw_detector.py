@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any, cast
 
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 import torch
 from tqdm import tqdm
+
+from fanic.settings import get_settings
 
 _MODEL_NAME = "ViT-L-14"
 _MODEL_PRETRAINED = "openai"
@@ -26,8 +27,9 @@ _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
     ],
 }
 _NSFW_CLASS_NAMES = list(_NSFW_PROMPTS_BY_CLASS.keys())
-_CACHE_DIR = os.getenv("FANIC_OPENCLIP_CACHE_DIR", str(Path.home() / ".cache" / "clip"))
-_DEFAULT_LOGIT_SCALE = float(os.getenv("FANIC_NSFW_LOGIT_SCALE", "100.0"))
+_SETTINGS = get_settings()
+_CACHE_DIR = _SETTINGS.fanic_openclip_cache_dir
+_DEFAULT_LOGIT_SCALE = _SETTINGS.fanic_nsfw_logit_scale
 
 _model: object | None = None
 _preprocess: object | None = None
@@ -36,7 +38,7 @@ _text_emb: object | None = None
 _torch_mod: object | None = None
 _device: str = "cpu"
 _load_attempted = False
-_VERBOSE_LOAD = os.getenv("FANIC_MODEL_LOAD_LOGS", "1") != "0"
+_VERBOSE_LOAD = _SETTINGS.fanic_model_load_logs
 
 
 def _call0(obj: object | None, name: str) -> object | None:
@@ -412,5 +414,5 @@ def nsfw_score_with_confidences(path: str) -> tuple[float, dict[str, float]]:
     return _nsfw_score_internal(path)
 
 
-if os.getenv("FANIC_PRELOAD_MODELS", "1") != "0":
+if _SETTINGS.fanic_preload_models:
     _ = _ensure_loaded()
