@@ -26,6 +26,7 @@ from fanic.repository import (
     add_work_comment,
     add_work_kudo,
     can_view_work,
+    create_work_version_snapshot,
     delete_work,
     get_work,
     update_work_metadata,
@@ -336,5 +337,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         metadata,
         editor_username=username,
         edited_by_admin=username == ADMIN_USERNAME,
+    )
+    _ = create_work_version_snapshot(
+        work_id,
+        action="metadata-edit",
+        actor=username,
+        details={"edited_by_admin": username == ADMIN_USERNAME},
     )
     return _redirect(response, f"/works/{work_id}/edit?msg=saved")

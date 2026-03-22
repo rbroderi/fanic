@@ -54,13 +54,13 @@
       </section>
 
       <section id="uploadCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
-        <h3>Upload and Metadata</h3>
+        <h3>Import CBZ Into Editor</h3>
         <form id="ingestForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
           <input name="upload_token" type="hidden" value="__UPLOAD_TOKEN__" />
           <label for="cbzFile">Comic Archive (.cbz)</label>
           <input id="cbzFile" name="cbz" type="file" accept=".cbz" />
 
-          <button id="loadMetadataBtn" type="submit" name="action" value="load-metadata">Load metadata from ComicInfo.xml</button>
+          <button id="loadMetadataBtn" type="submit" name="action" value="load-metadata">Import CBZ into editor draft</button>
 
           <div id="uploadProgressWrap" class="upload-progress" hidden>
             <label for="uploadProgressBar">Upload progress</label>
@@ -129,7 +129,7 @@
 
       <section id="editorCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
         <h3>Build Comic In Editor Mode</h3>
-        <p>Upload one page image at a time. Useful for unfinished comics or projects without a CBZ yet.</p>
+        <p>Upload pages, reorder by drag and drop, and organize chapter groups like the edit metadata workflow.</p>
         <form id="editorForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
           <input name="action" type="hidden" value="editor-add-page" />
           <input name="editor_work_id" type="hidden" value="__EDITOR_WORK_ID__" />
@@ -154,10 +154,11 @@
           <label for="editorLanguage">Language (ISO)</label>
           <input id="editorLanguage" name="editor_language" type="text" value="__EDITOR_LANGUAGE__" />
 
-          <label for="editorPageImage">Page image</label>
-          <input id="editorPageImage" name="page_image" type="file" accept="image/*" required />
+          <label for="editorInitialPageImage">Upload first page image</label>
+          <input id="editorInitialPageImage" name="page_image" type="file" accept="image/*" required />
+          <button type="submit">Upload image to draft</button>
 
-          <button type="submit">Upload page to comic draft</button>
+          <p class="profile-meta">Create or update the draft metadata above, then use the gallery controls below to insert pages and manage order.</p>
         </form>
         <p __EDITOR_LINKS_HIDDEN_ATTR__>
           Draft links:
@@ -167,9 +168,68 @@
         </p>
 
         <section class="card info-card" __EDITOR_MANAGER_HIDDEN_ATTR__>
-          <h4>Manage Draft Pages</h4>
-          <p class="profile-meta">Replace, reorder, or delete pages.</p>
-          <div>__EDITOR_PAGES_HTML__</div>
+          <h4>Page Gallery</h4>
+          <p class="profile-meta">Click a thumbnail to select a page. Drag and drop thumbnails to reorder pages and move pages between chapter galleries.</p>
+
+          <div id="editorPageGallery" class="editor-page-gallery">__EDITOR_PAGE_GALLERY_HTML__</div>
+
+          <div id="gallerySelectionPanel" class="card info-card gallery-selection-panel">
+            <p id="selectedPageLabel" class="profile-meta">No page selected.</p>
+            <p id="galleryDirtyBadge" class="status-text warning" hidden>Unsaved gallery order changes. Save gallery order before replacing or deleting pages.</p>
+
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+              <input type="hidden" name="action" value="editor-add-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="insertAfterPageIndex" type="hidden" name="insert_after_page_index" value="" />
+              <label for="editorPageImage">Insert page after selected page (or append if no page selected)</label>
+              <input id="editorPageImage" name="page_image" type="file" accept="image/*" required />
+              <button type="submit">Insert page</button>
+            </form>
+
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+              <input type="hidden" name="action" value="editor-replace-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="replacePageIndex" type="hidden" name="page_index" value="" />
+              <label for="replacePageImage">Replace selected page with image</label>
+              <input id="replacePageImage" name="page_image" type="file" accept="image/*" required />
+              <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
+            </form>
+
+            <form class="upload-form" method="post" action="/ingest" onsubmit="return confirm('Delete selected page?');">
+              <input type="hidden" name="action" value="editor-delete-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="deletePageIndex" type="hidden" name="page_index" value="" />
+              <button id="deleteSelectedButton" type="submit" class="button-muted" disabled>Delete selected page</button>
+            </form>
+
+            <form class="upload-form" method="post" action="/ingest">
+              <input type="hidden" name="action" value="editor-reorder-gallery" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="orderedFilenamesInput" type="hidden" name="ordered_filenames_json" value="" />
+              <input id="chapterMembersInput" type="hidden" name="chapter_members_json" value="{}" />
+              <button id="saveGalleryOrderButton" type="submit">Save gallery order</button>
+            </form>
+          </div>
         </section>
 
         <section class="card info-card" __EDITOR_MANAGER_HIDDEN_ATTR__>
@@ -178,6 +238,11 @@
           <form class="upload-form" method="post" action="/ingest">
             <input type="hidden" name="action" value="editor-add-chapter" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+            <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+            <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+            <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+            <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
             <label for="editorChapterTitle">Chapter title</label>
             <input id="editorChapterTitle" name="chapter_title" type="text" required />
             <label for="editorChapterStart">Start page</label>
@@ -203,5 +268,6 @@
     </main>
     <script src="/static/user-menu.js"></script>
     <script src="/static/ingest-upload-progress.js"></script>
+    <script src="/static/work-edit.js"></script>
   </body>
 </html>

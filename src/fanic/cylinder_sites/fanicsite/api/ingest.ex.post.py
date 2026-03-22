@@ -11,7 +11,13 @@ from fanic.cylinder_sites.common import (
     json_response,
     route_tail,
 )
-from fanic.ingest import extract_comicinfo_metadata_from_cbz, ingest_cbz
+from fanic.ingest import (
+    ModerationBlockedError,
+    extract_comicinfo_metadata_from_cbz,
+    ingest_cbz,
+)
+from fanic.ingest_progress import get_progress, set_progress
+from fanic.moderation import get_explicit_threshold
 
 
 def _csv(value: str) -> list[str]:
@@ -74,6 +80,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 response, {"detail": f"Metadata parse failed: {exc}"}, 400
             )
 
+    if tail == ["progress"]:
+        token = request.args.get("token", "").strip()
+        if not token:
+            return json_response(response, {"detail": "token is required"}, 400)
+        progress = get_progress(token)
+        if progress is None:
+            return json_response(response, {"ok": False, "found": False}, 404)
+        return json_response(
+            response, {"ok": True, "found": True, "progress": progress}
+        )
+
     if tail != []:
         return json_response(response, {"detail": "Not found"}, 404)
 
@@ -81,26 +98,109 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if cbz_upload is None:
         return json_response(response, {"detail": "cbz file is required"}, 400)
 
+    upload_token = request.form.get("upload_token", "").strip()
+
     try:
+        if upload_token:
+            set_progress(upload_token, stage="starting", message="Starting import")
+
         form_metadata = _collect_metadata_from_form(request)
         with TemporaryDirectory() as temp_dir:
             cbz_path = Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
             cbz_upload.save(cbz_path)
 
-            metadata_path = Path(temp_dir) / "metadata.json"
-            _ = metadata_path.write_text(
-                json.dumps(form_metadata, ensure_ascii=True),
-                encoding="utf-8",
+            metadata_path: Path | None = None
+            if form_metadata:
+                metadata_path = Path(temp_dir) / "metadata.json"
+                _ = metadata_path.write_text(
+                    json.dumps(form_metadata, ensure_ascii=True),
+                    encoding="utf-8",
+                )
+
+            result = ingest_cbz(
+                cbz_path,
+                metadata_override_path=metadata_path,
+                uploader_username=username,
+                progress_hook=(
+                    (
+                        lambda stage, message, current, total: set_progress(
+                            upload_token,
+                            stage=stage,
+                            message=message,
+                            current=current,
+                            total=total,
+                            done=False,
+                            ok=False,
+                        )
+                    )
+                    if upload_token
+                    else None
+                ),
             )
-            result = ingest_cbz(cbz_path, metadata_path)
+
+        if upload_token:
+            set_progress(
+                upload_token,
+                stage="done",
+                message="Import complete",
+                done=True,
+                ok=True,
+            )
 
         return json_response(
             response,
             {
                 "ok": True,
+                "mode": "editor",
                 "uploaded_by": username,
                 "result": result,
             },
         )
+    except ModerationBlockedError as exc:
+        if upload_token:
+            set_progress(
+                upload_token,
+                stage="blocked",
+                message="Blocked by moderation policy",
+                done=True,
+                ok=False,
+            )
+        moderation = exc.moderation
+        reasons_obj = moderation.get("reasons")
+        reasons: list[str] = []
+        if isinstance(reasons_obj, list):
+            reasons = [str(reason) for reason in reasons_obj]
+
+        return json_response(
+            response,
+            {
+                "ok": False,
+                "mode": "editor",
+                "detail": "Ingest blocked by moderation policy",
+                "blocked": True,
+                "explicit_threshold": get_explicit_threshold(),
+                "error": "moderation_blocked",
+                "message": str(exc),
+                "moderation": {
+                    "allow": bool(moderation.get("allow", False)),
+                    "style": str(moderation.get("style", "unknown")),
+                    "style_debug": moderation.get("style_debug", {}),
+                    "style_confidences": moderation.get("style_confidences", {}),
+                    "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                    "nsfw_confidences": moderation.get("nsfw_confidences", {}),
+                    "reasons": reasons,
+                    "source_member": str(moderation.get("source_member", "") or ""),
+                },
+            },
+            400,
+        )
     except Exception as exc:
+        if upload_token:
+            set_progress(
+                upload_token,
+                stage="failed",
+                message=f"Import failed: {exc}",
+                done=True,
+                ok=False,
+            )
         return json_response(response, {"detail": f"Ingest failed: {exc}"}, 400)

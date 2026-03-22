@@ -16,6 +16,10 @@ dependencies = [
     "rust-just>=1.47.1",
     "waitress>=3.0.0",
     "tomli-w>=1.2.0",
+    "open-clip-torch>=3.3.0",
+    "torch>=2.10.0",
+    "tqdm>=4.67.3",
+    "pathvalidate>=3.3.1",
 ]
 
 [project.scripts]

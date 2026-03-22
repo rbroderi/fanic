@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Profile</title>
+    <title>__PROFILE_PAGE_TITLE__</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -42,10 +42,13 @@
 
     <main class="layout">
       <section class="card profile-card">
-        <h2>Your Profile</h2>
-        <p class="profile-meta">This page shows your current FANIC session state.</p>
+        <h2>__PROFILE_CARD_TITLE__</h2>
+        <p class="profile-meta">__PROFILE_CARD_SUBTITLE__</p>
         <p id="profileStatus" class="profile-status __PROFILE_STATUS_CLASS__">__PROFILE_STATUS__</p>
         <p id="profileDetails">__PROFILE_DETAILS__</p>
+        <p __PROFILE_PUBLIC_LINK_HIDDEN_ATTR__>
+          <a href="__PROFILE_PUBLIC_HREF__">View your public profile page</a>
+        </p>
         <form class="profile-preferences" method="post" action="/profile" __PROFILE_PREFS_HIDDEN_ATTR__>
           <h3>Reading Preferences</h3>
           <p class="profile-meta">Choose what content appears while browsing and reading.</p>
@@ -56,6 +59,11 @@
           <button type="submit">Save preferences</button>
           <p class="status-text __PROFILE_PREF_STATUS_CLASS__" __PROFILE_PREF_STATUS_HIDDEN_ATTR__>__PROFILE_PREF_STATUS__</p>
         </form>
+      </section>
+
+      <section class="card info-card" __PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__>
+        <h3>Uploaded Works</h3>
+        <div>__PROFILE_UPLOADED_WORKS_HTML__</div>
       </section>
     </main>
 

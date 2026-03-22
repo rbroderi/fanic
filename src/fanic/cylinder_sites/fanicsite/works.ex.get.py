@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from html import escape
+from urllib.parse import quote
 
 from fanic.cylinder_sites.common import (
     ADMIN_USERNAME,
@@ -12,25 +13,27 @@ from fanic.cylinder_sites.common import (
     route_tail,
     text_error,
 )
+from fanic.cylinder_sites.editor_gallery import (
+    render_editor_chapters_html,
+    render_editor_page_gallery_html,
+)
+from fanic.cylinder_sites.editor_metadata import (
+    RATING_CHOICES,
+    render_common_tag_datalist_replacements,
+    render_options_html,
+    selected_attr,
+)
 from fanic.repository import (
     can_view_work,
     get_work,
+    get_work_version_manifest,
     has_user_kudoed_work,
-    list_tag_names,
-    list_work_chapter_members,
     list_work_chapters,
     list_work_comments,
     list_work_page_rows,
+    list_work_versions,
     work_kudos_count,
 )
-
-RATING_CHOICES = [
-    "Not Rated",
-    "General Audiences",
-    "Teen And Up Audiences",
-    "Mature",
-    "Explicit",
-]
 
 
 def _can_edit_work(username: str, uploader_username: str) -> bool:
@@ -54,27 +57,6 @@ def _tag_names_csv(tags: object, tag_type: str) -> str:
     return ", ".join(names)
 
 
-def _selected_attr(actual: str, expected: str) -> str:
-    return "selected" if actual == expected else ""
-
-
-def _options_html(names: list[str], selected: str) -> str:
-    selected_norm = selected.strip().casefold()
-    parts: list[str] = []
-    for name in names:
-        selected_attr = " selected" if name.strip().casefold() == selected_norm else ""
-        parts.append(
-            f'<option value="{escape(name)}"{selected_attr}>{escape(name)}</option>'
-        )
-    return "".join(parts)
-
-
-def _datalist_options_html(tag_type: str) -> str:
-    return "".join(
-        f'<option value="{escape(name)}"></option>' for name in list_tag_names(tag_type)
-    )
-
-
 def _comment_cards_html(comments: list[dict[str, object]]) -> str:
     if not comments:
         return '<p class="profile-meta">No comments yet.</p>'
@@ -95,146 +77,52 @@ def _comment_cards_html(comments: list[dict[str, object]]) -> str:
     return "".join(parts)
 
 
-def _chapter_seed_members_from_range(
-    page_order: list[str], chapter: dict[str, object]
-) -> list[str]:
-    start_page = int(chapter.get("start_page", 1) or 1)
-    end_page = int(chapter.get("end_page", start_page) or start_page)
-    start_page = max(1, min(start_page, len(page_order) or 1))
-    end_page = max(start_page, min(end_page, len(page_order) or start_page))
-    return page_order[start_page - 1 : end_page]
+def _work_versions_list_html(work_id: str, selected_version_id: str) -> str:
+    versions = list_work_versions(work_id, limit=30)
+    if not versions:
+        return '<p class="profile-meta">No versions recorded yet.</p>'
 
-
-def _page_thumb_button_html(
-    work_id: str,
-    page_by_filename: dict[str, dict[str, object]],
-    image_filename: str,
-) -> str:
-    page = page_by_filename.get(image_filename)
-    if not page:
-        return ""
-
-    page_index = int(page.get("page_index", 0) or 0)
-    safe_name = escape(image_filename)
-    safe_work_id = escape(work_id)
-    return (
-        '<button type="button" class="page-thumb-card" '
-        f'draggable="true" data-image-filename="{safe_name}" '
-        f'data-page-index="{page_index}">'
-        f'<img src="/api/works/{safe_work_id}/pages/{page_index}/thumb" alt="Page {page_index}" loading="lazy" />'
-        f"<span>Page {page_index}</span>"
-        "</button>"
-    )
-
-
-def _page_gallery_html(
-    work_id: str,
-    pages: list[dict[str, object]],
-    chapters: list[dict[str, object]],
-) -> str:
-    if not pages:
-        return '<p class="profile-meta">No pages uploaded yet.</p>'
-
-    page_by_filename: dict[str, dict[str, object]] = {}
-    page_order: list[str] = []
-    for page in pages:
-        image_filename = str(page.get("image_filename", "")).strip()
-        if not image_filename:
-            continue
-        page_by_filename[image_filename] = page
-        page_order.append(image_filename)
-
-    assigned: set[str] = set()
-    section_parts: list[str] = []
-
-    for chapter in chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
-        chapter_index = int(chapter.get("chapter_index", 0) or 0)
-        title = escape(str(chapter.get("title", "Untitled Chapter")))
-        members = list_work_chapter_members(chapter_id)
-        if not members:
-            members = _chapter_seed_members_from_range(page_order, chapter)
-
-        member_set = {name for name in members if name in page_by_filename}
-        ordered_members = [
-            name for name in page_order if name in member_set and name not in assigned
-        ]
-        assigned.update(ordered_members)
-
-        thumbs_html = "".join(
-            _page_thumb_button_html(work_id, page_by_filename, image_filename)
-            for image_filename in ordered_members
+    items: list[str] = []
+    for version in versions:
+        version_id = escape(str(version.get("version_id", "")))
+        created_at = escape(str(version.get("created_at", "")))
+        action = escape(str(version.get("action", "")))
+        actor = escape(str(version.get("actor", "")))
+        page_count = escape(str(version.get("page_count", 0)))
+        selected_attr = (
+            ' aria-current="page"' if version_id == selected_version_id else ""
         )
-        section_parts.append(
-            (
-                '<section class="chapter-gallery-section" '
-                f'data-chapter-id="{chapter_id}">'
-                f"<h4>Chapter {chapter_index}: {title}</h4>"
-                '<div class="page-gallery-grid">'
-                f"{thumbs_html}"
-                "</div></section>"
-            )
+        version_href = f"/works/{escape(work_id)}/versions/{quote(version_id)}"
+        items.append(
+            "<li>"
+            + f'<a href="{version_href}"{selected_attr}>{created_at}</a>'
+            + f' <span class="profile-meta">({action} | {actor or "unknown"} | {page_count} pages)</span>'
+            + "</li>"
         )
-
-    unchaptered = [name for name in page_order if name not in assigned]
-    unchaptered_html = "".join(
-        _page_thumb_button_html(work_id, page_by_filename, image_filename)
-        for image_filename in unchaptered
-    )
-    section_parts.append(
-        '<section class="chapter-gallery-section" data-chapter-id="">'
-        "<h4>Unchaptered</h4>"
-        f'<div class="page-gallery-grid">{unchaptered_html}</div>'
-        "</section>"
-    )
-
-    return "".join(section_parts)
+    return '<ul class="work-links">' + "".join(items) + "</ul>"
 
 
-def _editor_chapters_html(work_id: str, chapters: list[dict[str, object]]) -> str:
-    if not chapters:
-        return '<p class="profile-meta">No chapters yet.</p>'
+def _version_metadata_html(version_manifest: dict[str, object]) -> str:
+    work_block = version_manifest.get("work")
+    if not isinstance(work_block, dict):
+        work_block = {}
 
-    rows: list[str] = []
-    for chapter in chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
-        chapter_index = int(chapter.get("chapter_index", 0) or 0)
-        title = escape(str(chapter.get("title", "Untitled Chapter")))
-        start_page = int(chapter.get("start_page", 1) or 1)
-        end_page = int(chapter.get("end_page", start_page) or start_page)
-        rows.append(
-            """
-            <article class="card info-card editor-row">
-                <p><strong>Chapter {chapter_index}: {title}</strong> (pages {start_page}-{end_page})</p>
-                <form class="upload-form" method="post" action="/works/{work_id}/edit">
-                    <input type="hidden" name="edit_action" value="editor-update-chapter" />
-                    <input type="hidden" name="editor_work_id" value="{work_id}" />
-                    <input type="hidden" name="chapter_id" value="{chapter_id}" />
-                    <label>Title</label>
-                    <input type="text" name="chapter_title" value="{title}" required />
-                    <label>Start page</label>
-                    <input type="number" name="chapter_start_page" min="1" value="{start_page}" required />
-                    <label>End page</label>
-                    <input type="number" name="chapter_end_page" min="1" value="{end_page}" required />
-                    <button type="submit">Update chapter</button>
-                </form>
-                <form class="upload-form" method="post" action="/works/{work_id}/edit" onsubmit="return confirm('Delete this chapter?');">
-                    <input type="hidden" name="edit_action" value="editor-delete-chapter" />
-                    <input type="hidden" name="editor_work_id" value="{work_id}" />
-                    <input type="hidden" name="chapter_id" value="{chapter_id}" />
-                    <button type="submit" class="button-muted">Delete chapter</button>
-                </form>
-            </article>
-            """.format(
-                chapter_index=chapter_index,
-                title=title,
-                start_page=start_page,
-                end_page=end_page,
-                work_id=escape(work_id),
-                chapter_id=chapter_id,
-            )
-        )
-    return "".join(rows)
+    rows = [
+        ("Version ID", escape(str(version_manifest.get("version_id", "")))),
+        ("Created", escape(str(version_manifest.get("created_at", "")))),
+        ("Action", escape(str(version_manifest.get("action", "")))),
+        ("Actor", escape(str(version_manifest.get("actor", "") or "unknown"))),
+        ("Title", escape(str(work_block.get("title", "Untitled")))),
+        ("Rating", escape(str(work_block.get("rating", "Not Rated")))),
+        ("Status", escape(str(work_block.get("status", "in_progress")))),
+        ("Page Count", escape(str(work_block.get("page_count", 0)))),
+        ("Updated At", escape(str(work_block.get("updated_at", "")))),
+    ]
+    parts = ["<dl>"]
+    for label, value in rows:
+        parts.append(f"<dt><strong>{label}</strong></dt><dd>{value}</dd>")
+    parts.append("</dl>")
+    return "".join(parts)
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -346,7 +234,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__WORK_ID__": escape(work_id),
                 "__EDIT_TITLE__": escape(str(work.get("title", "Untitled"))),
                 "__EDIT_SUMMARY__": escape(str(work.get("summary", ""))),
-                "__EDIT_RATING_OPTIONS_HTML__": _options_html(
+                "__EDIT_RATING_OPTIONS_HTML__": render_options_html(
                     RATING_CHOICES,
                     str(work.get("rating", "Not Rated")),
                 ),
@@ -363,10 +251,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__EDIT_RELATIONSHIPS__": escape(_tag_names_csv(tags, "relationship")),
                 "__EDIT_CHARACTERS__": escape(_tag_names_csv(tags, "character")),
                 "__EDIT_FREEFORM_TAGS__": escape(_tag_names_csv(tags, "freeform")),
-                "__STATUS_IN_PROGRESS_SELECTED__": _selected_attr(
+                "__STATUS_IN_PROGRESS_SELECTED__": selected_attr(
                     str(work.get("status", "in_progress")), "in_progress"
                 ),
-                "__STATUS_COMPLETE_SELECTED__": _selected_attr(
+                "__STATUS_COMPLETE_SELECTED__": selected_attr(
                     str(work.get("status", "in_progress")), "complete"
                 ),
                 "__EDIT_STATUS_TEXT__": status_text,
@@ -375,28 +263,90 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__EDITOR_WORK_ID__": escape(work_id),
                 "__EDITOR_TITLE__": escape(str(work.get("title", "Untitled"))),
                 "__EDITOR_SUMMARY__": escape(str(work.get("summary", ""))),
-                "__EDITOR_RATING_OPTIONS_HTML__": _options_html(
+                "__EDITOR_RATING_OPTIONS_HTML__": render_options_html(
                     RATING_CHOICES,
                     str(work.get("rating", "Not Rated")),
                 ),
-                "__EDITOR_STATUS_IN_PROGRESS_SELECTED__": _selected_attr(
+                "__EDITOR_STATUS_IN_PROGRESS_SELECTED__": selected_attr(
                     str(work.get("status", "in_progress")), "in_progress"
                 ),
-                "__EDITOR_STATUS_COMPLETE_SELECTED__": _selected_attr(
+                "__EDITOR_STATUS_COMPLETE_SELECTED__": selected_attr(
                     str(work.get("status", "in_progress")), "complete"
                 ),
                 "__EDITOR_LANGUAGE__": escape(str(work.get("language", "en"))),
-                "__EDITOR_PAGE_GALLERY_HTML__": _page_gallery_html(
+                "__EDITOR_PAGE_GALLERY_HTML__": render_editor_page_gallery_html(
                     work_id,
                     pages,
                     chapters,
                 ),
-                "__EDITOR_CHAPTERS_HTML__": _editor_chapters_html(work_id, chapters),
-                "__WARNINGS_OPTIONS_HTML__": _datalist_options_html("archive_warning"),
-                "__FANDOM_OPTIONS_HTML__": _datalist_options_html("fandom"),
-                "__RELATIONSHIP_OPTIONS_HTML__": _datalist_options_html("relationship"),
-                "__CHARACTER_OPTIONS_HTML__": _datalist_options_html("character"),
-                "__FREEFORM_OPTIONS_HTML__": _datalist_options_html("freeform"),
+                "__EDITOR_CHAPTERS_HTML__": render_editor_chapters_html(
+                    work_id,
+                    chapters,
+                    form_action=f"/works/{work_id}/edit",
+                    action_field_name="edit_action",
+                    update_action_value="editor-update-chapter",
+                    delete_action_value="editor-delete-chapter",
+                    delete_confirm_message="Delete this chapter?",
+                ),
+                **render_common_tag_datalist_replacements(),
+            },
+        )
+
+    if len(tail) in {2, 3} and tail[1] == "versions":
+        work_id = tail[0]
+        work = get_work(work_id)
+        if not work:
+            return text_error(response, "Work not found", 404)
+
+        username = current_user(request)
+        if not can_view_work(username, work):
+            return text_error(response, "Work not found", 404)
+
+        versions = list_work_versions(work_id, limit=50)
+        if not versions:
+            return render_html_template(
+                request,
+                response,
+                "work-versions.html",
+                {
+                    "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
+                    "__WORK_HREF__": f"/works/{escape(work_id)}",
+                    "__WORK_READER_HREF__": f"/reader/{escape(work_id)}",
+                    "__WORK_VERSIONS_LIST_HTML__": '<p class="profile-meta">No versions recorded yet.</p>',
+                    "__VERSION_STATUS__": "No versions recorded yet.",
+                    "__VERSION_STATUS_CLASS__": "",
+                    "__VERSION_READER_HREF__": f"/reader/{escape(work_id)}",
+                    "__VERSION_METADATA_HTML__": '<p class="profile-meta">No snapshot metadata available.</p>',
+                },
+            )
+
+        selected_version_id = ""
+        if len(tail) == 3:
+            selected_version_id = tail[2]
+        if not selected_version_id:
+            selected_version_id = str(versions[0].get("version_id", ""))
+
+        version_manifest = get_work_version_manifest(work_id, selected_version_id)
+        if version_manifest is None:
+            return text_error(response, "Version not found", 404)
+
+        quoted_version = quote(selected_version_id)
+        return render_html_template(
+            request,
+            response,
+            "work-versions.html",
+            {
+                "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
+                "__WORK_HREF__": f"/works/{escape(work_id)}",
+                "__WORK_READER_HREF__": f"/reader/{escape(work_id)}",
+                "__WORK_VERSIONS_LIST_HTML__": _work_versions_list_html(
+                    work_id,
+                    selected_version_id,
+                ),
+                "__VERSION_STATUS__": escape(f"Viewing version {selected_version_id}"),
+                "__VERSION_STATUS_CLASS__": "success",
+                "__VERSION_READER_HREF__": f"/reader/{escape(work_id)}?version_id={quoted_version}",
+                "__VERSION_METADATA_HTML__": _version_metadata_html(version_manifest),
             },
         )
 
@@ -478,6 +428,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_COVER_SRC__": f"/api/works/{escape(work_id)}/pages/{cover_index}/image",
             "__WORK_READ_HREF__": f"/reader/{escape(work_id)}",
             "__WORK_DOWNLOAD_HREF__": f"/api/works/{escape(work_id)}/download",
+            "__WORK_VERSIONS_HREF__": f"/works/{escape(work_id)}/versions",
             "__WORK_TAGS_HTML__": tag_html,
             "__EDIT_METADATA_HREF__": f"/works/{escape(work_id)}/edit",
             "__EDIT_METADATA_HIDDEN_ATTR__": "" if can_edit else "hidden",

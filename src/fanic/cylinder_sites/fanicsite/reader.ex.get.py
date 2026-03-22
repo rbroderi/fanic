@@ -15,8 +15,43 @@ from fanic.repository import (
     can_view_work,
     get_manifest,
     get_work,
+    get_work_version_manifest,
     load_progress,
 )
+
+
+def _reader_pages_from_version_manifest(
+    work_id: str,
+    version_id: str,
+    manifest: dict[str, object],
+) -> list[dict[str, object]]:
+    pages_obj = manifest.get("pages")
+    if not isinstance(pages_obj, list):
+        return []
+
+    built: list[dict[str, object]] = []
+    for page in pages_obj:
+        if not isinstance(page, dict):
+            continue
+        page_index_obj = page.get("page_index", 0)
+        try:
+            page_index = int(page_index_obj)
+        except (TypeError, ValueError):
+            continue
+        if page_index < 1:
+            continue
+        built.append(
+            {
+                "index": page_index,
+                "image_url": f"/api/works/{work_id}/pages/{page_index}/image?version_id={version_id}",
+                "thumb_url": f"/api/works/{work_id}/pages/{page_index}/thumb?version_id={version_id}",
+                "width": page.get("width"),
+                "height": page.get("height"),
+            }
+        )
+
+    built.sort(key=lambda row: int(row.get("index", 0) or 0))
+    return built
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -33,21 +68,45 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not can_view_work(username, work):
         return text_error(response, "Work not found", 404)
 
-    manifest = get_manifest(work_id)
-    if manifest is None:
-        return text_error(response, "Work not found", 404)
+    version_id = request.args.get("version_id", "").strip()
+    manifest: dict[str, object] | None
+    reader_pages: list[dict[str, object]]
+    chapters: object
+    work_href = f"/works/{work_id}"
+    if version_id:
+        version_manifest = get_work_version_manifest(work_id, version_id)
+        if version_manifest is None:
+            return text_error(response, "Version not found", 404)
+        manifest = version_manifest
+        reader_pages = _reader_pages_from_version_manifest(
+            work_id,
+            version_id,
+            version_manifest,
+        )
+        chapters = version_manifest.get("chapters", [])
+        work_href = f"/works/{work_id}/versions/{version_id}"
+    else:
+        manifest = get_manifest(work_id)
+        if manifest is None:
+            return text_error(response, "Work not found", 404)
+        pages_obj = manifest.get("pages", [])
+        reader_pages = pages_obj if isinstance(pages_obj, list) else []
+        chapters = manifest.get("chapters", [])
 
     user_id = username or "anon"
     page_index = load_progress(work_id, user_id)
+    manifest_title = str(manifest.get("title", "FANIC Reader"))
+    if version_id:
+        manifest_title = f"{manifest_title} (version {version_id})"
     bootstrap_json = json.dumps(
         {
             "work_id": work_id,
-            "title": str(manifest.get("title", "FANIC Reader")),
-            "work_href": f"/works/{work_id}",
+            "title": manifest_title,
+            "work_href": work_href,
             "user_id": user_id,
             "page_index": page_index,
-            "pages": manifest.get("pages", []),
-            "chapters": manifest.get("chapters", []),
+            "pages": reader_pages,
+            "chapters": chapters,
         },
         ensure_ascii=True,
     ).replace("<", "\\u003c")
@@ -57,8 +116,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         response,
         "reader.html",
         {
-            "__READER_TITLE__": escape(str(manifest.get("title", "FANIC Reader"))),
-            "__READER_WORK_HREF__": escape(f"/works/{work_id}"),
+            "__READER_TITLE__": escape(manifest_title),
+            "__READER_WORK_HREF__": escape(work_href),
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,
         },
     )

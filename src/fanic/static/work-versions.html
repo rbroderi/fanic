@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Work</title>
+    <title>Work Versions</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,57 +38,33 @@
         </div>
       </div>
     </header>
-    <main class="layout card work-shell">
-      <section>
-        <img id="cover" class="work-cover" alt="Cover" src="__WORK_COVER_SRC__" />
+
+    <main class="layout">
+      <section class="card info-card">
+        <h2>Versions: __WORK_TITLE__</h2>
         <p>
-          <a id="readLink" href="__WORK_READ_HREF__">Read in browser</a>
+          <a href="__WORK_HREF__">Back to comic page</a>
           |
-          <a id="downloadLink" href="__WORK_DOWNLOAD_HREF__">Download CBZ</a>
-          |
-          <a id="versionsLink" href="__WORK_VERSIONS_HREF__">Previous versions</a>
+          <a href="__WORK_READER_HREF__">Read current version</a>
         </p>
-        <p __EDIT_METADATA_HIDDEN_ATTR__>
-          <a id="editMetadataLink" href="__EDIT_METADATA_HREF__">Edit metadata</a>
-        </p>
-        <form method="post" action="/works/__WORK_ID__/delete" class="admin-delete-form" __ADMIN_DELETE_HIDDEN_ATTR__ onsubmit="return confirm('Delete this comic? This cannot be undone.');">
-          <button type="submit" class="icon-delete-button" title="Delete comic" aria-label="Delete comic">
-            <i class="fa-solid fa-trash" aria-hidden="true"></i>
-          </button>
-        </form>
-        <form method="post" action="/works/__WORK_ID__/kudos" class="kudos-form">
-          <button type="submit" class="kudos-button" __KUDOS_DISABLED_ATTR__ aria-label="Leave kudos">
-            <i class="fa-solid fa-heart" aria-hidden="true"></i>
-            <span>Kudos</span>
-          </button>
-        </form>
       </section>
-      <section>
-        <h2 id="title">__WORK_TITLE__</h2>
-        <p class="work-meta" id="meta">__WORK_META__</p>
-        <p class="work-meta" id="kudosCount">__WORK_KUDOS_COUNT__ kudos</p>
-        <p id="summary">__WORK_SUMMARY__</p>
-        <div id="tags">__WORK_TAGS_HTML__</div>
 
-        <p class="status-text __WORK_STATUS_CLASS__" __WORK_STATUS_HIDDEN_ATTR__>__WORK_STATUS_TEXT__</p>
+      <section class="card info-card">
+        <h3>Version History</h3>
+        <p class="profile-meta">Every non-admin-delete edit creates an immutable version snapshot.</p>
+        <div>__WORK_VERSIONS_LIST_HTML__</div>
+      </section>
 
-        <section class="card info-card comments-shell">
-          <h3>Leave a comment</h3>
-          <form method="post" action="/works/__WORK_ID__/comments" class="upload-form">
-            <label for="chapterNumber">Chapter number (optional)</label>
-            <input id="chapterNumber" name="chapter_number" type="number" min="1" step="1" />
-            <label for="commentBody">Comment</label>
-            <textarea id="commentBody" name="comment_body" rows="4" required></textarea>
-            <button type="submit">Post comment</button>
-          </form>
-        </section>
-
-        <section class="comments-list">
-          <h3>Comments</h3>
-          __COMMENTS_HTML__
-        </section>
+      <section class="card info-card">
+        <h3>Selected Version</h3>
+        <p class="status-text __VERSION_STATUS_CLASS__">__VERSION_STATUS__</p>
+        <p>
+          <a href="__VERSION_READER_HREF__">Open this version in browser reader</a>
+        </p>
+        <div>__VERSION_METADATA_HTML__</div>
       </section>
     </main>
+
     <script src="/static/user-menu.js"></script>
   </body>
 </html>

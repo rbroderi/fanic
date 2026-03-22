@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 import uuid
 from collections.abc import Mapping, Sequence
 from io import BytesIO
@@ -12,8 +11,16 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from PIL import Image, UnidentifiedImageError
+from tqdm import tqdm
+
+try:
+    # Ensure PIL AVIF codec is registered when available.
+    import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
+except Exception:
+    pillow_avif = None
 
 from fanic.moderation import (
+    get_explicit_threshold,
     moderate_image,
     moderate_image_bytes,
     suggested_rating_for_nsfw,
@@ -21,6 +28,7 @@ from fanic.moderation import (
 from fanic.paths import CBZ_DIR, WORKS_DIR, ensure_storage_dirs
 from fanic.repository import (
     add_work_chapter,
+    create_work_version_snapshot,
     delete_work_chapter,
     get_work,
     list_work_chapter_members,
@@ -45,6 +53,46 @@ _RATING_RANK = {
     "Mature": 3,
     "Explicit": 4,
 }
+
+
+def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, format=fmt, quality=quality)
+    return buffer.getvalue()
+
+
+def _content_addressed_rel_path(data: bytes, extension: str) -> str:
+    digest = hashlib.sha256(data).hexdigest()
+    normalized_ext = extension.strip().lower().lstrip(".") or "bin"
+    return f"_objects/{digest[:2]}/{digest}.{normalized_ext}"
+
+
+def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
+    rel_path = _content_addressed_rel_path(data, extension)
+    target = base_dir / rel_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        return rel_path
+
+    try:
+        with target.open("xb") as handle:
+            handle.write(data)
+    except FileExistsError:
+        # Another request wrote the same hash concurrently.
+        pass
+    return rel_path
+
+
+class ModerationBlockedError(ValueError):
+    def __init__(self, moderation: dict[str, object]) -> None:
+        reasons_obj = moderation.get("reasons")
+        reasons: list[str] = []
+        if isinstance(reasons_obj, list):
+            reasons = [str(reason) for reason in reasons_obj]
+
+        reason_text = "; ".join(reasons) if reasons else "blocked by moderation"
+        super().__init__(f"Blocked image: {reason_text}")
+        self.moderation = moderation
 
 
 def _prepare_image_for_avif(image: Image.Image) -> Image.Image:
@@ -212,14 +260,6 @@ def _load_metadata_from_comicinfo(zip_file: ZipFile) -> dict[str, object]:
     return parse_comicinfo_xml(xml_text)
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as file_handle:
-        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _is_image_member_name(member: str) -> bool:
     suffix = Path(member).suffix.lower()
     return suffix in {
@@ -244,6 +284,10 @@ def ingest_cbz(
     cbz_path: Path,
     metadata_override_path: Path | None = None,
     uploader_username: str | None = None,
+    *,
+    show_progress: bool = False,
+    progress_desc: str = "Ingesting CBZ pages",
+    progress_hook: (callable[[str, str, int, int], None] | None) = None,
 ) -> dict[str, object]:
     ensure_storage_dirs()
     cbz_path = cbz_path.resolve()
@@ -251,6 +295,8 @@ def ingest_cbz(
         raise FileNotFoundError(f"CBZ not found: {cbz_path}")
 
     with ZipFile(cbz_path) as zip_file:
+        if progress_hook is not None:
+            progress_hook("read-metadata", "Reading metadata", 0, 0)
         metadata: dict[str, object] = _load_metadata_from_comicinfo(zip_file)
         if metadata_override_path:
             override_obj = cast(
@@ -267,9 +313,6 @@ def ingest_cbz(
         title = str(metadata.get("title") or cbz_path.stem)
         work_id = str(metadata.get("id") or uuid.uuid4().hex[:12])
         slug = str(metadata.get("slug") or slugify(title))
-
-        storage_cbz_path = CBZ_DIR / f"{work_id}.cbz"
-        _ = shutil.copy2(cbz_path, storage_cbz_path)
 
         work_dir = WORKS_DIR / work_id
         pages_dir = work_dir / "pages"
@@ -324,48 +367,141 @@ def ingest_cbz(
         else:
             image_members = sorted(image_members)
 
+        if progress_hook is not None:
+            progress_hook(
+                "prepare-pages",
+                "Preparing pages",
+                0,
+                len(image_members),
+            )
+
         pages: list[dict[str, object]] = []
         max_nsfw_score = 0.0
-        for index, member in enumerate(image_members, start=1):
-            image_name = f"{index:03d}.avif"
-            thumb_name: str | None = None
-
-            extracted = zip_file.read(member)
-            moderation = moderate_image_bytes(extracted, suffix=Path(member).suffix)
-            if not moderation["allow"]:
-                reasons = "; ".join(moderation["reasons"])
-                raise ValueError(f"Blocked image {member}: {reasons}")
-            max_nsfw_score = max(max_nsfw_score, moderation["nsfw_score"])
-
-            width = None
-            height = None
-            try:
-                with Image.open(BytesIO(extracted)) as image:
-                    width, height = image.size
-
-                    page_image = _prepare_image_for_avif(image)
-                    page_image.save(
-                        pages_dir / image_name,
-                        format="AVIF",
-                        quality=AVIF_QUALITY,
-                    )
-
-                    thumb_image = _prepare_image_for_avif(image)
-                    thumb_image.thumbnail((360, 360))
-                    thumb_name = f"{index:03d}.webp"
-                    thumb_image.save(thumbs_dir / thumb_name, format="WEBP", quality=82)
-            except (UnidentifiedImageError, OSError, ValueError) as exc:
-                raise ValueError(f"Failed to convert page to AVIF: {member}") from exc
-
-            pages.append(
-                {
-                    "page_index": index,
-                    "image_filename": image_name,
-                    "thumb_filename": thumb_name,
-                    "width": width,
-                    "height": height,
-                }
+        member_iter: object = image_members
+        progress = None
+        if show_progress:
+            progress = tqdm(
+                image_members,
+                desc=progress_desc,
+                unit="page",
+                leave=True,
             )
+            member_iter = progress
+
+        try:
+            for index, member in enumerate(member_iter, start=1):
+                if progress_hook is not None:
+                    progress_hook(
+                        "moderate",
+                        f"Moderating page {index}/{len(image_members)}",
+                        index,
+                        len(image_members),
+                    )
+                if progress is not None:
+                    progress.set_postfix_str("moderate")
+                extracted = zip_file.read(member)
+                moderation = moderate_image_bytes(extracted, suffix=Path(member).suffix)
+                if not moderation["allow"]:
+                    moderation_payload = dict(moderation)
+                    moderation_payload["source_member"] = member
+                    raise ModerationBlockedError(moderation_payload)
+                max_nsfw_score = max(max_nsfw_score, moderation["nsfw_score"])
+
+                width = None
+                height = None
+                try:
+                    if progress is not None:
+                        progress.set_postfix_str("decode")
+                    if progress_hook is not None:
+                        progress_hook(
+                            "decode",
+                            f"Decoding page {index}/{len(image_members)}",
+                            index,
+                            len(image_members),
+                        )
+                    with Image.open(BytesIO(extracted)) as image:
+                        width, height = image.size
+
+                        if progress is not None:
+                            progress.set_postfix_str("encode-page")
+                        if progress_hook is not None:
+                            progress_hook(
+                                "encode-page",
+                                f"Encoding page {index}/{len(image_members)}",
+                                index,
+                                len(image_members),
+                            )
+                        page_image = _prepare_image_for_avif(image)
+                        page_bytes = _render_image_bytes(
+                            page_image,
+                            fmt="AVIF",
+                            quality=AVIF_QUALITY,
+                        )
+
+                        if progress is not None:
+                            progress.set_postfix_str("store-page")
+                        if progress_hook is not None:
+                            progress_hook(
+                                "store-page",
+                                f"Storing page {index}/{len(image_members)}",
+                                index,
+                                len(image_members),
+                            )
+                        image_name = _store_content_addressed(
+                            pages_dir,
+                            page_bytes,
+                            "avif",
+                        )
+
+                        if progress is not None:
+                            progress.set_postfix_str("encode-thumb")
+                        if progress_hook is not None:
+                            progress_hook(
+                                "encode-thumb",
+                                f"Encoding thumbnail {index}/{len(image_members)}",
+                                index,
+                                len(image_members),
+                            )
+                        thumb_image = _prepare_image_for_avif(image)
+                        thumb_image.thumbnail((360, 360))
+                        thumb_bytes = _render_image_bytes(
+                            thumb_image,
+                            fmt="WEBP",
+                            quality=82,
+                        )
+
+                        if progress is not None:
+                            progress.set_postfix_str("store-thumb")
+                        if progress_hook is not None:
+                            progress_hook(
+                                "store-thumb",
+                                f"Storing thumbnail {index}/{len(image_members)}",
+                                index,
+                                len(image_members),
+                            )
+                        thumb_name = _store_content_addressed(
+                            thumbs_dir,
+                            thumb_bytes,
+                            "webp",
+                        )
+                except (UnidentifiedImageError, OSError, ValueError) as exc:
+                    raise ValueError(
+                        f"Failed to convert page to AVIF: {member}"
+                    ) from exc
+
+                pages.append(
+                    {
+                        "page_index": index,
+                        "image_filename": image_name,
+                        "thumb_filename": thumb_name,
+                        "width": width,
+                        "height": height,
+                    }
+                )
+        finally:
+            if progress is not None:
+                progress.set_postfix_str("done")
+                progress.close()
 
         rating_before = _normalize_rating(str(metadata.get("rating", "Not Rated")))
         rating_after = _elevate_rating(
@@ -394,19 +530,30 @@ def ingest_cbz(
         "published_at": metadata.get("published_at"),
         "cover_page_index": cover_page_index,
         "page_count": len(pages),
-        "cbz_path": str(storage_cbz_path),
+        "cbz_path": "",
         "uploader_username": uploader_username,
-        "source_hash": _sha256(storage_cbz_path),
     }
 
     upsert_work(work)
+    if progress_hook is not None:
+        progress_hook("write-db", "Saving work metadata", len(pages), len(pages))
     replace_work_pages(work_id, pages)
     replace_work_tags(work_id, metadata)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="ingest-cbz-editor-import",
+        actor=uploader_username,
+        details={"page_count": len(pages)},
+    )
+
+    if progress_hook is not None:
+        progress_hook("done", "Import complete", len(pages), len(pages))
 
     return {
         "work_id": work_id,
         "slug": slug,
         "page_count": len(pages),
+        "explicit_threshold": get_explicit_threshold(),
         "rating_before": rating_before,
         "rating_after": rating_after,
         "rating_auto_elevated": rating_after != rating_before,
@@ -428,8 +575,7 @@ def ingest_editor_page(
 
     moderation = moderate_image(str(image_path))
     if not moderation["allow"]:
-        reasons = "; ".join(moderation["reasons"])
-        raise ValueError(f"Blocked image: {reasons}")
+        raise ModerationBlockedError(dict(moderation))
     auto_rating = suggested_rating_for_nsfw(moderation["nsfw_score"])
 
     existing_work = get_work(work_id) if work_id else None
@@ -450,15 +596,6 @@ def ingest_editor_page(
     thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     existing_pages = list_work_page_rows(resolved_work_id)
-    used_indices: list[int] = []
-    for page in existing_pages:
-        image_filename = _as_str(cast(object, page.get("image_filename", "")))
-        stem = Path(image_filename).stem
-        if stem.isdigit():
-            used_indices.append(int(stem))
-    next_page_serial = (max(used_indices) if used_indices else 0) + 1
-    image_name = f"{next_page_serial:03d}.avif"
-    thumb_name = f"{next_page_serial:03d}.webp"
 
     width: int | None = None
     height: int | None = None
@@ -467,11 +604,21 @@ def ingest_editor_page(
             width, height = image.size
 
             page_image = _prepare_image_for_avif(image)
-            page_image.save(pages_dir / image_name, format="AVIF", quality=AVIF_QUALITY)
+            page_bytes = _render_image_bytes(
+                page_image,
+                fmt="AVIF",
+                quality=AVIF_QUALITY,
+            )
+            image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
             thumb_image = _prepare_image_for_avif(image)
             thumb_image.thumbnail((360, 360))
-            thumb_image.save(thumbs_dir / thumb_name, format="WEBP", quality=82)
+            thumb_bytes = _render_image_bytes(
+                thumb_image,
+                fmt="WEBP",
+                quality=82,
+            )
+            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "webp")
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert page image") from exc
 
@@ -594,12 +741,23 @@ def ingest_editor_page(
     replace_work_pages(resolved_work_id, all_pages)
     if existing_work:
         _reconcile_chapters_after_page_changes(resolved_work_id)
+    _ = create_work_version_snapshot(
+        resolved_work_id,
+        action="editor-add-page",
+        actor=uploader_username,
+        details={"inserted_at": inserted_at_index, "page_count": len(all_pages)},
+    )
 
     return {
         "work_id": resolved_work_id,
         "slug": slug,
         "page_count": len(all_pages),
         "latest_page_index": inserted_at_index,
+        "detected_style": str(moderation["style"]),
+        "style_confidences": moderation["style_confidences"],
+        "nsfw_score": float(moderation["nsfw_score"]),
+        "nsfw_confidences": moderation["nsfw_confidences"],
+        "explicit_threshold": get_explicit_threshold(),
         "rating_before": rating_before,
         "rating_after": chosen_rating,
         "rating_auto_elevated": chosen_rating != rating_before,
@@ -704,8 +862,7 @@ def editor_replace_page_image(
 
     moderation = moderate_image(str(image_path))
     if not moderation["allow"]:
-        reasons = "; ".join(moderation["reasons"])
-        raise ValueError(f"Blocked image: {reasons}")
+        raise ModerationBlockedError(dict(moderation))
 
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
@@ -720,10 +877,9 @@ def editor_replace_page_image(
     if not current_page:
         raise FileNotFoundError(f"Page index not found: {page_index}")
 
-    image_name = _as_str(cast(object, current_page.get("image_filename", "")))
-    thumb_name = _as_str(cast(object, current_page.get("thumb_filename", "")))
     pages_dir = WORKS_DIR / work_id / "pages"
     thumbs_dir = WORKS_DIR / work_id / "thumbs"
+    old_image_name = _as_str(cast(object, current_page.get("image_filename", "")))
 
     width: int | None = None
     height: int | None = None
@@ -731,11 +887,21 @@ def editor_replace_page_image(
         with Image.open(image_path) as image:
             width, height = image.size
             page_image = _prepare_image_for_avif(image)
-            page_image.save(pages_dir / image_name, format="AVIF", quality=AVIF_QUALITY)
+            page_bytes = _render_image_bytes(
+                page_image,
+                fmt="AVIF",
+                quality=AVIF_QUALITY,
+            )
+            image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
             thumb_image = _prepare_image_for_avif(image)
             thumb_image.thumbnail((360, 360))
-            thumb_image.save(thumbs_dir / thumb_name, format="WEBP", quality=82)
+            thumb_bytes = _render_image_bytes(
+                thumb_image,
+                fmt="WEBP",
+                quality=82,
+            )
+            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "webp")
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert replacement page image") from exc
 
@@ -755,17 +921,36 @@ def editor_replace_page_image(
             updated_pages.append(page)
 
     replace_work_pages(work_id, updated_pages)
+
+    chapters = list_work_chapters(work_id)
+    for chapter in chapters:
+        chapter_id = _as_int(cast(object, chapter.get("id", 0)), 0)
+        members = list_work_chapter_members(chapter_id)
+        remapped_members = [
+            image_name if name == old_image_name else name for name in members
+        ]
+        if remapped_members != members:
+            replace_work_chapter_members(chapter_id, remapped_members)
+
     rating_before = _normalize_rating(str(existing_work.get("rating", "Not Rated")))
     rating_after = _elevate_rating(
         existing_work.get("rating", "Not Rated"),
         suggested_rating_for_nsfw(moderation["nsfw_score"]),
     )
     existing_work["rating"] = rating_after
+    _reconcile_chapters_after_page_changes(work_id)
     _upsert_existing_work(existing_work, updated_pages)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-replace-page",
+        actor=uploader_username,
+        details={"page_index": page_index},
+    )
     return {
         "work_id": work_id,
         "page_count": len(updated_pages),
         "replaced_page_index": page_index,
+        "explicit_threshold": get_explicit_threshold(),
         "rating_before": rating_before,
         "rating_after": rating_after,
         "rating_auto_elevated": rating_after != rating_before,
@@ -789,12 +974,6 @@ def editor_delete_page(
         raise FileNotFoundError(f"Page index not found: {page_index}")
 
     image_name = _as_str(cast(object, current_page.get("image_filename", "")))
-    thumb_name = _as_str(cast(object, current_page.get("thumb_filename", "")))
-    try:
-        (WORKS_DIR / work_id / "pages" / image_name).unlink(missing_ok=True)
-        (WORKS_DIR / work_id / "thumbs" / thumb_name).unlink(missing_ok=True)
-    except OSError:
-        pass
 
     remaining = [
         p
@@ -816,6 +995,12 @@ def editor_delete_page(
     replace_work_pages(work_id, renumbered)
     _reconcile_chapters_after_page_changes(work_id, removed_image_filename=image_name)
     _upsert_existing_work(existing_work, renumbered)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-delete-page",
+        actor=uploader_username,
+        details={"deleted_page_index": page_index},
+    )
     return {
         "work_id": work_id,
         "page_count": len(renumbered),
@@ -857,6 +1042,12 @@ def editor_move_page(
     replace_work_pages(work_id, reordered)
     _reconcile_chapters_after_page_changes(work_id)
     _upsert_existing_work(existing_work, reordered)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-move-page",
+        actor=uploader_username,
+        details={"from": from_index, "to": to_index},
+    )
     return {
         "work_id": work_id,
         "page_count": len(reordered),
@@ -942,6 +1133,12 @@ def editor_reorder_gallery(
         replace_work_chapter_members(chapter_id, ordered_members)
 
     _upsert_existing_work(existing_work, reordered)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-reorder-gallery",
+        actor=uploader_username,
+        details={"page_count": len(reordered)},
+    )
     return {
         "work_id": work_id,
         "page_count": len(reordered),
@@ -959,9 +1156,20 @@ def editor_add_chapter(
     page_count = len(list_work_page_rows(work_id))
     if start_page < 1 or end_page < start_page or end_page > page_count:
         raise ValueError("Chapter range is invalid")
-    return add_work_chapter(
+    result = add_work_chapter(
         work_id, title=title, start_page=start_page, end_page=end_page
     )
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-add-chapter",
+        actor=uploader_username,
+        details={
+            "chapter_title": title,
+            "start_page": start_page,
+            "end_page": end_page,
+        },
+    )
+    return result
 
 
 def editor_update_chapter(
@@ -989,6 +1197,16 @@ def editor_update_chapter(
     page_order = list_work_page_image_names(work_id)
     selected = page_order[start_page - 1 : end_page]
     replace_work_chapter_members(chapter_id, selected)
+    _ = create_work_version_snapshot(
+        work_id,
+        action="editor-update-chapter",
+        actor=uploader_username,
+        details={
+            "chapter_id": chapter_id,
+            "start_page": start_page,
+            "end_page": end_page,
+        },
+    )
     return True
 
 
@@ -996,4 +1214,12 @@ def editor_delete_chapter(
     work_id: str, chapter_id: int, uploader_username: str
 ) -> bool:
     _ = _require_editor_owner(work_id, uploader_username)
-    return delete_work_chapter(work_id, chapter_id)
+    deleted = delete_work_chapter(work_id, chapter_id)
+    if deleted:
+        _ = create_work_version_snapshot(
+            work_id,
+            action="editor-delete-chapter",
+            actor=uploader_username,
+            details={"chapter_id": chapter_id},
+        )
+    return deleted

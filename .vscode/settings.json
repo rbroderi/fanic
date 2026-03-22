@@ -7,5 +7,8 @@
         "--python-executable",
         "${workspaceFolder}/.venv/Scripts/python.exe"
     ],
-    "python.analysis.typeCheckingMode": "off"
+    "python.analysis.typeCheckingMode": "off",
+    "cSpell.words": [
+        "FANIC"
+    ]
 }

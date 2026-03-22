@@ -11,15 +11,16 @@ from fanic.cylinder_sites.common import (
     current_user,
     user_menu_replacements,
 )
-from fanic.repository import list_tag_names
-
-RATING_CHOICES = [
-    "Not Rated",
-    "General Audiences",
-    "Teen And Up Audiences",
-    "Mature",
-    "Explicit",
-]
+from fanic.cylinder_sites.editor_gallery import (
+    render_editor_chapters_html,
+    render_editor_page_gallery_html,
+)
+from fanic.cylinder_sites.editor_metadata import (
+    RATING_CHOICES,
+    render_common_tag_datalist_replacements,
+    render_options_html,
+    selected_attr,
+)
 
 
 def _as_csv(value: Any) -> str:
@@ -36,117 +37,6 @@ def _status_class(kind: str) -> str:
     if kind == "success":
         return "success"
     return ""
-
-
-def _options_html(names: list[str], selected: str) -> str:
-    selected_norm = selected.strip().casefold()
-    parts: list[str] = []
-    for name in names:
-        selected_attr = " selected" if name.strip().casefold() == selected_norm else ""
-        parts.append(
-            f'<option value="{escape(name)}"{selected_attr}>{escape(name)}</option>'
-        )
-    return "".join(parts)
-
-
-def _datalist_options_html(tag_type: str) -> str:
-    return "".join(
-        f'<option value="{escape(name)}"></option>' for name in list_tag_names(tag_type)
-    )
-
-
-def _editor_pages_html(work_id: str, pages: list[dict[str, object]]) -> str:
-    if not work_id:
-        return ""
-    if not pages:
-        return '<p class="profile-meta">No pages uploaded yet.</p>'
-
-    rows: list[str] = []
-    for page in pages:
-        page_index = int(page.get("page_index", 0) or 0)
-        image_filename = escape(str(page.get("image_filename", "")))
-        rows.append(
-            """
-                        <article class="card info-card editor-row">
-                            <p><strong>Page {page_index}</strong> ({image_filename})</p>
-                            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
-                                <input type="hidden" name="action" value="editor-replace-page" />
-                                <input type="hidden" name="editor_work_id" value="{work_id}" />
-                                <input type="hidden" name="page_index" value="{page_index}" />
-                                <label>Replace with image</label>
-                                <input type="file" name="page_image" accept="image/*" required />
-                                <button type="submit">Replace page</button>
-                            </form>
-                            <form class="upload-form" method="post" action="/ingest">
-                                <input type="hidden" name="action" value="editor-move-page" />
-                                <input type="hidden" name="editor_work_id" value="{work_id}" />
-                                <input type="hidden" name="from_index" value="{page_index}" />
-                                <label>Move to position</label>
-                                <input type="number" name="to_index" min="1" required />
-                                <button type="submit">Move page</button>
-                            </form>
-                            <form class="upload-form" method="post" action="/ingest">
-                                <input type="hidden" name="action" value="editor-delete-page" />
-                                <input type="hidden" name="editor_work_id" value="{work_id}" />
-                                <input type="hidden" name="page_index" value="{page_index}" />
-                                <button type="submit" class="button-muted">Delete page</button>
-                            </form>
-                        </article>
-                        """.format(
-                page_index=page_index,
-                image_filename=image_filename,
-                work_id=escape(work_id),
-            )
-        )
-    return "".join(rows)
-
-
-def _editor_chapters_html(work_id: str, chapters: list[dict[str, object]]) -> str:
-    if not work_id:
-        return ""
-    if not chapters:
-        return '<p class="profile-meta">No chapters yet.</p>'
-
-    rows: list[str] = []
-    for chapter in chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
-        chapter_index = int(chapter.get("chapter_index", 0) or 0)
-        title = escape(str(chapter.get("title", "Untitled Chapter")))
-        start_page = int(chapter.get("start_page", 1) or 1)
-        end_page = int(chapter.get("end_page", start_page) or start_page)
-        rows.append(
-            """
-                        <article class="card info-card editor-row">
-                            <p><strong>Chapter {chapter_index}: {title}</strong> (pages {start_page}-{end_page})</p>
-                            <form class="upload-form" method="post" action="/ingest">
-                                <input type="hidden" name="action" value="editor-update-chapter" />
-                                <input type="hidden" name="editor_work_id" value="{work_id}" />
-                                <input type="hidden" name="chapter_id" value="{chapter_id}" />
-                                <label>Title</label>
-                                <input type="text" name="chapter_title" value="{title}" required />
-                                <label>Start page</label>
-                                <input type="number" name="chapter_start_page" min="1" value="{start_page}" required />
-                                <label>End page</label>
-                                <input type="number" name="chapter_end_page" min="1" value="{end_page}" required />
-                                <button type="submit">Update chapter</button>
-                            </form>
-                            <form class="upload-form" method="post" action="/ingest">
-                                <input type="hidden" name="action" value="editor-delete-chapter" />
-                                <input type="hidden" name="editor_work_id" value="{work_id}" />
-                                <input type="hidden" name="chapter_id" value="{chapter_id}" />
-                                <button type="submit" class="button-muted">Delete chapter</button>
-                            </form>
-                        </article>
-                        """.format(
-                chapter_index=chapter_index,
-                title=title,
-                start_page=start_page,
-                end_page=end_page,
-                work_id=escape(work_id),
-                chapter_id=chapter_id,
-            )
-        )
-    return "".join(rows)
 
 
 def render_ingest_page(
@@ -188,26 +78,41 @@ def render_ingest_page(
         "__EDITOR_WORK_ID__": escape(editor_work_id),
         "__EDITOR_TITLE__": escape(editor_title),
         "__EDITOR_SUMMARY__": escape(editor_summary),
-        "__EDITOR_RATING_OPTIONS_HTML__": _options_html(RATING_CHOICES, editor_rating),
-        "__EDITOR_STATUS_IN_PROGRESS_SELECTED__": "selected"
-        if editor_status == "in_progress"
-        else "",
-        "__EDITOR_STATUS_COMPLETE_SELECTED__": "selected"
-        if editor_status == "complete"
-        else "",
+        "__EDITOR_RATING_OPTIONS_HTML__": render_options_html(
+            RATING_CHOICES,
+            editor_rating,
+        ),
+        "__EDITOR_RATING_VALUE__": escape(editor_rating),
+        "__EDITOR_STATUS_IN_PROGRESS_SELECTED__": selected_attr(
+            editor_status,
+            "in_progress",
+        ),
+        "__EDITOR_STATUS_COMPLETE_SELECTED__": selected_attr(editor_status, "complete"),
+        "__EDITOR_STATUS_VALUE__": escape(editor_status),
         "__EDITOR_LANGUAGE__": escape(editor_language),
         "__EDITOR_LINKS_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
         "__EDITOR_WORK_HREF__": f"/works/{escape(editor_work_id)}",
         "__EDITOR_READER_HREF__": f"/reader/{escape(editor_work_id)}",
         "__EDITOR_MANAGER_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
-        "__EDITOR_PAGES_HTML__": _editor_pages_html(editor_work_id, pages),
-        "__EDITOR_CHAPTERS_HTML__": _editor_chapters_html(editor_work_id, chapters),
+        "__EDITOR_PAGE_GALLERY_HTML__": render_editor_page_gallery_html(
+            editor_work_id,
+            pages,
+            chapters,
+        ),
+        "__EDITOR_CHAPTERS_HTML__": render_editor_chapters_html(
+            editor_work_id,
+            chapters,
+            form_action="/ingest",
+            action_field_name="action",
+            update_action_value="editor-update-chapter",
+            delete_action_value="editor-delete-chapter",
+        ),
         "__INGEST_STATUS__": escape(ingest_status),
         "__INGEST_STATUS_CLASS__": _status_class(ingest_status_kind),
         "__INGEST_STATUS_HIDDEN_ATTR__": "" if ingest_status else "hidden",
         "__META_TITLE__": escape(str(data.get("title", ""))),
         "__META_SUMMARY__": escape(str(data.get("summary", ""))),
-        "__META_RATING_OPTIONS_HTML__": _options_html(
+        "__META_RATING_OPTIONS_HTML__": render_options_html(
             RATING_CHOICES,
             str(data.get("rating", "Not Rated")),
         ),
@@ -220,18 +125,16 @@ def render_ingest_page(
         "__META_RELATIONSHIPS__": escape(_as_csv(data.get("relationships", ""))),
         "__META_CHARACTERS__": escape(_as_csv(data.get("characters", ""))),
         "__META_FREEFORM_TAGS__": escape(_as_csv(data.get("freeform_tags", ""))),
-        "__STATUS_IN_PROGRESS_SELECTED__": "selected"
-        if str(data.get("status", "in_progress")) == "in_progress"
-        else "",
-        "__STATUS_COMPLETE_SELECTED__": "selected"
-        if str(data.get("status", "in_progress")) == "complete"
-        else "",
-        "__WARNINGS_OPTIONS_HTML__": _datalist_options_html("archive_warning"),
-        "__FANDOM_OPTIONS_HTML__": _datalist_options_html("fandom"),
-        "__RELATIONSHIP_OPTIONS_HTML__": _datalist_options_html("relationship"),
-        "__CHARACTER_OPTIONS_HTML__": _datalist_options_html("character"),
-        "__FREEFORM_OPTIONS_HTML__": _datalist_options_html("freeform"),
+        "__STATUS_IN_PROGRESS_SELECTED__": selected_attr(
+            str(data.get("status", "in_progress")),
+            "in_progress",
+        ),
+        "__STATUS_COMPLETE_SELECTED__": selected_attr(
+            str(data.get("status", "in_progress")),
+            "complete",
+        ),
     }
+    replacements.update(render_common_tag_datalist_replacements())
     replacements.update(user_menu_replacements(request))
 
     if result_payload is not None:

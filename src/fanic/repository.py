@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,19 @@ TAG_FIELD_TO_TYPE = {
     "characters": "character",
     "freeform_tags": "freeform",
 }
+
+
+def _versions_dir_for_work(work_id: str) -> Path:
+    return WORKS_DIR / work_id / "versions"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _new_version_id() -> str:
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y%m%dT%H%M%S_%fZ")
 
 
 def _strip_none_values(value: object) -> object:
@@ -307,6 +321,15 @@ def upsert_work(work: dict[str, Any]) -> None:
     sync_work_metadata_toml(str(work["id"]))
 
 
+def set_work_cbz_path(work_id: str, cbz_path: str) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE works SET cbz_path = ? WHERE id = ?",
+            (cbz_path, work_id),
+        )
+    sync_work_metadata_toml(work_id)
+
+
 def update_work_metadata(
     work_id: str,
     metadata: dict[str, Any],
@@ -485,6 +508,24 @@ def list_works(filters: dict[str, str]) -> list[dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
+def list_works_by_uploader(username: str) -> list[dict[str, Any]]:
+    if not username.strip():
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, slug, title, summary, status, rating, warnings,
+                   page_count, cover_page_index, updated_at, uploader_username
+            FROM works
+            WHERE uploader_username = ?
+            ORDER BY updated_at DESC
+            """,
+            (username.strip(),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_work(work_id: str) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
@@ -537,7 +578,127 @@ def get_manifest(work_id: str) -> dict[str, Any] | None:
         for page in pages
     ]
     work["chapters"] = list_work_chapters(work_id)
+    versions = list_work_versions(work_id, limit=1)
+    work["current_version_id"] = versions[0]["version_id"] if versions else ""
     return work
+
+
+def create_work_version_snapshot(
+    work_id: str,
+    *,
+    action: str,
+    actor: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    work = get_work(work_id)
+    if not work:
+        return None
+
+    pages = list_work_page_rows(work_id)
+    chapters = list_work_chapters(work_id)
+    chapters_with_members: list[dict[str, Any]] = []
+    for chapter in chapters:
+        chapter_copy = dict(chapter)
+        chapter_id = int(chapter_copy.get("id", 0) or 0)
+        chapter_copy["members"] = list_work_chapter_members(chapter_id)
+        chapters_with_members.append(chapter_copy)
+
+    version_id = _new_version_id()
+    created_at = _utc_now_iso()
+    version_dir = _versions_dir_for_work(work_id) / version_id
+    version_dir.mkdir(parents=True, exist_ok=False)
+
+    manifest = {
+        "version_id": version_id,
+        "created_at": created_at,
+        "work_id": work_id,
+        "action": action,
+        "actor": actor or "",
+        "details": details or {},
+        "work": {
+            "id": str(work.get("id", work_id)),
+            "slug": str(work.get("slug", "")),
+            "title": str(work.get("title", "Untitled")),
+            "rating": str(work.get("rating", "Not Rated")),
+            "status": str(work.get("status", "in_progress")),
+            "cover_page_index": int(work.get("cover_page_index", 1) or 1),
+            "page_count": int(work.get("page_count", 0) or 0),
+            "updated_at": str(work.get("updated_at", "")),
+        },
+        "pages": [dict(page) for page in pages],
+        "chapters": chapters_with_members,
+    }
+
+    manifest_path = version_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=True, indent=2),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def get_work_version_manifest(work_id: str, version_id: str) -> dict[str, Any] | None:
+    if not version_id or "/" in version_id or "\\" in version_id:
+        return None
+    manifest_path = _versions_dir_for_work(work_id) / version_id / "manifest.json"
+    if not manifest_path.exists() or not manifest_path.is_file():
+        return None
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return raw
+
+
+def list_work_versions(work_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    if limit < 1:
+        return []
+
+    root = _versions_dir_for_work(work_id)
+    if not root.exists() or not root.is_dir():
+        return []
+
+    versions: list[dict[str, Any]] = []
+    candidates = sorted(
+        [path for path in root.iterdir() if path.is_dir()],
+        key=lambda path: path.name,
+        reverse=True,
+    )
+
+    for path in candidates:
+        manifest_path = path / "manifest.json"
+        if not manifest_path.exists() or not manifest_path.is_file():
+            continue
+        try:
+            raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(raw, dict):
+            continue
+
+        work_block = raw.get("work")
+        page_count = 0
+        if isinstance(work_block, dict):
+            try:
+                page_count = int(work_block.get("page_count", 0) or 0)
+            except (TypeError, ValueError):
+                page_count = 0
+
+        versions.append(
+            {
+                "version_id": str(raw.get("version_id", path.name)),
+                "created_at": str(raw.get("created_at", "")),
+                "action": str(raw.get("action", "")),
+                "actor": str(raw.get("actor", "")),
+                "page_count": page_count,
+            }
+        )
+        if len(versions) >= limit:
+            break
+
+    return versions
 
 
 def get_page_files(work_id: str, page_index: int) -> dict[str, str] | None:

@@ -1,10 +1,6 @@
 from __future__ import annotations
 
 import json
-import secrets
-import shutil
-import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -16,23 +12,20 @@ from fanic.cylinder_sites.common import (
 )
 from fanic.cylinder_sites.ingest_page import render_ingest_page
 from fanic.ingest import (
+    ModerationBlockedError,
     editor_add_chapter,
     editor_delete_chapter,
     editor_delete_page,
     editor_move_page,
+    editor_reorder_gallery,
     editor_replace_page_image,
     editor_update_chapter,
-    extract_comicinfo_metadata_from_cbz,
     ingest_cbz,
     ingest_editor_page,
 )
-from fanic.paths import DATA_ROOT
+from fanic.ingest_progress import set_progress
+from fanic.moderation import get_explicit_threshold
 from fanic.repository import get_work, list_work_chapters, list_work_page_rows
-
-_UPLOAD_STAGE_DIR = DATA_ROOT / "upload_staging"
-_UPLOAD_JOB_DIR = DATA_ROOT / "upload_jobs"
-_UPLOAD_TTL_SECONDS = 60 * 60
-_INGEST_WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix="fanic-ingest")
 
 
 def _csv(value: str) -> list[str]:
@@ -44,96 +37,6 @@ def _has_selected_file(upload: object | None) -> bool:
         return False
     filename = getattr(upload, "filename", None)
     return isinstance(filename, str) and bool(filename.strip())
-
-
-def _ensure_stage_dir() -> None:
-    _UPLOAD_STAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _ensure_job_dir() -> None:
-    _UPLOAD_JOB_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _cleanup_stale_uploads(now: float) -> None:
-    if not _UPLOAD_STAGE_DIR.exists():
-        return
-    for path in _UPLOAD_STAGE_DIR.glob("*.cbz"):
-        try:
-            if now - path.stat().st_mtime > _UPLOAD_TTL_SECONDS:
-                path.unlink(missing_ok=True)
-        except OSError:
-            continue
-
-
-def _new_upload_token() -> str:
-    return secrets.token_urlsafe(24)
-
-
-def _stage_upload(upload) -> tuple[str, Path]:
-    _ensure_stage_dir()
-    token = _new_upload_token()
-    staged_path = _UPLOAD_STAGE_DIR / f"{token}.cbz"
-    upload.save(staged_path)
-    return token, staged_path
-
-
-def _path_for_token(token: str) -> Path | None:
-    if not token:
-        return None
-    if any(
-        ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-        for ch in token
-    ):
-        return None
-    path = _UPLOAD_STAGE_DIR / f"{token}.cbz"
-    return path if path.exists() else None
-
-
-def _process_queued_ingest(
-    cbz_path: Path,
-    metadata_path: Path,
-    uploader_username: str,
-    job_dir: Path,
-) -> None:
-    try:
-        _ = ingest_cbz(cbz_path, metadata_path, uploader_username=uploader_username)
-    finally:
-        shutil.rmtree(job_dir, ignore_errors=True)
-
-
-def _enqueue_ingest_job(
-    *,
-    cbz_upload,
-    staged_path: Path | None,
-    metadata: dict[str, object],
-    uploader_username: str,
-) -> str:
-    _ensure_job_dir()
-    job_id = _new_upload_token()
-    job_dir = _UPLOAD_JOB_DIR / job_id
-    job_dir.mkdir(parents=True, exist_ok=False)
-
-    cbz_path = job_dir / "upload.cbz"
-    metadata_path = job_dir / "metadata.json"
-
-    if staged_path is not None:
-        _ = shutil.copy2(staged_path, cbz_path)
-    else:
-        cbz_upload.save(cbz_path)
-
-    _ = metadata_path.write_text(
-        json.dumps(metadata, ensure_ascii=True),
-        encoding="utf-8",
-    )
-
-    _INGEST_WORKERS.submit(
-        _process_queued_ingest,
-        cbz_path,
-        metadata_path,
-        uploader_username,
-        job_dir,
-    )
-    return job_id
 
 
 def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
@@ -242,10 +145,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     raw_page_upload = request.files.get("page_image")
     page_upload = raw_page_upload if _has_selected_file(raw_page_upload) else None
     upload_token = request.form.get("upload_token", "").strip()
-    now = time.time()
-    _cleanup_stale_uploads(now)
 
-    if action == "load-metadata":
+    if action in {"load-metadata", "ingest"}:
         if cbz_upload is None:
             return render_ingest_page(
                 request,
@@ -255,87 +156,139 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
 
         try:
-            token, staged_path = _stage_upload(cbz_upload)
-            metadata = extract_comicinfo_metadata_from_cbz(staged_path)
-            if not str(metadata.get("title", "")).strip():
-                fallback_title = Path(cbz_upload.filename or "").stem.strip()
-                if fallback_title:
-                    metadata["title"] = fallback_title
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="starting",
+                    message="Starting import",
+                )
 
-            return render_ingest_page(
+            metadata = _collect_metadata_from_form(request)
+            override_path: Path | None = None
+            with TemporaryDirectory() as temp_dir:
+                cbz_path = (
+                    Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
+                )
+                cbz_upload.save(cbz_path)
+                if metadata:
+                    override_path = Path(temp_dir) / "metadata.json"
+                    _ = override_path.write_text(
+                        json.dumps(metadata, ensure_ascii=True),
+                        encoding="utf-8",
+                    )
+
+                result = ingest_cbz(
+                    cbz_path,
+                    metadata_override_path=override_path,
+                    uploader_username=username,
+                    progress_hook=(
+                        (
+                            lambda stage, message, current, total: set_progress(
+                                upload_token,
+                                stage=stage,
+                                message=message,
+                                current=current,
+                                total=total,
+                                done=False,
+                                ok=False,
+                            )
+                        )
+                        if upload_token
+                        else None
+                    ),
+                )
+
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="done",
+                    message="Import complete",
+                    done=True,
+                    ok=True,
+                )
+
+            work_id = str(result.get("work_id", ""))
+            work = get_work(work_id) or {}
+            editor_state = {
+                "editor_work_id": work_id,
+                "editor_title": str(work.get("title", "") or ""),
+                "editor_summary": str(work.get("summary", "") or ""),
+                "editor_rating": str(work.get("rating", "Not Rated") or "Not Rated"),
+                "editor_status": str(
+                    work.get("status", "in_progress") or "in_progress"
+                ),
+                "editor_language": str(work.get("language", "en") or "en"),
+            }
+
+            return _render_editor_result(
                 request,
                 response,
-                metadata=metadata,
-                show_metadata_form=True,
-                upload_token=token,
-                ingest_status="Metadata loaded from ComicInfo.xml. Review fields and click Ingest comic.",
-                ingest_status_kind="success",
-            )
-        except Exception as exc:
-            return render_ingest_page(
-                request,
-                response,
-                show_metadata_form=True,
-                upload_token=upload_token,
-                ingest_status=f"Failed to parse ComicInfo.xml: {exc}",
-                ingest_status_kind="error",
-            )
-
-    if action == "ingest":
-        metadata = _collect_metadata_from_form(request)
-
-        staged_path = _path_for_token(upload_token)
-        if cbz_upload is None and staged_path is None:
-            return render_ingest_page(
-                request,
-                response,
-                metadata=metadata,
-                show_metadata_form=True,
-                upload_token=upload_token,
-                ingest_status="Please choose a CBZ file and load metadata first.",
-                ingest_status_kind="error",
-            )
-
-        try:
-            if staged_path is None and cbz_upload is None:
-                raise ValueError("Upload token is missing or expired")
-
-            job_id = _enqueue_ingest_job(
-                cbz_upload=cbz_upload,
-                staged_path=staged_path,
-                metadata=metadata,
-                uploader_username=username,
-            )
-
-            if staged_path is not None:
-                try:
-                    staged_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-
-            return render_ingest_page(
-                request,
-                response,
-                metadata=metadata,
-                show_metadata_form=True,
-                upload_token="",
-                ingest_status="Comic queued for processing. It will be added as soon as it finishes processing.",
+                editor_state,
+                ingest_status="CBZ imported into editor draft. Review pages, reorder, and finalize using the editor workflow.",
                 ingest_status_kind="success",
                 result_payload={
                     "ok": True,
-                    "queued": True,
-                    "job_id": job_id,
+                    "mode": "editor",
                     "uploaded_by": username,
+                    "result": result,
                 },
             )
-        except Exception as exc:
+        except ModerationBlockedError as exc:
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="blocked",
+                    message="Blocked by moderation policy",
+                    done=True,
+                    ok=False,
+                )
+            moderation = exc.moderation
+            reasons_obj = moderation.get("reasons")
+            reasons: list[str] = []
+            if isinstance(reasons_obj, list):
+                reasons = [str(reason) for reason in reasons_obj]
+
+            source_member = str(moderation.get("source_member", "") or "")
+            source_suffix = f" ({source_member})" if source_member else ""
             return render_ingest_page(
                 request,
                 response,
-                metadata=metadata,
-                show_metadata_form=True,
-                upload_token=upload_token,
-                ingest_status=f"Ingest failed: {exc}",
+                ingest_status=(
+                    f"CBZ import blocked by moderation policy{source_suffix}."
+                ),
+                ingest_status_kind="error",
+                result_payload={
+                    "ok": False,
+                    "mode": "editor",
+                    "blocked": True,
+                    "explicit_threshold": get_explicit_threshold(),
+                    "error": "moderation_blocked",
+                    "message": str(exc),
+                    "moderation": {
+                        "allow": bool(moderation.get("allow", False)),
+                        "style": str(moderation.get("style", "unknown")),
+                        "style_debug": moderation.get("style_debug", {}),
+                        "style_confidences": moderation.get("style_confidences", {}),
+                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_confidences": moderation.get("nsfw_confidences", {}),
+                        "reasons": reasons,
+                        "source_member": source_member,
+                    },
+                },
+            )
+        except Exception as exc:
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="failed",
+                    message=f"Import failed: {exc}",
+                    done=True,
+                    ok=False,
+                )
+            return render_ingest_page(
+                request,
+                response,
+                ingest_status=f"CBZ import failed: {exc}",
                 ingest_status_kind="error",
             )
 
@@ -394,6 +347,37 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "result": result,
                 },
             )
+        except ModerationBlockedError as exc:
+            moderation = exc.moderation
+            reasons_obj = moderation.get("reasons")
+            reasons: list[str] = []
+            if isinstance(reasons_obj, list):
+                reasons = [str(reason) for reason in reasons_obj]
+
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status="Editor upload blocked by moderation policy.",
+                ingest_status_kind="error",
+                result_payload={
+                    "ok": False,
+                    "mode": "editor",
+                    "blocked": True,
+                    "explicit_threshold": get_explicit_threshold(),
+                    "error": "moderation_blocked",
+                    "message": str(exc),
+                    "moderation": {
+                        "allow": bool(moderation.get("allow", False)),
+                        "style": str(moderation.get("style", "unknown")),
+                        "style_debug": moderation.get("style_debug", {}),
+                        "style_confidences": moderation.get("style_confidences", {}),
+                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_confidences": moderation.get("nsfw_confidences", {}),
+                        "reasons": reasons,
+                    },
+                },
+            )
         except Exception as exc:
             return _render_editor_result(
                 request,
@@ -441,6 +425,37 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ),
                 ingest_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
+            )
+        except ModerationBlockedError as exc:
+            moderation = exc.moderation
+            reasons_obj = moderation.get("reasons")
+            reasons: list[str] = []
+            if isinstance(reasons_obj, list):
+                reasons = [str(reason) for reason in reasons_obj]
+
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status="Replace blocked by moderation policy.",
+                ingest_status_kind="error",
+                result_payload={
+                    "ok": False,
+                    "mode": "editor",
+                    "blocked": True,
+                    "explicit_threshold": get_explicit_threshold(),
+                    "error": "moderation_blocked",
+                    "message": str(exc),
+                    "moderation": {
+                        "allow": bool(moderation.get("allow", False)),
+                        "style": str(moderation.get("style", "unknown")),
+                        "style_debug": moderation.get("style_debug", {}),
+                        "style_confidences": moderation.get("style_confidences", {}),
+                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_confidences": moderation.get("nsfw_confidences", {}),
+                        "reasons": reasons,
+                    },
+                },
             )
         except Exception as exc:
             return _render_editor_result(
@@ -493,6 +508,46 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 response,
                 editor_state,
                 ingest_status="Page reordered.",
+                ingest_status_kind="success",
+                result_payload={"ok": True, "mode": "editor", "result": result},
+            )
+        except Exception as exc:
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status=f"Reorder failed: {exc}",
+                ingest_status_kind="error",
+            )
+
+    if action == "editor-reorder-gallery":
+        editor_state = _editor_state_from_form(request)
+        try:
+            ordered_filenames_raw = request.form.get("ordered_filenames_json", "")
+            chapter_members_raw = request.form.get("chapter_members_json", "{}")
+
+            ordered_filenames = json.loads(ordered_filenames_raw)
+            chapter_members = json.loads(chapter_members_raw)
+            if not isinstance(ordered_filenames, list):
+                raise ValueError("Invalid ordered_filenames_json")
+            if not isinstance(chapter_members, dict):
+                raise ValueError("Invalid chapter_members_json")
+
+            result = editor_reorder_gallery(
+                work_id=editor_state["editor_work_id"],
+                ordered_filenames=[str(name) for name in ordered_filenames],
+                chapter_members={
+                    str(chapter_id): [str(name) for name in members]
+                    for chapter_id, members in chapter_members.items()
+                    if isinstance(members, list)
+                },
+                uploader_username=username,
+            )
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status="Gallery order saved. Page order and chapter assignments updated.",
                 ingest_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
