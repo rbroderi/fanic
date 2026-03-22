@@ -57,17 +57,19 @@ def test_reports_route_renders_report_rows_for_admin(
         *,
         work_id: str,
         issue_type: str,
+        status: str,
         start_date: str,
         end_date: str,
         limit: int = 250,
     ) -> list[dict[str, object]]:
-        _ = (work_id, issue_type, start_date, end_date, limit)
+        _ = (work_id, issue_type, status, start_date, end_date, limit)
         return [
             {
                 "id": 1,
                 "work_id": "work-1",
                 "work_title": "Sample Work",
                 "issue_type": "illegal-content",
+                "status": "resolved",
                 "reason": "Illegal content",
                 "reporter_name": "Reporter",
                 "reporter_email": "reporter@example.com",
@@ -93,6 +95,7 @@ def test_reports_route_renders_report_rows_for_admin(
         captured["count"] = replacements["__REPORT_COUNT__"]
         captured["rows"] = replacements["__REPORT_ROWS_HTML__"]
         captured["options"] = replacements["__REPORT_ISSUE_OPTIONS_HTML__"]
+        captured["status_options"] = replacements["__REPORT_STATUS_OPTIONS_HTML__"]
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -107,6 +110,7 @@ def test_reports_route_renders_report_rows_for_admin(
         args={
             "work_id": "work-1",
             "issue_type": "illegal-content",
+            "status": "resolved",
             "start_date": "2026-03-01",
             "end_date": "2026-03-31",
         },
@@ -118,4 +122,7 @@ def test_reports_route_renders_report_rows_for_admin(
     assert captured["template"] == "reports.html"
     assert captured["count"] == "1"
     assert "Sample Work" in captured["rows"]
+    assert "Resolved" in captured["rows"]
     assert "Illegal content" in captured["options"]
+    assert "resolved" in captured["status_options"]
+    assert "re-open" in captured["status_options"]

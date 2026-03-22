@@ -90,6 +90,10 @@ def test_route_helpers_and_user_menu(
         _ = req
         return "alice"
 
+    def fake_current_user_admin(req: Any) -> str:
+        _ = req
+        return "admin"
+
     def fake_current_user_logged_out(req: Any) -> None:
         _ = req
         return None
@@ -101,14 +105,21 @@ def test_route_helpers_and_user_menu(
     assert module.route_tail(request, ["reader"]) is None
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_in)
+    monkeypatch.setattr(module, "ADMIN_USERNAME", "admin")
     logged_in = module.user_menu_replacements(request)
     assert logged_in["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == "hidden"
     assert logged_in["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == ""
+    assert logged_in["__ADMIN_REPORTS_LINK__"] == ""
+
+    monkeypatch.setattr(module, "current_user", fake_current_user_admin)
+    logged_in_admin = module.user_menu_replacements(request)
+    assert logged_in_admin["__ADMIN_REPORTS_LINK__"] == '<a href="/reports">Reports</a>'
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_out)
     logged_out = module.user_menu_replacements(request)
     assert logged_out["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == ""
     assert logged_out["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == "hidden"
+    assert logged_out["__ADMIN_REPORTS_LINK__"] == ""
 
 
 def test_theme_override_parsing_and_style_tag(
@@ -286,3 +297,20 @@ def test_session_and_upload_helpers(
     thumb_path = module.thumb_file_for("w1", "t1.jpg")
     assert page_path.parts[-3:] == ("w1", "pages", "p1.jpg")
     assert thumb_path.parts[-3:] == ("w1", "thumbs", "t1.jpg")
+
+
+def test_log_path_resolution_uses_log_suffix(
+    load_route_module: Callable[[str, str], ModuleType],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/common.py", "common_log_path_suffix_test"
+    )
+
+    with_default_template = module._resolve_log_path("logs/%TIMESTAMP%")
+    assert with_default_template.suffix == ".log"
+
+    with_blank_template = module._resolve_log_path("   ")
+    assert with_blank_template.suffix == ".log"
+
+    with_explicit_suffix = module._resolve_log_path("logs/custom.txt")
+    assert with_explicit_suffix.suffix == ".txt"

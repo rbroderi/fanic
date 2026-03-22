@@ -18,7 +18,8 @@
         <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>`r`n            __ADMIN_REPORTS_LINK__
+            <a href="/">Browse</a>
+            __ADMIN_REPORTS_LINK__
             <a href="/ingest">Upload comic</a>
             <a href="/profile" aria-current="page">Profile</a>
           </nav>
@@ -43,14 +44,14 @@
     <main class="layout">
       <section class="card profile-card">
         <h2>__PROFILE_CARD_TITLE__</h2>
-        <p class="profile-meta">__PROFILE_CARD_SUBTITLE__</p>
-        <p id="profileStatus" class="profile-status __PROFILE_STATUS_CLASS__">__PROFILE_STATUS__</p>
+        <p class="profile-meta" __PROFILE_SUBTITLE_HIDDEN_ATTR__>__PROFILE_CARD_SUBTITLE__</p>
+        <p id="profileStatus" class="profile-status __PROFILE_STATUS_CLASS__" __PROFILE_STATUS_HIDDEN_ATTR__>__PROFILE_STATUS__</p>
         <p id="profileDetails">__PROFILE_DETAILS__</p>
         <p __PROFILE_PUBLIC_LINK_HIDDEN_ATTR__>
           <a href="__PROFILE_PUBLIC_HREF__">View your public profile page</a>
         </p>
 
-        <section class="theme-preferences" aria-labelledby="themePreferencesHeading">
+        <section class="theme-preferences" aria-labelledby="themePreferencesHeading" __PROFILE_SETTINGS_HIDDEN_ATTR__>
           <h3 id="themePreferencesHeading">Appearance</h3>
           <p class="profile-meta">Choose your preferred website theme.</p>
           <label class="toggle-row" for="themeToggle">
@@ -59,7 +60,7 @@
           </label>
         </section>
 
-        <form class="profile-preferences" method="post" action="/profile" enctype="multipart/form-data" __PROFILE_PREFS_HIDDEN_ATTR__>
+        <form class="profile-preferences" method="post" action="/profile" enctype="multipart/form-data" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_PREFS_HIDDEN_ATTR__>
           <input type="hidden" name="profile_action" value="theme" />
           <h3>Custom Theme</h3>
           <p class="profile-meta">Upload a theme.toml file to override light and dark theme variables.</p>
@@ -119,7 +120,7 @@ bg-glow-2 = "#18374f"
           <p class="status-text __PROFILE_THEME_STATUS_CLASS__" __PROFILE_THEME_STATUS_HIDDEN_ATTR__>__PROFILE_THEME_STATUS__</p>
         </form>
 
-        <form class="profile-preferences" method="post" action="/profile" __PROFILE_PREFS_HIDDEN_ATTR__>
+        <form class="profile-preferences" method="post" action="/profile" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_PREFS_HIDDEN_ATTR__>
           <input type="hidden" name="profile_action" value="preferences" />
           <h3>Reading Preferences</h3>
           <p class="profile-meta">Choose what content appears while browsing and reading.</p>

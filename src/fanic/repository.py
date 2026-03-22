@@ -82,6 +82,7 @@ class ContentReportRow(TypedDict):
     work_id: str | None
     work_title: str
     issue_type: str
+    status: str
     reason: str
     reporter_name: str
     reporter_email: str
@@ -411,6 +412,7 @@ def list_content_reports(
     *,
     work_id: str,
     issue_type: str,
+    status: str,
     start_date: str,
     end_date: str,
     limit: int = 250,
@@ -428,6 +430,11 @@ def list_content_reports(
         where.append("issue_type = ?")
         params.append(normalized_issue_type)
 
+    normalized_status = status.strip()
+    if normalized_status:
+        where.append("status = ?")
+        params.append(normalized_status)
+
     normalized_start_date = start_date.strip()
     if normalized_start_date:
         where.append("substr(created_at, 1, 10) >= ?")
@@ -444,6 +451,7 @@ def list_content_reports(
             work_id,
             work_title,
             issue_type,
+            status,
             reason,
             reporter_name,
             reporter_email,
@@ -475,6 +483,7 @@ def list_content_reports(
                 "work_id": str(work_id_obj) if work_id_obj is not None else None,
                 "work_title": str(row["work_title"]),
                 "issue_type": str(row["issue_type"]),
+                "status": str(row["status"]),
                 "reason": str(row["reason"]),
                 "reporter_name": str(row["reporter_name"]),
                 "reporter_email": str(row["reporter_email"]),
@@ -491,6 +500,28 @@ def list_content_reports(
             }
         )
     return reports
+
+
+def update_content_report_status(report_id: int, status: str) -> bool:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE dmca_reports
+            SET status = ?
+            WHERE id = ?
+            """,
+            (status, report_id),
+        )
+    return cursor.rowcount > 0
+
+
+def delete_content_report(report_id: int) -> bool:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM dmca_reports WHERE id = ?",
+            (report_id,),
+        )
+    return cursor.rowcount > 0
 
 
 def list_work_comments(work_id: str) -> list[WorkComment]:
@@ -713,6 +744,43 @@ def update_work_metadata(
 
     replace_work_tags(work_id, metadata)
     sync_work_metadata_toml(work_id)
+
+
+def set_work_rating(
+    work_id: str,
+    rating: str,
+    *,
+    editor_username: str,
+    edited_by_admin: bool,
+) -> bool:
+    existing_work = get_work(work_id)
+    if not existing_work:
+        return False
+
+    metadata: dict[str, object] = {
+        "title": str(existing_work.get("title", "Untitled")),
+        "summary": str(existing_work.get("summary", "")),
+        "rating": rating,
+        "warnings": str(existing_work.get("warnings", "No Archive Warnings Apply")),
+        "language": str(existing_work.get("language", "en")),
+        "status": str(existing_work.get("status", "in_progress")),
+        "series": (
+            existing_work.get("series_name") if existing_work.get("series_name") else ""
+        ),
+        "series_index": existing_work.get("series_index"),
+        "published_at": (
+            existing_work.get("published_at")
+            if existing_work.get("published_at")
+            else ""
+        ),
+    }
+    update_work_metadata(
+        work_id,
+        metadata,
+        editor_username=editor_username,
+        edited_by_admin=edited_by_admin,
+    )
+    return True
 
 
 def replace_work_pages(work_id: str, pages: list[WorkPageRow]) -> None:

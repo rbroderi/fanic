@@ -125,6 +125,10 @@ def test_profile_get_marks_custom_theme_checked(
         captured["checked"] = replacements[
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__"
         ]
+        captured["settings_hidden"] = replacements["__PROFILE_SETTINGS_HIDDEN_ATTR__"]
+        captured["public_link_hidden"] = replacements[
+            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"
+        ]
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -138,6 +142,68 @@ def test_profile_get_marks_custom_theme_checked(
 
     assert result.status_code == 200
     assert captured["checked"] == "checked"
+    assert captured["settings_hidden"] == ""
+    assert captured["public_link_hidden"] == ""
+
+
+def test_users_public_profile_hides_settings_and_public_link(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
+        "fanicsite_users_ex_get_public_profile_test",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "admin"
+
+    def fake_list_works_by_uploader(username: str) -> list[dict[str, Any]]:
+        _ = username
+        return []
+
+    def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        captured["template"] = template_name
+        captured["public_link_hidden"] = replacements[
+            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"
+        ]
+        captured["settings_hidden"] = replacements["__PROFILE_SETTINGS_HIDDEN_ATTR__"]
+        captured["prefs_hidden"] = replacements["__PROFILE_PREFS_HIDDEN_ATTR__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(path="/users/admin", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert captured["template"] == "profile.html"
+    assert captured["public_link_hidden"] == "hidden"
+    assert captured["settings_hidden"] == "hidden"
+    assert captured["prefs_hidden"] == "hidden"
 
 
 def test_profile_post_disabling_custom_theme_stops_override_injection(

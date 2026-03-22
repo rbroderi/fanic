@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS dmca_reports (
     work_id TEXT,
     work_title TEXT NOT NULL DEFAULT '',
     issue_type TEXT NOT NULL DEFAULT 'copyright-dmca',
+    status TEXT NOT NULL DEFAULT 'open',
     reporter_name TEXT NOT NULL,
     reporter_email TEXT NOT NULL,
     reason TEXT NOT NULL,

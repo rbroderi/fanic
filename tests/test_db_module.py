@@ -112,6 +112,7 @@ def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
             for row in connection.execute("PRAGMA table_info(dmca_reports)").fetchall()
         }
         assert "issue_type" in dmca_columns
+        assert "status" in dmca_columns
     finally:
         connection.close()
 

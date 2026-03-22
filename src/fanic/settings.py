@@ -104,7 +104,7 @@ class FanicSettings(BaseSettings):
     )
 
     log_path_template: str = Field(
-        default="logs/%TIMESTAMP%",
+        default="logs/%TIMESTAMP%.log",
         alias="FANIC_LOG_PATH_TEMPLATE",
     )
 

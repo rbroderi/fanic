@@ -142,6 +142,7 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
             work_id TEXT,
             work_title TEXT NOT NULL DEFAULT '',
             issue_type TEXT NOT NULL DEFAULT 'copyright-dmca',
+            status TEXT NOT NULL DEFAULT 'open',
             reporter_name TEXT NOT NULL,
             reporter_email TEXT NOT NULL,
             reason TEXT NOT NULL,
@@ -162,6 +163,13 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE dmca_reports ADD COLUMN issue_type TEXT NOT NULL DEFAULT 'copyright-dmca'"
         )
+    if "status" not in dmca_columns:
+        connection.execute(
+            "ALTER TABLE dmca_reports ADD COLUMN status TEXT NOT NULL DEFAULT 'open'"
+        )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dmca_reports_status ON dmca_reports(status)"
+    )
 
 
 def get_connection() -> sqlite3.Connection:

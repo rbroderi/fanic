@@ -176,8 +176,29 @@ JWT_DECODE = cast(JWTDecode, jwt.decode)
 def _resolve_log_path(template: str) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     resolved = template.replace("%TIMESTAMP%", timestamp).strip()
-    value = resolved if resolved else f"logs/{timestamp}"
-    return Path(value).expanduser().resolve()
+    value = resolved if resolved else f"logs/{timestamp}.log"
+    path = Path(value).expanduser().resolve()
+    if path.suffix:
+        return path
+    return path.with_suffix(".log")
+
+
+def _ensure_file_logging_handler(log_path: Path) -> None:
+    root_logger = logging.getLogger()
+    target_path = log_path.resolve()
+
+    for handler in root_logger.handlers:
+        if not isinstance(handler, logging.FileHandler):
+            continue
+        current_path = Path(handler.baseFilename).resolve()
+        if current_path == target_path:
+            return
+
+    file_handler = logging.FileHandler(target_path, encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger.addHandler(file_handler)
+    if root_logger.level == logging.NOTSET or root_logger.level > logging.INFO:
+        root_logger.setLevel(logging.INFO)
 
 
 def _configure_structlog() -> None:
@@ -187,12 +208,7 @@ def _configure_structlog() -> None:
 
     log_path = _resolve_log_path(_SETTINGS.log_path_template)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(message)s",
-        handlers=[logging.FileHandler(log_path, encoding="utf-8")],
-    )
+    _ensure_file_logging_handler(log_path)
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
@@ -202,6 +218,10 @@ def _configure_structlog() -> None:
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
+    )
+    structlog.get_logger("fanic.http").info(
+        "logging initialized",
+        log_path=str(log_path),
     )
     _structlog_configured = True
 
@@ -827,6 +847,7 @@ def clear_login_cookie(response: ResponseLike) -> None:
 def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     username = current_user(request)
     logged_in = username is not None
+    is_admin = bool(username) and username == ADMIN_USERNAME
     return {
         "__USER_MENU_STATUS__": f"Logged in as {escape(username)}."
         if logged_in and username
@@ -834,6 +855,7 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         "__USER_MENU_LOGIN_HIDDEN_ATTR__": "hidden" if logged_in else "",
         "__USER_MENU_PROFILE_HIDDEN_ATTR__": "" if logged_in else "hidden",
         "__USER_MENU_LOGOUT_HIDDEN_ATTR__": "" if logged_in else "hidden",
+        "__ADMIN_REPORTS_LINK__": '<a href="/reports">Reports</a>' if is_admin else "",
     }
 
 

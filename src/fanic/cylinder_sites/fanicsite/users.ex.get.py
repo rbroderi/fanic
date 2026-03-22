@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from html import escape
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    render_html_template,
-    route_tail,
-    text_error,
-)
-from fanic.repository import WorkListItem, can_view_work, list_works_by_uploader
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import text_error
+from fanic.repository import WorkListItem
+from fanic.repository import can_view_work
+from fanic.repository import list_works_by_uploader
 
 
 def _uploaded_works_html(works: Sequence[WorkListItem]) -> str:
@@ -51,14 +51,23 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         "__PROFILE_PAGE_TITLE__": f"FANIC Profile - {escape(profile_username)}",
         "__PROFILE_CARD_TITLE__": f"{escape(profile_username)}'s Profile",
         "__PROFILE_CARD_SUBTITLE__": "Public profile and uploaded works.",
+        "__PROFILE_SUBTITLE_HIDDEN_ATTR__": "hidden",
         "__PROFILE_STATUS__": "Public profile",
         "__PROFILE_STATUS_CLASS__": "",
+        "__PROFILE_STATUS_HIDDEN_ATTR__": "hidden",
         "__PROFILE_DETAILS__": f"Username: {escape(profile_username)}",
+        "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden",
+        "__PROFILE_PUBLIC_HREF__": "",
+        "__PROFILE_SETTINGS_HIDDEN_ATTR__": "hidden",
         "__PROFILE_PREFS_HIDDEN_ATTR__": "hidden",
         "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": "",
         "__PROFILE_PREF_STATUS__": "",
         "__PROFILE_PREF_STATUS_CLASS__": "",
         "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": "hidden",
+        "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__": "",
+        "__PROFILE_THEME_STATUS__": "",
+        "__PROFILE_THEME_STATUS_CLASS__": "",
+        "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": "hidden",
         "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "",
         "__PROFILE_UPLOADED_WORKS_HTML__": _uploaded_works_html(uploaded),
     }
