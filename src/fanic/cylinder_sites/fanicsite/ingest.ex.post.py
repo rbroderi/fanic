@@ -4,28 +4,38 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    text_error,
-)
+from fanic.cylinder_sites.common import MAX_CBZ_UPLOAD_BYTES
+from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import admin_aware_detail
+from fanic.cylinder_sites.common import begin_upload_session
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import end_upload_session
+from fanic.cylinder_sites.common import enforce_https_termination
+from fanic.cylinder_sites.common import log_exception
+from fanic.cylinder_sites.common import request_id
+from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common import validate_cbz_upload_policy
+from fanic.cylinder_sites.common import validate_csrf
+from fanic.cylinder_sites.common import validate_page_upload_policy
+from fanic.cylinder_sites.common import validate_saved_upload_size
 from fanic.cylinder_sites.ingest_page import render_ingest_page
-from fanic.ingest import (
-    ModerationBlockedError,
-    editor_add_chapter,
-    editor_delete_chapter,
-    editor_delete_page,
-    editor_move_page,
-    editor_reorder_gallery,
-    editor_replace_page_image,
-    editor_update_chapter,
-    ingest_cbz,
-    ingest_editor_page,
-)
+from fanic.ingest import ModerationBlockedError
+from fanic.ingest import editor_add_chapter
+from fanic.ingest import editor_delete_chapter
+from fanic.ingest import editor_delete_page
+from fanic.ingest import editor_move_page
+from fanic.ingest import editor_reorder_gallery
+from fanic.ingest import editor_replace_page_image
+from fanic.ingest import editor_update_chapter
+from fanic.ingest import ingest_cbz
+from fanic.ingest import ingest_editor_page
 from fanic.ingest_progress import set_progress
 from fanic.moderation import get_explicit_threshold
-from fanic.repository import get_work, list_work_chapters, list_work_page_rows
+from fanic.repository import get_work
+from fanic.repository import list_work_chapters
+from fanic.repository import list_work_page_rows
 
 
 def _csv(value: str) -> list[str]:
@@ -147,8 +157,15 @@ def _render_editor_result(
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+    _ = request_id(request, response)
     if request.path != "/ingest":
         return text_error(response, "Not found", 404)
+
+    if not enforce_https_termination(request):
+        return text_error(response, "HTTPS required", 400)
+
+    if not validate_csrf(request):
+        return text_error(response, "Invalid CSRF token", 403)
 
     username = current_user(request)
     if username is None:
@@ -189,7 +206,41 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ingest_status_kind="error",
             )
 
+        cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
+        if cbz_policy_error:
+            return render_ingest_page(
+                request,
+                response,
+                ingest_status=cbz_policy_error,
+                ingest_status_kind="error",
+            )
+
+        started_upload_session = False
+        allowed, limit_code, retry_after = begin_upload_session(username)
+        if not allowed:
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="throttled",
+                    message="Upload temporarily throttled",
+                    done=True,
+                    ok=False,
+                )
+            message = (
+                "Too many upload requests. Please retry later "
+                f"(retry in {retry_after}s)."
+                if limit_code == "upload_rate_limited"
+                else "Too many concurrent uploads. Please wait for active uploads to finish."
+            )
+            return render_ingest_page(
+                request,
+                response,
+                ingest_status=message,
+                ingest_status_kind="error",
+            )
+
         try:
+            started_upload_session = True
             if upload_token:
                 set_progress(
                     upload_token,
@@ -207,6 +258,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 cbz_upload.save(cbz_path)
+                cbz_size_error = validate_saved_upload_size(
+                    cbz_path,
+                    MAX_CBZ_UPLOAD_BYTES,
+                    "CBZ upload",
+                )
+                if cbz_size_error:
+                    return render_ingest_page(
+                        request,
+                        response,
+                        ingest_status=cbz_size_error,
+                        ingest_status_kind="error",
+                    )
                 if metadata:
                     override_path = Path(temp_dir) / "metadata.json"
                     _ = override_path.write_text(
@@ -317,7 +380,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "blocked": True,
                     "explicit_threshold": get_explicit_threshold(),
                     "error": "moderation_blocked",
-                    "message": str(exc),
+                    "message": admin_aware_detail(
+                        request,
+                        public_detail="Blocked by moderation policy",
+                        exc=exc,
+                    ),
                     "moderation": {
                         "allow": bool(moderation.get("allow", False)),
                         "style": str(moderation.get("style", "unknown")),
@@ -335,20 +402,33 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 },
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="ingest_failed",
+                exc=exc,
+                message="Browser ingest failed",
+            )
             if upload_token:
                 set_progress(
                     upload_token,
                     stage="failed",
-                    message=f"Import failed: {exc}",
+                    message="Import failed",
                     done=True,
                     ok=False,
                 )
             return render_ingest_page(
                 request,
                 response,
-                ingest_status=f"CBZ import failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="CBZ import failed [ingest_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if action == "editor-add-page":
         editor_state = _editor_state_from_form(request)
@@ -372,6 +452,33 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ingest_status_kind="error",
             )
 
+        page_policy_error = validate_page_upload_policy(page_upload)
+        if page_policy_error:
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status=page_policy_error,
+                ingest_status_kind="error",
+            )
+
+        started_upload_session = False
+        allowed, limit_code, retry_after = begin_upload_session(username)
+        if not allowed:
+            message = (
+                "Too many upload requests. Please retry later "
+                f"(retry in {retry_after}s)."
+                if limit_code == "upload_rate_limited"
+                else "Too many concurrent uploads. Please wait for active uploads to finish."
+            )
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status=message,
+                ingest_status_kind="error",
+            )
+
         editor_metadata: dict[str, object] = {
             "title": editor_state["editor_title"],
             "summary": editor_state["editor_summary"],
@@ -381,6 +488,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         }
 
         try:
+            started_upload_session = True
             with TemporaryDirectory() as temp_dir:
                 page_path = (
                     Path(temp_dir)
@@ -389,6 +497,19 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 page_upload.save(page_path)
+                page_size_error = validate_saved_upload_size(
+                    page_path,
+                    MAX_PAGE_UPLOAD_BYTES,
+                    "Page upload",
+                )
+                if page_size_error:
+                    return _render_editor_result(
+                        request,
+                        response,
+                        editor_state,
+                        ingest_status=page_size_error,
+                        ingest_status_kind="error",
+                    )
                 result = ingest_editor_page(
                     image_path=page_path,
                     metadata=editor_metadata,
@@ -441,7 +562,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "blocked": True,
                     "explicit_threshold": get_explicit_threshold(),
                     "error": "moderation_blocked",
-                    "message": str(exc),
+                    "message": admin_aware_detail(
+                        request,
+                        public_detail="Blocked by moderation policy",
+                        exc=exc,
+                    ),
                     "moderation": {
                         "allow": bool(moderation.get("allow", False)),
                         "style": str(moderation.get("style", "unknown")),
@@ -458,13 +583,26 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 },
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_add_page_failed",
+                exc=exc,
+                message="Editor add page failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Editor upload failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Editor upload failed [editor_add_page_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if action == "editor-replace-page":
         editor_state = _editor_state_from_form(request)
@@ -477,7 +615,35 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ingest_status_kind="error",
             )
 
+        page_policy_error = validate_page_upload_policy(page_upload)
+        if page_policy_error:
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status=page_policy_error,
+                ingest_status_kind="error",
+            )
+
+        started_upload_session = False
+        allowed, limit_code, retry_after = begin_upload_session(username)
+        if not allowed:
+            message = (
+                "Too many upload requests. Please retry later "
+                f"(retry in {retry_after}s)."
+                if limit_code == "upload_rate_limited"
+                else "Too many concurrent uploads. Please wait for active uploads to finish."
+            )
+            return _render_editor_result(
+                request,
+                response,
+                editor_state,
+                ingest_status=message,
+                ingest_status_kind="error",
+            )
+
         try:
+            started_upload_session = True
             page_index = int(request.form.get("page_index", "0"))
             with TemporaryDirectory() as temp_dir:
                 page_path = (
@@ -487,6 +653,19 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 page_upload.save(page_path)
+                page_size_error = validate_saved_upload_size(
+                    page_path,
+                    MAX_PAGE_UPLOAD_BYTES,
+                    "Page upload",
+                )
+                if page_size_error:
+                    return _render_editor_result(
+                        request,
+                        response,
+                        editor_state,
+                        ingest_status=page_size_error,
+                        ingest_status_kind="error",
+                    )
                 result = editor_replace_page_image(
                     image_path=page_path,
                     work_id=editor_state["editor_work_id"],
@@ -527,7 +706,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "blocked": True,
                     "explicit_threshold": get_explicit_threshold(),
                     "error": "moderation_blocked",
-                    "message": str(exc),
+                    "message": admin_aware_detail(
+                        request,
+                        public_detail="Blocked by moderation policy",
+                        exc=exc,
+                    ),
                     "moderation": {
                         "allow": bool(moderation.get("allow", False)),
                         "style": str(moderation.get("style", "unknown")),
@@ -544,13 +727,26 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 },
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_replace_page_failed",
+                exc=exc,
+                message="Editor replace page failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Replace failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Replace failed [editor_replace_page_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if action == "editor-delete-page":
         editor_state = _editor_state_from_form(request)
@@ -570,11 +766,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_delete_page_failed",
+                exc=exc,
+                message="Editor delete page failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Delete failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Delete failed [editor_delete_page_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 
@@ -598,11 +804,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_move_page_failed",
+                exc=exc,
+                message="Editor move page failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Reorder failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Reorder failed [editor_move_page_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 
@@ -638,11 +854,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_reorder_gallery_failed",
+                exc=exc,
+                message="Editor reorder gallery failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Reorder failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Reorder failed [editor_reorder_gallery_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 
@@ -672,11 +898,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_add_chapter_failed",
+                exc=exc,
+                message="Editor add chapter failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Add chapter failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Add chapter failed [editor_add_chapter_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 
@@ -699,11 +935,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ingest_status_kind="success",
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_delete_chapter_failed",
+                exc=exc,
+                message="Editor delete chapter failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Delete chapter failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Delete chapter failed [editor_delete_chapter_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 
@@ -736,11 +982,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ingest_status_kind="success",
             )
         except Exception as exc:
+            log_exception(
+                request,
+                code="editor_update_chapter_failed",
+                exc=exc,
+                message="Editor update chapter failed",
+            )
             return _render_editor_result(
                 request,
                 response,
                 editor_state,
-                ingest_status=f"Update chapter failed: {exc}",
+                ingest_status=admin_aware_detail(
+                    request,
+                    public_detail="Update chapter failed [editor_update_chapter_failed].",
+                    exc=exc,
+                ),
                 ingest_status_kind="error",
             )
 

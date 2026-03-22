@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from types import TracebackType
 from typing import Any
 from wsgiref.types import StartResponse
 
 from fanic.cylinder_main import create_app
 
-type WriteCallable = Callable[[bytes], object]
+type WsgiExcInfo = (
+    tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
+)
 
 
 def _call_app(path: str) -> tuple[int, bytes]:
@@ -17,9 +20,9 @@ def _call_app(path: str) -> tuple[int, bytes]:
     def start_response(
         status: str,
         headers: list[tuple[str, str]],
-        exc_info: Any = None,
+        exc_info: WsgiExcInfo | None = None,
         /,
-    ) -> WriteCallable:
+    ) -> Callable[[bytes], object]:
         _ = (headers, exc_info)
         captured["status"] = status
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -149,3 +150,117 @@ def test_initialize_database_reset_recreates_database(
         connection.close()
     assert "works" in tables
     assert "user_preferences" in tables
+
+
+def test_create_runtime_backup_archives_db_and_storage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    db_path = data_root / "fanic.db"
+    cbz_dir = data_root / "cbz"
+    works_dir = data_root / "works"
+
+    monkeypatch.setattr(db, "DATA_ROOT", data_root)
+    monkeypatch.setattr(db, "DB_PATH", db_path)
+    monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
+    monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+
+    def fake_ensure_storage_dirs() -> None:
+        data_root.mkdir(parents=True, exist_ok=True)
+        cbz_dir.mkdir(parents=True, exist_ok=True)
+        works_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
+
+    fake_ensure_storage_dirs()
+    db_path.write_text("sqlite-bytes", encoding="utf-8")
+    (cbz_dir / "work-1.cbz").write_text("cbz", encoding="utf-8")
+    page = works_dir / "work-1" / "pages" / "001.jpg"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text("jpg", encoding="utf-8")
+
+    backup_path = tmp_path / "backup.zip"
+    created_path = db.create_runtime_backup(backup_path)
+
+    assert created_path == backup_path.resolve()
+    with zipfile.ZipFile(created_path, mode="r") as archive:
+        names = set(archive.namelist())
+    assert "fanic.db" in names
+    assert "cbz/work-1.cbz" in names
+    assert "works/work-1/pages/001.jpg" in names
+
+
+def test_restore_runtime_backup_requires_force_when_data_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    db_path = data_root / "fanic.db"
+    cbz_dir = data_root / "cbz"
+    works_dir = data_root / "works"
+
+    monkeypatch.setattr(db, "DATA_ROOT", data_root)
+    monkeypatch.setattr(db, "DB_PATH", db_path)
+    monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
+    monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+
+    def fake_ensure_storage_dirs() -> None:
+        data_root.mkdir(parents=True, exist_ok=True)
+        cbz_dir.mkdir(parents=True, exist_ok=True)
+        works_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
+
+    fake_ensure_storage_dirs()
+    (data_root / "existing.txt").write_text("existing", encoding="utf-8")
+
+    backup_path = tmp_path / "restore-source.zip"
+    with zipfile.ZipFile(
+        backup_path, mode="w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        archive.writestr("fanic.db", "newdb")
+
+    with pytest.raises(FileExistsError):
+        db.restore_runtime_backup(backup_path, force=False)
+
+
+def test_restore_runtime_backup_replaces_runtime_data_when_forced(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    db_path = data_root / "fanic.db"
+    cbz_dir = data_root / "cbz"
+    works_dir = data_root / "works"
+
+    monkeypatch.setattr(db, "DATA_ROOT", data_root)
+    monkeypatch.setattr(db, "DB_PATH", db_path)
+    monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
+    monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+
+    def fake_ensure_storage_dirs() -> None:
+        data_root.mkdir(parents=True, exist_ok=True)
+        cbz_dir.mkdir(parents=True, exist_ok=True)
+        works_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
+
+    fake_ensure_storage_dirs()
+    db_path.write_text("old-db", encoding="utf-8")
+    (cbz_dir / "old.cbz").write_text("old", encoding="utf-8")
+
+    backup_path = tmp_path / "restore-source.zip"
+    with zipfile.ZipFile(
+        backup_path, mode="w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        archive.writestr("fanic.db", "new-db")
+        archive.writestr("cbz/new.cbz", "new-cbz")
+        archive.writestr("works/work-2/pages/001.jpg", "img")
+
+    db.restore_runtime_backup(backup_path, force=True)
+
+    assert db_path.read_text(encoding="utf-8") == "new-db"
+    assert (cbz_dir / "new.cbz").exists() is True
+    assert (cbz_dir / "old.cbz").exists() is False
+    assert (works_dir / "work-2" / "pages" / "001.jpg").exists() is True

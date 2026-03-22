@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from html import escape
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    render_html_template,
-    text_error,
-)
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import text_error
 
 
 def _message_block(request: RequestLike) -> tuple[str, str]:
     msg = request.args.get("msg", "")
+    retry_after = request.args.get("retry_after", "").strip()
     username = current_user(request)
 
     if msg == "invalid":
@@ -24,6 +23,22 @@ def _message_block(request: RequestLike) -> tuple[str, str]:
 
     if msg == "logged_out":
         return ("You have been logged out.", "info")
+
+    if msg == "csrf-invalid":
+        return ("Invalid CSRF token. Please retry from the form page.", "error")
+
+    if msg == "https-required":
+        return (
+            "Secure HTTPS connection is required for login.",
+            "error",
+        )
+
+    if msg == "locked":
+        retry_value = retry_after if retry_after else "a few minutes"
+        return (
+            f"Too many failed login attempts. Try again in {retry_value} seconds.",
+            "error",
+        )
 
     if username:
         return (f"Success: logged in as {username}.", "success")

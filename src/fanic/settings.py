@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import math
+import mimetypes
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar
+from typing import Literal
 
+import pillow_avif  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from dotenv import load_dotenv
+from PIL import Image
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
@@ -12,8 +18,80 @@ from pydantic_settings import SettingsConfigDict
 load_dotenv()
 
 
+ByteUnit = Literal["B", "KiB", "MiB", "GiB", "TiB"]
+
+
+def from_unit(unit: ByteUnit, value: float | int) -> int:
+    unit_multiplier_by_name: dict[ByteUnit, int] = {
+        "B": 1,
+        "KiB": 1024,
+        "MiB": 1024 * 1024,
+        "GiB": 1024 * 1024 * 1024,
+        "TiB": 1024 * 1024 * 1024 * 1024,
+    }
+
+    multiplier = unit_multiplier_by_name[unit]
+    if not math.isfinite(value):
+        raise ValueError("Unit value must be finite")
+    if value < 0:
+        raise ValueError("Unit value must be non-negative")
+    return int(round(value * multiplier))
+
+
+def _default_allowed_page_extensions_csv() -> str:
+    Image.init()
+    values = {
+        extension.lower()
+        for extension, format_name in Image.registered_extensions().items()
+        if format_name in Image.OPEN
+    }
+    if not values:
+        values = {
+            ".avif",
+            ".bmp",
+            ".gif",
+            ".jpeg",
+            ".jpg",
+            ".png",
+            ".tif",
+            ".tiff",
+            ".webp",
+        }
+    return ",".join(sorted(values))
+
+
+def _default_allowed_page_content_types_csv() -> str:
+    Image.init()
+    content_types: set[str] = set()
+    for format_name in Image.OPEN:
+        mime = Image.MIME.get(format_name)
+        if mime:
+            content_types.add(str(mime).lower())
+    for extension in _default_allowed_page_extensions_csv().split(","):
+        guessed, _ = mimetypes.guess_type(f"placeholder{extension}")
+        if guessed:
+            content_types.add(guessed.lower())
+    content_types.add("application/octet-stream")
+    return ",".join(sorted(content_types))
+
+
 class FanicSettings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(extra="ignore")
+
+    environment: str = Field(
+        default="development",
+        alias="FANIC_ENV",
+    )
+
+    require_https: bool = Field(
+        default=True,
+        alias="FANIC_REQUIRE_HTTPS",
+    )
+
+    csrf_protect: bool = Field(
+        default=True,
+        alias="FANIC_CSRF_PROTECT",
+    )
 
     data_dir: str | None = Field(
         default=None,
@@ -23,6 +101,11 @@ class FanicSettings(BaseSettings):
     enable_beartype: bool = Field(
         default=True,
         alias="FANIC_ENABLE_BEARTYPE",
+    )
+
+    log_path_template: str = Field(
+        default="logs/%TIMESTAMP%",
+        alias="FANIC_LOG_PATH_TEMPLATE",
     )
 
     explicit_threshold: float = Field(
@@ -103,13 +186,91 @@ class FanicSettings(BaseSettings):
         default=False,
         alias="FANIC_SESSION_SECURE",
     )
+    session_cookie_samesite: str = Field(
+        default="Lax",
+        alias="FANIC_SESSION_COOKIE_SAMESITE",
+    )
     admin_username: str = Field(
         default="admin",
         alias="FANIC_ADMIN_USERNAME",
     )
-    admin_password: str = Field(
-        default="admin",
-        alias="FANIC_ADMIN_PASSWORD",
+    admin_password_hash: str = Field(
+        default=f"sha256${hashlib.sha256(b'admin').hexdigest()}",
+        alias="FANIC_ADMIN_PASSWORD_HASH",
+    )
+
+    auth_max_failures: int = Field(
+        default=5,
+        alias="FANIC_AUTH_MAX_FAILURES",
+    )
+    auth_window_seconds: int = Field(
+        default=300,
+        alias="FANIC_AUTH_WINDOW_SECONDS",
+    )
+    auth_lockout_seconds: int = Field(
+        default=900,
+        alias="FANIC_AUTH_LOCKOUT_SECONDS",
+    )
+    upload_rate_window_seconds: int = Field(
+        default=60,
+        alias="FANIC_UPLOAD_RATE_WINDOW_SECONDS",
+    )
+    upload_rate_max_requests: int = Field(
+        default=20,
+        alias="FANIC_UPLOAD_RATE_MAX_REQUESTS",
+    )
+    upload_max_concurrent_per_user: int = Field(
+        default=2,
+        alias="FANIC_UPLOAD_MAX_CONCURRENT_PER_USER",
+    )
+
+    max_cbz_upload_bytes: int = Field(
+        default=from_unit("MiB", 256.0),
+        alias="FANIC_MAX_CBZ_UPLOAD_BYTES",
+    )
+    max_page_upload_bytes: int = Field(
+        default=from_unit("MiB", 20.0),
+        alias="FANIC_MAX_PAGE_UPLOAD_BYTES",
+    )
+    max_ingest_pages: int = Field(
+        default=2000,
+        alias="FANIC_MAX_INGEST_PAGES",
+    )
+    max_cbz_member_uncompressed_bytes: int = Field(
+        default=from_unit("MiB", 128.0),
+        alias="FANIC_MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES",
+    )
+    max_cbz_total_uncompressed_bytes: int = Field(
+        default=from_unit("GiB", 2.0),
+        alias="FANIC_MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES",
+    )
+    max_upload_image_pixels: int = Field(
+        default=40_000,
+        alias="FANIC_MAX_UPLOAD_IMAGE_PIXELS",
+    )
+    user_page_soft_cap: int = Field(
+        default=2000,
+        alias="FANIC_USER_PAGE_SOFT_CAP",
+    )
+    user_page_quality_ramp_multiplier: float = Field(
+        default=1.5,
+        alias="FANIC_USER_PAGE_QUALITY_RAMP_MULTIPLIER",
+    )
+    allowed_cbz_extensions_csv: str = Field(
+        default=".cbz",
+        alias="FANIC_ALLOWED_CBZ_EXTENSIONS",
+    )
+    allowed_cbz_content_types_csv: str = Field(
+        default="application/zip,application/x-cbz,application/octet-stream",
+        alias="FANIC_ALLOWED_CBZ_CONTENT_TYPES",
+    )
+    allowed_page_extensions_csv: str = Field(
+        default_factory=_default_allowed_page_extensions_csv,
+        alias="FANIC_ALLOWED_PAGE_EXTENSIONS",
+    )
+    allowed_page_content_types_csv: str = Field(
+        default_factory=_default_allowed_page_content_types_csv,
+        alias="FANIC_ALLOWED_PAGE_CONTENT_TYPES",
     )
 
     @property
@@ -129,6 +290,67 @@ class FanicSettings(BaseSettings):
         if "photoreal_min_confidence" in self.model_fields_set:
             return self.photoreal_min_confidence
         return self.style_min_confidence
+
+    @property
+    def is_production(self) -> bool:
+        normalized = self.environment.strip().lower()
+        return normalized in {"prod", "production"}
+
+    @property
+    def session_secure_effective(self) -> bool:
+        return self.session_secure if self.session_secure else self.is_production
+
+    @property
+    def csrf_protect_effective(self) -> bool:
+        if not self.is_production:
+            return False
+        return self.csrf_protect if self.csrf_protect else False
+
+    @property
+    def require_https_effective(self) -> bool:
+        if not self.is_production:
+            return False
+        return self.require_https if self.require_https else False
+
+    @property
+    def allowed_cbz_extensions(self) -> set[str]:
+        values: set[str] = set()
+        for raw in self.allowed_cbz_extensions_csv.split(","):
+            value = raw.strip().lower()
+            if not value:
+                continue
+            if not value.startswith("."):
+                value = f".{value}"
+            values.add(value)
+        return values
+
+    @property
+    def allowed_cbz_content_types(self) -> set[str]:
+        return {
+            value.strip().lower()
+            for value in self.allowed_cbz_content_types_csv.split(",")
+            if value.strip()
+        }
+
+    @property
+    def allowed_page_extensions(self) -> set[str]:
+        values: set[str] = set()
+        for raw in self.allowed_page_extensions_csv.split(","):
+            value = raw.strip().lower()
+            if not value:
+                continue
+            if not value.startswith("."):
+                value = f".{value}"
+            values.add(value)
+        return values
+
+    @property
+    def allowed_page_content_types(self) -> set[str]:
+        return {
+            value.strip().lower()
+            for value in self.allowed_page_content_types_csv.split(",")
+            if value.strip()
+        }
 
 
 @lru_cache(maxsize=1)

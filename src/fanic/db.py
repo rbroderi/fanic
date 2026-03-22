@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import tempfile
+import zipfile
 from pathlib import Path
 from types import TracebackType
 from typing import Literal
 from typing import override
 
+from fanic.settings import CBZ_DIR
 from fanic.settings import DATA_ROOT
 from fanic.settings import DB_PATH
+from fanic.settings import WORKS_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
@@ -157,4 +161,85 @@ def initialize_database(schema_path: Path = SCHEMA_PATH, *, reset: bool = False)
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.executescript(sql)
         _ensure_runtime_schema(connection)
+    return 0
+
+
+def create_runtime_backup(backup_path: Path) -> Path:
+    ensure_storage_dirs()
+    resolved_backup_path = backup_path.expanduser().resolve()
+    if resolved_backup_path.suffix.lower() != ".zip":
+        raise ValueError("Backup path must end with .zip")
+    if resolved_backup_path.exists():
+        raise FileExistsError(f"Backup already exists: {resolved_backup_path}")
+
+    resolved_backup_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(
+        resolved_backup_path,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        if DB_PATH.exists():
+            archive.write(DB_PATH, arcname=DB_PATH.name)
+        for runtime_dir in (CBZ_DIR, WORKS_DIR):
+            if not runtime_dir.exists():
+                continue
+            for file_path in sorted(runtime_dir.rglob("*")):
+                if file_path.is_file():
+                    arcname = str(file_path.relative_to(DATA_ROOT)).replace("\\", "/")
+                    archive.write(file_path, arcname=arcname)
+    return resolved_backup_path
+
+
+def _safe_extract_zip(archive: zipfile.ZipFile, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_resolved = destination.resolve()
+
+    for info in archive.infolist():
+        member_path = (destination_resolved / info.filename).resolve()
+        if not member_path.is_relative_to(destination_resolved):
+            raise ValueError(f"Archive contains unsafe path: {info.filename}")
+        archive.extract(info, destination_resolved)
+
+
+def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
+    resolved_backup_path = backup_path.expanduser().resolve()
+    if not resolved_backup_path.exists():
+        raise FileNotFoundError(f"Backup not found: {resolved_backup_path}")
+    if resolved_backup_path.suffix.lower() != ".zip":
+        raise ValueError("Backup path must end with .zip")
+
+    if DATA_ROOT.exists() and any(DATA_ROOT.iterdir()):
+        if not force:
+            raise FileExistsError(
+                "Data directory is not empty. Re-run with force=True to overwrite it."
+            )
+        shutil.rmtree(DATA_ROOT)
+
+    with tempfile.TemporaryDirectory(prefix="fanic-restore-") as tmp_dir:
+        extract_root = Path(tmp_dir) / "extract"
+        with zipfile.ZipFile(resolved_backup_path, mode="r") as archive:
+            member_names = {info.filename.strip("/") for info in archive.infolist()}
+            _safe_extract_zip(archive, extract_root)
+
+        has_runtime_payload = any(
+            name == "fanic.db" or name.startswith("cbz/") or name.startswith("works/")
+            for name in member_names
+        )
+        if not has_runtime_payload:
+            raise ValueError("Backup archive does not contain FANIC runtime data")
+
+        ensure_storage_dirs()
+        restored_db = extract_root / DB_PATH.name
+        if restored_db.exists():
+            shutil.copy2(restored_db, DB_PATH)
+
+        for source_name, destination_dir in (("cbz", CBZ_DIR), ("works", WORKS_DIR)):
+            source_dir = extract_root / source_name
+            if destination_dir.exists():
+                shutil.rmtree(destination_dir)
+            if source_dir.exists():
+                shutil.copytree(source_dir, destination_dir)
+            else:
+                destination_dir.mkdir(parents=True, exist_ok=True)
     return 0

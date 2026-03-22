@@ -3,37 +3,29 @@ from __future__ import annotations
 from html import escape
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import (
-    ADMIN_USERNAME,
-    RequestLike,
-    ResponseLike,
-    current_user,
-    rating_badge_html,
-    render_html_template,
-    route_tail,
-    text_error,
-)
-from fanic.cylinder_sites.editor_gallery import (
-    render_editor_chapters_html,
-    render_editor_page_gallery_html,
-)
-from fanic.cylinder_sites.editor_metadata import (
-    RATING_CHOICES,
-    render_common_tag_datalist_replacements,
-    render_options_html,
-    selected_attr,
-)
-from fanic.repository import (
-    can_view_work,
-    get_work,
-    get_work_version_manifest,
-    has_user_kudoed_work,
-    list_work_chapters,
-    list_work_comments,
-    list_work_page_rows,
-    list_work_versions,
-    work_kudos_count,
-)
+from fanic.cylinder_sites.common import ADMIN_USERNAME
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import rating_badge_html
+from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
+from fanic.cylinder_sites.editor_gallery import render_editor_page_gallery_html
+from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
+from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
+from fanic.cylinder_sites.editor_metadata import render_options_html
+from fanic.cylinder_sites.editor_metadata import selected_attr
+from fanic.repository import can_view_work
+from fanic.repository import get_work
+from fanic.repository import get_work_version_manifest
+from fanic.repository import has_user_kudoed_work
+from fanic.repository import list_work_chapters
+from fanic.repository import list_work_comments
+from fanic.repository import list_work_page_rows
+from fanic.repository import list_work_versions
+from fanic.repository import work_kudos_count
 
 
 def _can_edit_work(username: str, uploader_username: str) -> bool:
@@ -215,7 +207,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         elif save_msg in {
             "page-file-required",
             "page-add-failed",
+            "page-add-too-large",
+            "page-add-unsupported-extension",
+            "page-add-unsupported-content-type",
+            "page-add-rate-limited",
+            "page-add-busy",
             "page-replace-failed",
+            "page-replace-too-large",
+            "page-replace-unsupported-extension",
+            "page-replace-unsupported-content-type",
+            "page-replace-rate-limited",
+            "page-replace-busy",
             "page-delete-failed",
             "page-move-failed",
             "page-reorder-failed",
@@ -223,7 +225,26 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "chapter-update-failed",
             "chapter-delete-failed",
         }:
-            status_text = "Edit action failed. Check inputs and permissions."
+            if save_msg in {"page-add-too-large", "page-replace-too-large"}:
+                status_text = (
+                    "Upload rejected: file is larger than the configured limit."
+                )
+            elif save_msg in {
+                "page-add-unsupported-extension",
+                "page-replace-unsupported-extension",
+            }:
+                status_text = "Upload rejected: file extension is not allowed."
+            elif save_msg in {
+                "page-add-unsupported-content-type",
+                "page-replace-unsupported-content-type",
+            }:
+                status_text = "Upload rejected: content type is not allowed."
+            elif save_msg in {"page-add-rate-limited", "page-replace-rate-limited"}:
+                status_text = "Upload rate limit reached. Please wait and try again."
+            elif save_msg in {"page-add-busy", "page-replace-busy"}:
+                status_text = "Too many active uploads. Please retry shortly."
+            else:
+                status_text = "Edit action failed. Check inputs and permissions."
             status_class = "error"
             status_hidden = ""
         elif save_msg == "page-blocked":

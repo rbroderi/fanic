@@ -4,19 +4,26 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    json_response,
-    route_tail,
-)
-from fanic.ingest import (
-    ModerationBlockedError,
-    extract_comicinfo_metadata_from_cbz,
-    ingest_cbz,
-)
-from fanic.ingest_progress import get_progress, set_progress
+from fanic.cylinder_sites.common import MAX_CBZ_UPLOAD_BYTES
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import admin_aware_detail
+from fanic.cylinder_sites.common import begin_upload_session
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import end_upload_session
+from fanic.cylinder_sites.common import json_response
+from fanic.cylinder_sites.common import log_exception
+from fanic.cylinder_sites.common import request_id
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import stable_api_error
+from fanic.cylinder_sites.common import upload_policy_error_info
+from fanic.cylinder_sites.common import validate_cbz_upload_policy
+from fanic.cylinder_sites.common import validate_saved_upload_size
+from fanic.ingest import ModerationBlockedError
+from fanic.ingest import extract_comicinfo_metadata_from_cbz
+from fanic.ingest import ingest_cbz
+from fanic.ingest_progress import get_progress
+from fanic.ingest_progress import set_progress
 from fanic.moderation import get_explicit_threshold
 
 
@@ -53,6 +60,7 @@ def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+    _ = request_id(request, response)
     tail = route_tail(request, ["api", "ingest"])
     if tail is None:
         return json_response(response, {"detail": "Not found"}, 404)
@@ -66,7 +74,43 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if cbz_upload is None:
             return json_response(response, {"detail": "cbz file is required"}, 400)
 
+        cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
+        if cbz_policy_error:
+            error_code, status_code = upload_policy_error_info(cbz_policy_error)
+            return json_response(
+                response,
+                {"detail": cbz_policy_error, "error": error_code},
+                status_code,
+            )
+
+        started_upload_session = False
+        allowed, limit_code, retry_after = begin_upload_session(username)
+        if not allowed:
+            if limit_code == "upload_rate_limited":
+                return json_response(
+                    response,
+                    {
+                        "ok": False,
+                        "error": limit_code,
+                        "detail": "Too many upload requests. Please retry later.",
+                        "retry_after": retry_after,
+                        "request_id": request_id(request, response),
+                    },
+                    429,
+                )
+            return json_response(
+                response,
+                {
+                    "ok": False,
+                    "error": limit_code,
+                    "detail": "Too many concurrent uploads. Please wait for active uploads to finish.",
+                    "request_id": request_id(request, response),
+                },
+                429,
+            )
+
         try:
+            started_upload_session = True
             with TemporaryDirectory() as temp_dir:
                 cbz_path = (
                     Path(temp_dir)
@@ -75,13 +119,39 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 cbz_upload.save(cbz_path)
+                cbz_size_error = validate_saved_upload_size(
+                    cbz_path,
+                    MAX_CBZ_UPLOAD_BYTES,
+                    "CBZ upload",
+                )
+                if cbz_size_error:
+                    error_code, status_code = upload_policy_error_info(cbz_size_error)
+                    return json_response(
+                        response,
+                        {"detail": cbz_size_error, "error": error_code},
+                        status_code,
+                    )
                 metadata = extract_comicinfo_metadata_from_cbz(cbz_path)
 
             return json_response(response, {"ok": True, "metadata": metadata})
         except Exception as exc:
-            return json_response(
-                response, {"detail": f"Metadata parse failed: {exc}"}, 400
+            log_exception(
+                request,
+                code="metadata_parse_failed",
+                exc=exc,
+                message="Metadata parse failure",
             )
+            return stable_api_error(
+                request,
+                response,
+                error="metadata_parse_failed",
+                public_detail="Unable to parse metadata from the uploaded archive",
+                status_code=400,
+                exc=exc,
+            )
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if tail == ["progress"]:
         token = request.args.get("token", "").strip()
@@ -101,9 +171,52 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if cbz_upload is None:
         return json_response(response, {"detail": "cbz file is required"}, 400)
 
+    cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
+    if cbz_policy_error:
+        error_code, status_code = upload_policy_error_info(cbz_policy_error)
+        return json_response(
+            response,
+            {"detail": cbz_policy_error, "error": error_code},
+            status_code,
+        )
+
     upload_token = request.form.get("upload_token", "").strip()
+    started_upload_session = False
+    allowed, limit_code, retry_after = begin_upload_session(username)
+    if not allowed:
+        if upload_token:
+            set_progress(
+                upload_token,
+                stage="throttled",
+                message="Upload temporarily throttled",
+                done=True,
+                ok=False,
+            )
+        if limit_code == "upload_rate_limited":
+            return json_response(
+                response,
+                {
+                    "ok": False,
+                    "error": limit_code,
+                    "detail": "Too many upload requests. Please retry later.",
+                    "retry_after": retry_after,
+                    "request_id": request_id(request, response),
+                },
+                429,
+            )
+        return json_response(
+            response,
+            {
+                "ok": False,
+                "error": limit_code,
+                "detail": "Too many concurrent uploads. Please wait for active uploads to finish.",
+                "request_id": request_id(request, response),
+            },
+            429,
+        )
 
     try:
+        started_upload_session = True
         if upload_token:
             set_progress(upload_token, stage="starting", message="Starting import")
 
@@ -116,6 +229,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ).name
             )
             cbz_upload.save(cbz_path)
+            cbz_size_error = validate_saved_upload_size(
+                cbz_path,
+                MAX_CBZ_UPLOAD_BYTES,
+                "CBZ upload",
+            )
+            if cbz_size_error:
+                error_code, status_code = upload_policy_error_info(cbz_size_error)
+                return json_response(
+                    response,
+                    {"detail": cbz_size_error, "error": error_code},
+                    status_code,
+                )
 
             metadata_path: Path | None = None
             if form_metadata:
@@ -188,7 +313,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "blocked": True,
                 "explicit_threshold": get_explicit_threshold(),
                 "error": "moderation_blocked",
-                "message": str(exc),
+                "message": admin_aware_detail(
+                    request,
+                    public_detail="Blocked by moderation policy",
+                    exc=exc,
+                ),
                 "moderation": {
                     "allow": bool(moderation.get("allow", False)),
                     "style": str(moderation.get("style", "unknown")),
@@ -211,12 +340,28 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             400,
         )
     except Exception as exc:
+        log_exception(
+            request,
+            code="ingest_failed",
+            exc=exc,
+            message="Ingest execution failure",
+        )
         if upload_token:
             set_progress(
                 upload_token,
                 stage="failed",
-                message=f"Import failed: {exc}",
+                message="Import failed",
                 done=True,
                 ok=False,
             )
-        return json_response(response, {"detail": f"Ingest failed: {exc}"}, 400)
+        return stable_api_error(
+            request,
+            response,
+            error="ingest_failed",
+            public_detail="Unable to ingest the uploaded archive",
+            status_code=400,
+            exc=exc,
+        )
+    finally:
+        if started_upload_session:
+            end_upload_session(username)

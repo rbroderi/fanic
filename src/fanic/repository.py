@@ -392,6 +392,28 @@ def work_kudos_count(work_id: str) -> int:
     return int(row["count"])
 
 
+def count_uploaded_pages_for_user(username: str | None) -> int:
+    if not username:
+        return 0
+
+    normalized_username = username.strip()
+    if not normalized_username:
+        return 0
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT COALESCE(SUM(page_count), 0) AS page_count_total
+            FROM works
+            WHERE uploader_username = ?
+            """,
+            (normalized_username,),
+        ).fetchone()
+    if not row:
+        return 0
+    return int(row["page_count_total"])
+
+
 def has_user_kudoed_work(work_id: str, username: str | None) -> bool:
     if not username:
         return False

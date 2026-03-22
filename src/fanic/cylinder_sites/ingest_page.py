@@ -14,6 +14,7 @@ else:
 from fanic.cylinder_sites.common import STATIC_ROOT
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import apply_security_markup
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import user_menu_replacements
 from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
@@ -154,6 +155,8 @@ def render_ingest_page(
 
     for marker, value in replacements.items():
         ingest_html = ingest_html.replace(marker, value)
+
+    ingest_html = apply_security_markup(request, response, ingest_html)
 
     response.status_code = 200
     response.content_type = "text/html; charset=utf-8"

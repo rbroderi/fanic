@@ -4,33 +4,35 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fanic.cylinder_sites.common import (
-    ADMIN_USERNAME,
-    RequestLike,
-    ResponseLike,
-    current_user,
-    route_tail,
-    text_error,
-)
-from fanic.ingest import (
-    editor_add_chapter,
-    editor_delete_chapter,
-    editor_delete_page,
-    editor_move_page,
-    editor_reorder_gallery,
-    editor_replace_page_image,
-    editor_update_chapter,
-    ingest_editor_page,
-)
-from fanic.repository import (
-    add_work_comment,
-    add_work_kudo,
-    can_view_work,
-    create_work_version_snapshot,
-    delete_work,
-    get_work,
-    update_work_metadata,
-)
+from fanic.cylinder_sites.common import ADMIN_USERNAME
+from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import begin_upload_session
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import end_upload_session
+from fanic.cylinder_sites.common import enforce_https_termination
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common import upload_policy_error_info
+from fanic.cylinder_sites.common import validate_csrf
+from fanic.cylinder_sites.common import validate_page_upload_policy
+from fanic.cylinder_sites.common import validate_saved_upload_size
+from fanic.ingest import editor_add_chapter
+from fanic.ingest import editor_delete_chapter
+from fanic.ingest import editor_delete_page
+from fanic.ingest import editor_move_page
+from fanic.ingest import editor_reorder_gallery
+from fanic.ingest import editor_replace_page_image
+from fanic.ingest import editor_update_chapter
+from fanic.ingest import ingest_editor_page
+from fanic.repository import add_work_comment
+from fanic.repository import add_work_kudo
+from fanic.repository import can_view_work
+from fanic.repository import create_work_version_snapshot
+from fanic.repository import delete_work
+from fanic.repository import get_work
+from fanic.repository import update_work_metadata
 
 
 def _csv(value: str) -> list[str]:
@@ -62,6 +64,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tail = route_tail(request, ["works"])
     if tail is None or len(tail) != 2:
         return text_error(response, "Not found", 404)
+
+    if not enforce_https_termination(request):
+        return text_error(response, "HTTPS required", 400)
+
+    if not validate_csrf(request):
+        return text_error(response, "Invalid CSRF token", 403)
 
     work_id = tail[0]
     action = tail[1]
@@ -131,6 +139,30 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if page_upload is None:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
 
+        page_policy_error = validate_page_upload_policy(page_upload)
+        if page_policy_error:
+            error_code, _ = upload_policy_error_info(page_policy_error)
+            msg = (
+                "page-add-unsupported-extension"
+                if error_code == "unsupported_extension"
+                else (
+                    "page-add-unsupported-content-type"
+                    if error_code == "unsupported_content_type"
+                    else "page-add-failed"
+                )
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+
+        started_upload_session = False
+        allowed, limit_code, _ = begin_upload_session(username)
+        if not allowed:
+            msg = (
+                "page-add-rate-limited"
+                if limit_code == "upload_rate_limited"
+                else "page-add-busy"
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+
         editor_metadata: dict[str, object] = {
             "title": str(work.get("title", "Untitled")),
             "summary": str(work.get("summary", "")),
@@ -140,6 +172,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         }
 
         try:
+            started_upload_session = True
             insert_after_page_index: int | None = None
             insert_after_raw = request.form.get("insert_after_page_index", "").strip()
             if insert_after_raw:
@@ -155,6 +188,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 page_upload.save(page_path)
+                page_size_error = validate_saved_upload_size(
+                    page_path,
+                    MAX_PAGE_UPLOAD_BYTES,
+                    "Page upload",
+                )
+                if page_size_error:
+                    return _redirect(
+                        response, f"/works/{work_id}/edit?msg=page-add-too-large"
+                    )
                 result = ingest_editor_page(
                     image_path=page_path,
                     metadata=editor_metadata,
@@ -174,13 +216,41 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
         except Exception:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if edit_action == "editor-replace-page":
         raw_upload = request.files.get("page_image")
         page_upload = raw_upload if _has_selected_file(raw_upload) else None
         if page_upload is None:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
+
+        page_policy_error = validate_page_upload_policy(page_upload)
+        if page_policy_error:
+            error_code, _ = upload_policy_error_info(page_policy_error)
+            msg = (
+                "page-replace-unsupported-extension"
+                if error_code == "unsupported_extension"
+                else (
+                    "page-replace-unsupported-content-type"
+                    if error_code == "unsupported_content_type"
+                    else "page-replace-failed"
+                )
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+        started_upload_session = False
+        allowed, limit_code, _ = begin_upload_session(username)
+        if not allowed:
+            msg = (
+                "page-replace-rate-limited"
+                if limit_code == "upload_rate_limited"
+                else "page-replace-busy"
+            )
+            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+
         try:
+            started_upload_session = True
             page_index = int(request.form.get("page_index", "0"))
             with TemporaryDirectory() as temp_dir:
                 page_path = (
@@ -190,6 +260,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ).name
                 )
                 page_upload.save(page_path)
+                page_size_error = validate_saved_upload_size(
+                    page_path,
+                    MAX_PAGE_UPLOAD_BYTES,
+                    "Page upload",
+                )
+                if page_size_error:
+                    return _redirect(
+                        response,
+                        f"/works/{work_id}/edit?msg=page-replace-too-large",
+                    )
                 result = editor_replace_page_image(
                     image_path=page_path,
                     work_id=work_id,
@@ -208,6 +288,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
         except Exception:
             return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
+        finally:
+            if started_upload_session:
+                end_upload_session(username)
 
     if edit_action == "editor-delete-page":
         try:

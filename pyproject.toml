@@ -24,6 +24,7 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.11.0",
     "lazi>=1.9.161",
+    "structlog>=25.5.0",
 ]
 
 [project.optional-dependencies]
@@ -53,3 +54,9 @@ line-length = 120
 
 [tool.ruff.lint.isort]
 force-single-line = true
+
+[tool.coverage.run]
+omit = [
+    "src/fanic/app.py",
+    "src/fanic/main.py"
+]

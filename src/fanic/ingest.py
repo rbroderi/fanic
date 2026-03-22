@@ -26,6 +26,7 @@ from fanic.moderation import suggested_rating_for_nsfw
 from fanic.repository import WorkChapterRow
 from fanic.repository import WorkPageRow
 from fanic.repository import add_work_chapter
+from fanic.repository import count_uploaded_pages_for_user
 from fanic.repository import create_work_version_snapshot
 from fanic.repository import delete_work_chapter
 from fanic.repository import get_work
@@ -53,6 +54,18 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 _SETTINGS = get_settings()
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
+MAX_INGEST_PAGES = int(getattr(_SETTINGS, "max_ingest_pages", 2000))
+MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = int(
+    getattr(_SETTINGS, "max_cbz_member_uncompressed_bytes", 134217728)
+)
+MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = int(
+    getattr(_SETTINGS, "max_cbz_total_uncompressed_bytes", 2147483648)
+)
+MAX_UPLOAD_IMAGE_PIXELS = int(getattr(_SETTINGS, "max_upload_image_pixels", 40000000))
+USER_PAGE_SOFT_CAP = int(getattr(_SETTINGS, "user_page_soft_cap", 2000))
+USER_PAGE_QUALITY_RAMP_MULTIPLIER = float(
+    getattr(_SETTINGS, "user_page_quality_ramp_multiplier", 1.5)
+)
 
 type ComicInfoValue = str | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
@@ -87,19 +100,122 @@ def _content_addressed_rel_path(data: bytes, extension: str) -> str:
 
 
 def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
+    _assert_safe_storage_dir(base_dir)
     rel_path = _content_addressed_rel_path(data, extension)
     target = base_dir / rel_path
+    _assert_safe_storage_target(base_dir, target)
     target.parent.mkdir(parents=True, exist_ok=True)
+    _assert_path_not_symlink(target.parent)
     if target.exists():
+        target_stat = target.stat()
+        if target_stat.st_nlink > 1:
+            raise ValueError(f"Unsafe linked upload target detected: {target}")
         return rel_path
 
     try:
         with target.open("xb") as handle:
             handle.write(data)
+        target_stat = target.stat()
+        if target_stat.st_nlink > 1:
+            target.unlink(missing_ok=True)
+            raise ValueError(f"Unsafe linked upload target detected: {target}")
     except FileExistsError:
         # Another request wrote the same hash concurrently.
         pass
     return rel_path
+
+
+def _assert_path_not_symlink(path: Path) -> None:
+    candidate = path
+    while True:
+        if candidate.exists() and candidate.is_symlink():
+            raise ValueError(f"Refusing upload path through symlink: {candidate}")
+        parent = candidate.parent
+        if parent == candidate:
+            break
+        candidate = parent
+
+
+def _assert_safe_storage_dir(base_dir: Path) -> None:
+    resolved_base = base_dir.resolve()
+    resolved_works = WORKS_DIR.resolve()
+    try:
+        _ = resolved_base.relative_to(resolved_works)
+    except ValueError as exc:
+        raise ValueError(
+            f"Upload base directory escapes storage root: {base_dir}"
+        ) from exc
+    _assert_path_not_symlink(resolved_base)
+
+
+def _assert_safe_storage_target(base_dir: Path, target: Path) -> None:
+    resolved_base = base_dir.resolve()
+    resolved_target_parent = target.parent.resolve()
+    try:
+        _ = resolved_target_parent.relative_to(resolved_base)
+    except ValueError as exc:
+        raise ValueError(f"Upload target escapes storage root: {target}") from exc
+
+
+def _safe_work_dirs(work_id: str) -> tuple[Path, Path, Path]:
+    work_dir = WORKS_DIR / work_id
+    pages_dir = work_dir / "pages"
+    thumbs_dir = work_dir / "thumbs"
+
+    for candidate in (work_dir, pages_dir, thumbs_dir):
+        _assert_safe_storage_dir(candidate)
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+    return work_dir, pages_dir, thumbs_dir
+
+
+def _quality_for_account_page(account_page_number: int) -> int:
+    base_quality = int(IMAGE_AVIF_QUALITY)
+    if account_page_number <= USER_PAGE_SOFT_CAP:
+        return max(1, base_quality)
+
+    ramp_limit = int(round(USER_PAGE_SOFT_CAP * USER_PAGE_QUALITY_RAMP_MULTIPLIER))
+    if ramp_limit <= USER_PAGE_SOFT_CAP:
+        return 1
+    if account_page_number >= ramp_limit:
+        return 1
+
+    ramp_progress = (account_page_number - USER_PAGE_SOFT_CAP) / (
+        ramp_limit - USER_PAGE_SOFT_CAP
+    )
+    quality_value = round(base_quality - (base_quality - 1) * ramp_progress)
+    return max(1, int(quality_value))
+
+
+def _validate_zip_archive_limits(zip_file: ZipFile) -> None:
+    infos = [info for info in zip_file.infolist() if not info.is_dir()]
+    total_uncompressed = 0
+    for info in infos:
+        file_size = int(info.file_size)
+        total_uncompressed += file_size
+        if file_size > MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES:
+            raise ValueError(
+                "CBZ member exceeds maximum allowed uncompressed size "
+                f"({file_size} > {MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES}): {info.filename}"
+            )
+    if total_uncompressed > MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES:
+        raise ValueError(
+            "CBZ exceeds maximum allowed total uncompressed size "
+            f"({total_uncompressed} > {MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES})"
+        )
+
+
+def _assert_image_pixels_within_limit(image: Image.Image, context: str) -> None:
+    width, height = image.size
+    total_pixels = int(width) * int(height)
+    if total_pixels > MAX_UPLOAD_IMAGE_PIXELS:
+        raise ValueError(
+            f"{context} exceeds maximum allowed pixel count "
+            f"({total_pixels} > {MAX_UPLOAD_IMAGE_PIXELS})"
+        )
 
 
 class ModerationBlockedError(ValueError):
@@ -308,6 +424,7 @@ def ingest_cbz(
         raise FileNotFoundError(f"CBZ not found: {cbz_path}")
 
     with ZipFile(cbz_path) as zip_file:
+        _validate_zip_archive_limits(zip_file)
         if progress_hook is not None:
             progress_hook("read-metadata", "Reading metadata", 0, 0)
         metadata: dict[str, object] = {
@@ -330,12 +447,7 @@ def ingest_cbz(
         )
         slug = str(metadata.get("slug") if metadata.get("slug") else slugify(title))
 
-        work_dir = WORKS_DIR / work_id
-        pages_dir = work_dir / "pages"
-        thumbs_dir = work_dir / "thumbs"
-        work_dir.mkdir(parents=True, exist_ok=True)
-        pages_dir.mkdir(parents=True, exist_ok=True)
-        thumbs_dir.mkdir(parents=True, exist_ok=True)
+        _, pages_dir, thumbs_dir = _safe_work_dirs(work_id)
 
         candidate_members = [
             member
@@ -361,6 +473,12 @@ def ingest_cbz(
                 "CBZ contains no recognizable image pages. "
                 "Supported extensions include: "
                 f"{', '.join(sorted(SUPPORTED_IMAGE_EXTENSIONS))}"
+            )
+
+        if len(image_members) > MAX_INGEST_PAGES:
+            raise ValueError(
+                "CBZ exceeds maximum allowed page count "
+                f"({len(image_members)} > {MAX_INGEST_PAGES})"
             )
 
         configured_order_raw = metadata.get("page_order", [])
@@ -393,6 +511,7 @@ def ingest_cbz(
             )
 
         pages: list[WorkPageRow] = []
+        uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
         max_nsfw_score = 0.0
         member_iter: object = image_members
         progress = None
@@ -437,6 +556,7 @@ def ingest_cbz(
                             len(image_members),
                         )
                     with Image.open(BytesIO(extracted)) as image:
+                        _assert_image_pixels_within_limit(image, "Uploaded CBZ page")
                         width, height = image.size
 
                         if progress is not None:
@@ -449,10 +569,14 @@ def ingest_cbz(
                                 len(image_members),
                             )
                         page_image = _prepare_image_for_avif(image)
+                        account_page_number = uploader_pages_before + index
+                        effective_quality = _quality_for_account_page(
+                            account_page_number
+                        )
                         page_bytes = _render_image_bytes(
                             page_image,
                             fmt="AVIF",
-                            quality=IMAGE_AVIF_QUALITY,
+                            quality=effective_quality,
                         )
 
                         if progress is not None:
@@ -699,26 +823,25 @@ def ingest_editor_page(
             raise PermissionError("Only the original uploader can append editor pages")
 
     resolved_work_id = work_id if work_id else uuid.uuid4().hex[:12]
-    work_dir = WORKS_DIR / resolved_work_id
-    pages_dir = work_dir / "pages"
-    thumbs_dir = work_dir / "thumbs"
-    work_dir.mkdir(parents=True, exist_ok=True)
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    thumbs_dir.mkdir(parents=True, exist_ok=True)
+    _, pages_dir, thumbs_dir = _safe_work_dirs(resolved_work_id)
 
     existing_pages = list_work_page_rows(resolved_work_id)
 
     width: int | None = None
     height: int | None = None
     try:
+        uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
+        account_page_number = uploader_pages_before + 1
+        effective_quality = _quality_for_account_page(account_page_number)
         with Image.open(image_path) as image:
+            _assert_image_pixels_within_limit(image, "Uploaded editor page")
             width, height = image.size
 
             page_image = _prepare_image_for_avif(image)
             page_bytes = _render_image_bytes(
                 page_image,
                 fmt="AVIF",
-                quality=IMAGE_AVIF_QUALITY,
+                quality=effective_quality,
             )
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
@@ -1007,18 +1130,23 @@ def editor_replace_page_image(
 
     pages_dir = WORKS_DIR / work_id / "pages"
     thumbs_dir = WORKS_DIR / work_id / "thumbs"
+    _assert_safe_storage_dir(pages_dir)
+    _assert_safe_storage_dir(thumbs_dir)
     old_image_name = _as_str(current_page["image_filename"], "")
 
     width: int | None = None
     height: int | None = None
     try:
+        uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
+        effective_quality = _quality_for_account_page(uploader_pages_before)
         with Image.open(image_path) as image:
+            _assert_image_pixels_within_limit(image, "Replacement editor page")
             width, height = image.size
             page_image = _prepare_image_for_avif(image)
             page_bytes = _render_image_bytes(
                 page_image,
                 fmt="AVIF",
-                quality=IMAGE_AVIF_QUALITY,
+                quality=effective_quality,
             )
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 

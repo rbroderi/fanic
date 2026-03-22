@@ -12,9 +12,12 @@ from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import json_response
+from fanic.cylinder_sites.common import log_exception
 from fanic.cylinder_sites.common import page_file_for
+from fanic.cylinder_sites.common import request_id
 from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import send_file
+from fanic.cylinder_sites.common import stable_api_error
 from fanic.cylinder_sites.common import thumb_file_for
 from fanic.repository import can_view_work
 from fanic.repository import get_manifest
@@ -300,6 +303,7 @@ def _version_page_files(
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+    _ = request_id(request, response)
     tail = route_tail(request, ["api", "works"])
     if tail is None:
         return json_response(response, {"detail": "Not found"}, 404)
@@ -365,10 +369,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         try:
             archive_path = _ensure_download_archive(work_id, work)
         except Exception as exc:
-            return json_response(
+            log_exception(
+                request,
+                code="download_archive_build_failed",
+                exc=exc,
+                message="Failed to build download archive",
+                extra={"work_id": work_id},
+            )
+            return stable_api_error(
+                request,
                 response,
-                {"detail": f"Failed to build CBZ download: {exc}"},
-                500,
+                error="download_archive_build_failed",
+                public_detail="Unable to build CBZ download archive",
+                status_code=500,
+                exc=exc,
             )
 
         slug = work.get("slug")

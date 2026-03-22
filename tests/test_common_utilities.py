@@ -256,7 +256,10 @@ def test_session_and_upload_helpers(
     module.set_login_cookie(cookie_response, "alice")
     module.clear_login_cookie(cookie_response)
     assert cookie_response.cookie_calls[0][0] == module.SESSION_COOKIE_NAME
-    assert cookie_response.delete_calls == [module.SESSION_COOKIE_NAME]
+    assert cookie_response.delete_calls == [
+        module.SESSION_COOKIE_NAME,
+        module.CSRF_COOKIE_NAME,
+    ]
 
     captured: dict[str, Path | None] = {"metadata": None}
 

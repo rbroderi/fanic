@@ -17,4 +17,4 @@ autopep695 mode="check":
 
 # Run pytest with coverage for the src package.
 test-cov *args:
-    uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}
+    $env:FANIC_ENABLE_BEARTYPE = "1"; uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}

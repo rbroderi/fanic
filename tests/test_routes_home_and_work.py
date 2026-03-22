@@ -424,3 +424,196 @@ def test_work_versions_route_returns_404_for_missing_version(
 
     assert result.status_code == 404
     assert b"Version not found" in result.data
+
+
+def test_work_edit_route_forbidden_for_non_uploader(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "fanicsite_works_edit_forbidden_test",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "bob"
+
+    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    def fake_get_work(work_id: str) -> dict[str, Any]:
+        return {
+            "id": work_id,
+            "title": "Editable Work",
+            "uploader_username": "alice",
+            "rating": "General Audiences",
+            "status": "in_progress",
+            "summary": "",
+            "language": "en",
+            "tags": [],
+        }
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    monkeypatch.setattr(module, "get_work", fake_get_work)
+
+    request = dummy_request(path="/works/work-1/edit", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 403
+
+
+def test_work_versions_route_renders_empty_versions_message(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "fanicsite_works_versions_empty_test",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    def fake_get_work(work_id: str) -> dict[str, Any]:
+        return {
+            "id": work_id,
+            "title": "Versioned Work",
+            "uploader_username": "alice",
+        }
+
+    def fake_list_work_versions(work_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        _ = (work_id, limit)
+        return []
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    monkeypatch.setattr(module, "get_work", fake_get_work)
+    monkeypatch.setattr(module, "list_work_versions", fake_list_work_versions)
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        captured["status"] = replacements["__VERSION_STATUS__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(path="/works/work-1/versions", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert captured["status"] == "No versions recorded yet."
+
+
+@pytest.mark.parametrize(
+    ("msg", "expected_class"),
+    [
+        ("comment-saved", "success"),
+        ("kudos-saved", "success"),
+        ("already-kudoed", ""),
+        ("login-required", "error"),
+        ("comment-empty", "error"),
+        ("chapter-invalid", "error"),
+    ],
+)
+def test_work_detail_status_messages(
+    msg: str,
+    expected_class: str,
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        f"fanicsite_work_status_msg_{msg}",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    def fake_get_work(work_id: str) -> dict[str, Any]:
+        return {
+            "id": work_id,
+            "title": "Status Work",
+            "summary": "Summary",
+            "rating": "General Audiences",
+            "status": "in_progress",
+            "page_count": 3,
+            "cover_page_index": 1,
+            "uploader_username": "alice",
+            "tags": [],
+        }
+
+    def fake_list_work_comments(work_id: str) -> list[dict[str, Any]]:
+        _ = work_id
+        return []
+
+    def fake_work_kudos_count(work_id: str) -> int:
+        _ = work_id
+        return 0
+
+    def fake_has_user_kudoed_work(work_id: str, username: str) -> bool:
+        _ = (work_id, username)
+        return False
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    monkeypatch.setattr(module, "get_work", fake_get_work)
+    monkeypatch.setattr(module, "list_work_comments", fake_list_work_comments)
+    monkeypatch.setattr(module, "work_kudos_count", fake_work_kudos_count)
+    monkeypatch.setattr(module, "has_user_kudoed_work", fake_has_user_kudoed_work)
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        captured["status_class"] = replacements["__WORK_STATUS_CLASS__"]
+        captured["status_text"] = replacements["__WORK_STATUS_TEXT__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(path="/works/work-1", args={"msg": msg})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert captured["status_class"] == expected_class
+    assert captured["status_text"] != ""
