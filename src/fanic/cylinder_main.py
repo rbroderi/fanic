@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import signal
+import sys
 from collections.abc import Callable
 from collections.abc import Iterable
 from datetime import datetime
@@ -46,6 +48,8 @@ def _build_cylinder_log_handler() -> logging.FileHandler:
 
 
 def startup() -> None:
+    settings = get_settings()
+    settings.validate_production_settings()
     ensure_storage_dirs()
     initialize_database()
     _ = initialize_moderation_models()
@@ -101,6 +105,38 @@ def _admin_path_guard(app: WSGIApplication) -> WSGIApplication:
     return guarded_app
 
 
+def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
+    settings = get_settings()
+    add_hsts = settings.require_https_effective
+
+    def secured_app(
+        environ: dict[str, object],
+        start_response: Callable[..., object],
+    ) -> Iterable[bytes]:
+        def injecting_start_response(
+            status: str,
+            headers: list[tuple[str, str]],
+            exc_info: object = None,
+        ) -> object:
+            headers.extend(
+                [
+                    ("X-Content-Type-Options", "nosniff"),
+                    ("X-Frame-Options", "DENY"),
+                    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+                    ("Permissions-Policy", "camera=(), microphone=(), geolocation=()"),
+                ]
+            )
+            if add_hsts:
+                headers.append(
+                    ("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+                )
+            return start_response(status, headers, exc_info)
+
+        return app(environ, injecting_start_response)
+
+    return secured_app
+
+
 def create_app() -> WSGIApplication:
     startup()
     log_handler = _build_cylinder_log_handler()
@@ -112,13 +148,32 @@ def create_app() -> WSGIApplication:
             log_handler=log_handler,
         ),
     )
-    return _admin_path_guard(raw_app)
+    return _security_headers_middleware(_admin_path_guard(raw_app))
 
 
 def serve(host: str, port: int) -> int:
+    settings = get_settings()
     app = create_app()
+
+    def _shutdown_handler(signum: int, _frame: object) -> None:
+        name = signal.Signals(signum).name
+        print(f"Received {name}, shutting down gracefully...", flush=True)
+        sys.exit(0)
+
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _shutdown_handler)
+
     try:
-        waitress.serve(app, host=host, port=port)
+        waitress.serve(
+            app,
+            host=host,
+            port=port,
+            threads=4,
+            connection_limit=1000,
+            recv_bytes=65536,
+            channel_timeout=120,
+            max_request_body_size=settings.max_cbz_upload_bytes + 1024 * 1024,
+        )
     except KeyboardInterrupt:
         print("Shutting down gracefully...", flush=True)
     return OK

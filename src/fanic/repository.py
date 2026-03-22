@@ -252,22 +252,32 @@ def get_local_user(username: str) -> LocalUserRow | None:
     }
 
 
-def list_local_users() -> list[LocalUserRow]:
+def count_local_users() -> int:
     with get_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT username, display_name, email, role, active, created_at
-            FROM users
-            ORDER BY
-                CASE role
-                    WHEN 'superadmin' THEN 0
-                    WHEN 'admin' THEN 1
-                    WHEN 'user' THEN 2
-                    ELSE 3
-                END,
-                username COLLATE NOCASE ASC
-            """
-        ).fetchall()
+        row = connection.execute("SELECT COUNT(*) FROM users").fetchone()
+        return int(row[0]) if row else 0
+
+
+def list_local_users(*, offset: int = 0, limit: int = 0) -> list[LocalUserRow]:
+    sql = """
+        SELECT username, display_name, email, role, active, created_at
+        FROM users
+        ORDER BY
+            CASE role
+                WHEN 'superadmin' THEN 0
+                WHEN 'admin' THEN 1
+                WHEN 'user' THEN 2
+                ELSE 3
+            END,
+            username COLLATE NOCASE ASC
+    """
+    params: list[int] = []
+    if limit > 0:
+        sql += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+    with get_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
 
     return [
         {

@@ -22,8 +22,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     action = tail[0]
 
     if action == "login":
-        if not enforce_https_termination(request):
-            return json_response(response, {"detail": "HTTPS required"}, 400)
+        if not enforce_https_termination(request, response):
+            return response
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")

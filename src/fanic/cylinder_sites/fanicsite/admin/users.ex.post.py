@@ -36,8 +36,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/admin/users":
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request):
-        return text_error(response, "HTTPS required", 400)
+    if not enforce_https_termination(request, response):
+        return response
 
     if not validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)

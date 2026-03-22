@@ -27,8 +27,7 @@ def test_non_admin_cannot_lower_explicit_rating(
         "fanicsite_works_edit_post_explicit_lock_test",
     )
 
-    def fake_enforce_https_termination(request: Any) -> bool:
-        _ = request
+    def fake_enforce_https_termination(*_args: Any) -> bool:
         return True
 
     def fake_validate_csrf(request: Any) -> bool:
@@ -132,8 +131,7 @@ def test_admin_can_lower_explicit_rating(
         "fanicsite_works_edit_post_explicit_admin_test",
     )
 
-    def fake_enforce_https_termination(request: Any) -> bool:
-        _ = request
+    def fake_enforce_https_termination(*_args: Any) -> bool:
         return True
 
     def fake_validate_csrf(request: Any) -> bool:

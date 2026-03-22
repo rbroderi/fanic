@@ -4,10 +4,12 @@ from urllib.parse import quote
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import check_post_rate_limit
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import enforce_https_termination
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
+from fanic.cylinder_sites.common import validate_field_lengths
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_label
 from fanic.repository import add_dmca_report
@@ -29,11 +31,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/dmca":
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request):
-        return text_error(response, "HTTPS required", 400)
+    if not enforce_https_termination(request, response):
+        return response
 
     if not validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
+
+    retry_after = check_post_rate_limit(request)
+    if retry_after:
+        response.headers["Retry-After"] = str(retry_after)
+        return text_error(response, "Too many requests. Please try again later.", 429)
 
     reporter_name = request.form.get("reporter_name", "").strip()
     reporter_email = request.form.get("reporter_email", "").strip()
@@ -41,6 +48,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     claimed_url = request.form.get("claimed_url", "").strip()
     details = request.form.get("details", "").strip()
     attest = request.form.get("attest", "").strip().lower()
+
+    length_error = validate_field_lengths(
+        {
+            "reporter_name": reporter_name,
+            "reporter_email": reporter_email,
+            "claimed_url": claimed_url,
+            "details": details,
+        },
+        short={"reporter_name", "reporter_email"},
+        url={"claimed_url"},
+        long={"details"},
+    )
+    if length_error:
+        return _redirect(response, "/dmca?msg=invalid")
 
     if (
         not _is_non_empty(reporter_name)

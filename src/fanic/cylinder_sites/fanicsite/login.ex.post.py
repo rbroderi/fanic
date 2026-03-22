@@ -25,8 +25,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/login":
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request):
-        return _redirect(response, "/login?msg=https-required")
+    if not enforce_https_termination(request, response):
+        return response
 
     if not validate_csrf(request):
         return _redirect(response, "/login?msg=csrf-invalid")

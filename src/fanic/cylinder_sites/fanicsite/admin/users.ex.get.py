@@ -12,7 +12,10 @@ from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.user_roles import ManagedUserRole
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import LocalUserRow
+from fanic.repository import count_local_users
 from fanic.repository import list_local_users
+
+USERS_PER_PAGE = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +144,21 @@ def _users_rows_html(
     return "".join(rows)
 
 
+def _pagination_html(page: int, total_pages: int, msg: str) -> str:
+    if total_pages <= 1:
+        return ""
+    parts: list[str] = ['<nav class="pagination">']
+    if page > 1:
+        prev_qs = f"?page={page - 1}&msg={escape(msg)}" if msg else f"?page={page - 1}"
+        parts.append(f'<a href="/admin/users{prev_qs}">&laquo; Previous</a>')
+    parts.append(f"<span>Page {page} of {total_pages}</span>")
+    if page < total_pages:
+        next_qs = f"?page={page + 1}&msg={escape(msg)}" if msg else f"?page={page + 1}"
+        parts.append(f'<a href="/admin/users{next_qs}">Next &raquo;</a>')
+    parts.append("</nav>")
+    return " ".join(parts)
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/admin/users":
         return text_error(response, "Not found", 404)
@@ -154,15 +172,28 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     status = _status_replacements(msg)
     actor_name = actor_username if actor_username else ""
 
+    page_raw = request.args.get("page", "1").strip()
+    try:
+        page = max(1, int(page_raw))
+    except ValueError:
+        page = 1
+
+    total_users = count_local_users()
+    total_pages = max(1, (total_users + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * USERS_PER_PAGE
+
     replacements = {
         "__USERS_STATUS_TEXT__": escape(status.text),
         "__USERS_STATUS_CLASS__": escape(status.css_class),
         "__USERS_STATUS_HIDDEN_ATTR__": status.hidden_attr,
         "__USERS_ROLE_OPTIONS__": _role_options_html(ManagedUserRole.USER.value),
         "__USERS_ROWS_HTML__": _users_rows_html(
-            list_local_users(),
+            list_local_users(offset=offset, limit=USERS_PER_PAGE),
             actor_username=actor_name,
             actor_role=actor_role,
         ),
+        "__USERS_PAGINATION_HTML__": _pagination_html(page, total_pages, msg),
     }
     return render_html_template(request, response, "users-admin.html", replacements)

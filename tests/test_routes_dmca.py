@@ -76,8 +76,7 @@ def test_dmca_post_rejects_missing_required_fields(
         "fanicsite_dmca_ex_post_invalid_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
@@ -161,8 +160,7 @@ def test_dmca_post_persists_report_and_redirects(
 
     captured: dict[str, object] = {}
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:

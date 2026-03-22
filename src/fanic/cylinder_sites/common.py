@@ -99,6 +99,15 @@ UPLOAD_MAX_CONCURRENT_PER_USER = int(
     getattr(_SETTINGS, "upload_max_concurrent_per_user", 2)
 )
 
+# Maximum length for user-supplied text form fields.
+MAX_SHORT_FIELD_LENGTH = 512
+MAX_LONG_FIELD_LENGTH = 4096
+MAX_URL_FIELD_LENGTH = 2048
+
+# Per-IP rate limiting for general POST endpoints (dmca, profile, etc.).
+POST_RATE_WINDOW_SECONDS = 60
+POST_RATE_MAX_REQUESTS = 30
+
 _POST_FORM_OPEN_TAG_RE = re.compile(
     r"<form\\b[^>]*\\bmethod\\s*=\\s*(['\"]?)post\\1[^>]*>",
     flags=re.IGNORECASE,
@@ -106,6 +115,8 @@ _POST_FORM_OPEN_TAG_RE = re.compile(
 _AUTH_LOCK = threading.Lock()
 _AUTH_FAILURE_TIMESTAMPS: dict[str, list[float]] = {}
 _AUTH_LOCKED_UNTIL: dict[str, float] = {}
+_POST_RATE_LOCK = threading.Lock()
+_POST_RATE_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_LOCK = threading.Lock()
 _UPLOAD_ATTEMPT_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_IN_FLIGHT: dict[str, int] = {}
@@ -607,10 +618,21 @@ def request_is_secure(request: RequestLike) -> bool:
     return False
 
 
-def enforce_https_termination(request: RequestLike) -> bool:
+def enforce_https_termination(
+    request: RequestLike, response: ResponseLike | None = None
+) -> bool:
     if not REQUIRE_HTTPS:
         return True
-    return request_is_secure(request)
+    if request_is_secure(request):
+        return True
+    if response is not None:
+        host = _header_value(request, "Host").strip()
+        if host:
+            response.status_code = 301
+            response.content_type = "text/plain; charset=utf-8"
+            response.headers["Location"] = f"https://{host}{request.path}"
+            response.set_data("Redirecting to HTTPS")
+    return False
 
 
 def _ensure_csrf_token(request: RequestLike, response: ResponseLike) -> str:
@@ -661,8 +683,22 @@ def validate_csrf(request: RequestLike) -> bool:
     form_token = request.form.get("csrf_token", "").strip()
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME, "").strip()
     if not form_token or not cookie_token:
+        LOGGER.warning(
+            "CSRF validation failed",
+            event_type="security",
+            client_ip=_request_client_ip(request),
+            path=request.path,
+        )
         return False
-    return hmac.compare_digest(form_token, cookie_token)
+    valid = hmac.compare_digest(form_token, cookie_token)
+    if not valid:
+        LOGGER.warning(
+            "CSRF token mismatch",
+            event_type="security",
+            client_ip=_request_client_ip(request),
+            path=request.path,
+        )
+    return valid
 
 
 def _admin_password_hash_digest(password: str) -> str:
@@ -730,8 +766,10 @@ def auth_lockout_seconds_remaining(request: RequestLike, username: str) -> int:
 
 def record_auth_failure(request: RequestLike, username: str) -> int:
     key = _auth_key(request, username)
+    client_ip = _request_client_ip(request)
     now = time.time()
     with _AUTH_LOCK:
+        _prune_stale_auth_entries(now)
         attempts = _AUTH_FAILURE_TIMESTAMPS.get(key, [])
         window_floor = now - AUTH_WINDOW_SECONDS
         attempts = [attempt for attempt in attempts if attempt >= window_floor]
@@ -741,8 +779,36 @@ def record_auth_failure(request: RequestLike, username: str) -> int:
         if len(attempts) >= AUTH_MAX_FAILURES:
             _AUTH_LOCKED_UNTIL[key] = now + AUTH_LOCKOUT_SECONDS
             _AUTH_FAILURE_TIMESTAMPS[key] = []
+            LOGGER.warning(
+                "auth lockout triggered",
+                event_type="security",
+                username=username,
+                client_ip=client_ip,
+                lockout_seconds=AUTH_LOCKOUT_SECONDS,
+            )
             return AUTH_LOCKOUT_SECONDS
+        LOGGER.info(
+            "auth failure recorded",
+            event_type="security",
+            username=username,
+            client_ip=client_ip,
+            attempt_count=len(attempts),
+        )
         return 0
+
+
+def _prune_stale_auth_entries(now: float) -> None:
+    """Remove expired lockout entries to prevent unbounded memory growth.
+
+    Must be called while holding ``_AUTH_LOCK``.
+    """
+    cutoff = now - AUTH_LOCKOUT_SECONDS * 2
+    stale_keys = [
+        key for key, locked_until in _AUTH_LOCKED_UNTIL.items() if locked_until < cutoff
+    ]
+    for key in stale_keys:
+        _AUTH_LOCKED_UNTIL.pop(key, None)
+        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
 
 
 def clear_auth_failures(request: RequestLike, username: str) -> None:
@@ -796,6 +862,53 @@ def end_upload_session(username: str) -> None:
         _UPLOAD_IN_FLIGHT[normalized_username] = current_in_flight - 1
 
 
+def check_post_rate_limit(request: RequestLike) -> int:
+    """Return retry-after seconds if the client IP exceeds the POST rate limit, else 0."""
+    client_ip = _request_client_ip(request)
+    now = time.time()
+    with _POST_RATE_LOCK:
+        attempts = _POST_RATE_TIMESTAMPS.get(client_ip, [])
+        window_floor = now - POST_RATE_WINDOW_SECONDS
+        attempts = [ts for ts in attempts if ts >= window_floor]
+
+        if len(attempts) >= POST_RATE_MAX_REQUESTS:
+            oldest = attempts[0]
+            retry_after = int(max(1, oldest + POST_RATE_WINDOW_SECONDS - now))
+            _POST_RATE_TIMESTAMPS[client_ip] = attempts
+            LOGGER.warning(
+                "POST rate limit exceeded",
+                event_type="security",
+                client_ip=client_ip,
+                retry_after=retry_after,
+            )
+            return retry_after
+
+        attempts.append(now)
+        _POST_RATE_TIMESTAMPS[client_ip] = attempts
+    return 0
+
+
+def validate_field_lengths(
+    fields: dict[str, str],
+    *,
+    short: set[str] | None = None,
+    long: set[str] | None = None,
+    url: set[str] | None = None,
+) -> str | None:
+    """Return an error message if any field exceeds its length limit, else None."""
+    for name, value in fields.items():
+        if short and name in short:
+            if len(value) > MAX_SHORT_FIELD_LENGTH:
+                return f"{name} exceeds maximum length ({MAX_SHORT_FIELD_LENGTH} chars)"
+        elif url and name in url:
+            if len(value) > MAX_URL_FIELD_LENGTH:
+                return f"{name} exceeds maximum length ({MAX_URL_FIELD_LENGTH} chars)"
+        elif long and name in long:
+            if len(value) > MAX_LONG_FIELD_LENGTH:
+                return f"{name} exceeds maximum length ({MAX_LONG_FIELD_LENGTH} chars)"
+    return None
+
+
 def encode_session(username: str) -> str:
     now = int(time.time())
     token = JWT_ENCODE(
@@ -844,6 +957,17 @@ def set_login_cookie(response: ResponseLike, username: str) -> None:
         path="/",
         secure=SESSION_COOKIE_SECURE,
         httponly=True,
+        samesite=SESSION_COOKIE_SAMESITE,
+    )
+    # Rotate CSRF token on login to prevent token-fixation attacks.
+    new_csrf = secrets.token_urlsafe(32)
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        new_csrf,
+        max_age=SESSION_MAX_AGE,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=False,
         samesite=SESSION_COOKIE_SAMESITE,
     )
 

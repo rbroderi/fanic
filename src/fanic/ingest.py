@@ -270,9 +270,11 @@ def _quality_for_account_page(account_page_number: int) -> int:
 def _validate_zip_archive_limits(zip_file: ZipFile) -> None:
     infos = [info for info in zip_file.infolist() if not info.is_dir()]
     total_uncompressed = 0
+    total_compressed = 0
     for info in infos:
         file_size = int(info.file_size)
         total_uncompressed += file_size
+        total_compressed += int(info.compress_size)
         if file_size > MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES:
             raise ValueError(
                 "CBZ member exceeds maximum allowed uncompressed size "
@@ -283,6 +285,13 @@ def _validate_zip_archive_limits(zip_file: ZipFile) -> None:
             "CBZ exceeds maximum allowed total uncompressed size "
             f"({total_uncompressed} > {MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES})"
         )
+    if total_compressed > 0:
+        ratio = total_uncompressed / total_compressed
+        if ratio > 100:
+            raise ValueError(
+                f"CBZ compression ratio is suspiciously high ({ratio:.0f}:1); "
+                "archive may be a zip bomb"
+            )
 
 
 def _assert_image_pixels_within_limit(image: Image.Image, context: str) -> None:

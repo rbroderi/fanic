@@ -233,10 +233,10 @@ def test_serve_invokes_waitress(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_create_app() -> str:
         return "app-object"
 
-    def fake_waitress_serve(app: object, host: str, port: int) -> None:
+    def fake_waitress_serve(app: object, **kwargs: object) -> None:
         captured["app"] = app
-        captured["host"] = host
-        captured["port"] = port
+        captured["host"] = kwargs.get("host")
+        captured["port"] = kwargs.get("port")
 
     monkeypatch.setattr(cylinder_main, "create_app", fake_create_app)
     monkeypatch.setattr("fanic.cylinder_main.waitress.serve", fake_waitress_serve)
@@ -254,8 +254,8 @@ def test_serve_handles_keyboard_interrupt(
     def fake_create_app() -> str:
         return "app-object"
 
-    def fake_waitress_serve(app: object, host: str, port: int) -> None:
-        _ = (app, host, port)
+    def fake_waitress_serve(app: object, **kwargs: object) -> None:
+        _ = (app, kwargs)
         raise KeyboardInterrupt()
 
     monkeypatch.setattr(cylinder_main, "create_app", fake_create_app)

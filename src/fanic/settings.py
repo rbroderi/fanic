@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import mimetypes
+import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar
@@ -295,6 +296,31 @@ class FanicSettings(BaseSettings):
     def is_production(self) -> bool:
         normalized = self.environment.strip().lower()
         return normalized in {"prod", "production"}
+
+    def validate_production_settings(self) -> None:
+        """Emit warnings for insecure defaults that must be overridden in production."""
+        if not self.is_production:
+            return
+
+        if self.session_secret == "fanic-dev-secret-change-me":
+            raise RuntimeError(
+                "FANIC_SESSION_SECRET must be set to a strong random value "
+                "in production (e.g. python -c 'import secrets; print(secrets.token_hex(32))')."
+            )
+
+        if self.admin_password_hash.startswith("sha256$"):
+            warnings.warn(
+                "FANIC_ADMIN_PASSWORD_HASH uses bare SHA256 which is unsuitable for "
+                "production. Generate a strong hash with: fanic hash-admin-password",
+                stacklevel=1,
+            )
+
+        if not self.data_dir:
+            warnings.warn(
+                "FANIC_DATA_DIR is not set; data will be stored inside the package "
+                "directory. Set an absolute path for production deployments.",
+                stacklevel=1,
+            )
 
     @property
     def session_secure_effective(self) -> bool:

@@ -225,6 +225,16 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_dmca_reports_status ON dmca_reports(status)"
     )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at)"
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_work_comments_work_id ON work_comments(work_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_work_kudos_work_id ON work_kudos(work_id)"
+    )
 
 
 def get_connection() -> sqlite3.Connection:
@@ -232,6 +242,9 @@ def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH, factory=_ManagedConnection)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
+    connection.execute("PRAGMA journal_mode = WAL;")
+    connection.execute("PRAGMA synchronous = NORMAL;")
+    connection.execute("PRAGMA busy_timeout = 5000;")
     _ensure_runtime_schema(connection)
     return connection
 
@@ -249,6 +262,9 @@ def initialize_database(schema_path: Path = SCHEMA_PATH, *, reset: bool = False)
     with sqlite3.connect(DB_PATH, factory=_ManagedConnection) as connection:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("PRAGMA journal_mode = WAL;")
+        connection.execute("PRAGMA synchronous = NORMAL;")
+        connection.execute("PRAGMA busy_timeout = 5000;")
         connection.executescript(sql)
         _ensure_runtime_schema(connection)
     return 0

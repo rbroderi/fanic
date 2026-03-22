@@ -14,7 +14,7 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
-def _always_true(_: Any) -> bool:
+def _always_true(*_args: Any) -> bool:
     return True
 
 
@@ -101,7 +101,7 @@ def test_users_get_dashboard_uses_admin_template(
     monkeypatch.setattr(
         module,
         "list_local_users",
-        lambda: [
+        lambda **_kwargs: [
             {
                 "username": "alice",
                 "display_name": "Alice",
@@ -112,6 +112,7 @@ def test_users_get_dashboard_uses_admin_template(
             }
         ],
     )
+    monkeypatch.setattr(module, "count_local_users", lambda: 1)
 
     captured: dict[str, Any] = {}
 

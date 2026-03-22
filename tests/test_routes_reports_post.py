@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections.abc import Callable
 from types import ModuleType
@@ -33,8 +33,7 @@ def test_reports_post_forbidden_for_non_admin(
         "fanicsite_reports_ex_post_forbidden_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:
@@ -68,8 +67,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
         "fanicsite_reports_ex_post_mark_false_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:
@@ -131,8 +129,7 @@ def test_reports_post_remove_redirects_not_found_when_missing(
         "fanicsite_reports_ex_post_remove_missing_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:
@@ -172,8 +169,7 @@ def test_reports_post_marks_report_resolved_and_reopen(
         "fanicsite_reports_ex_post_resolve_reopen_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:
@@ -233,8 +229,7 @@ def test_reports_post_promote_explicit_marks_report_resolved(
         "fanicsite_reports_ex_post_promote_explicit_test",
     )
 
-    def always_true(request: Any) -> bool:
-        _ = request
+    def always_true(*_args: Any) -> bool:
         return True
 
     def fake_current_user(request: Any) -> str:

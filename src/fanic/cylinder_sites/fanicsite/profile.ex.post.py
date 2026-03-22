@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import check_post_rate_limit
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import enforce_https_termination
 from fanic.cylinder_sites.common import text_error
@@ -26,11 +27,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/profile":
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request):
-        return text_error(response, "HTTPS required", 400)
+    if not enforce_https_termination(request, response):
+        return response
 
     if not validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
+
+    retry_after = check_post_rate_limit(request)
+    if retry_after:
+        response.headers["Retry-After"] = str(retry_after)
+        return text_error(response, "Too many requests. Please try again later.", 429)
 
     username = current_user(request)
     if not username:
