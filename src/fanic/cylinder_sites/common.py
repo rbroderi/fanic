@@ -14,7 +14,7 @@ from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 
 from fanic.ingest import ingest_cbz
-from fanic.paths import WORKS_DIR
+from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
 
 mimetypes.add_type("image/avif", ".avif")

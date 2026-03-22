@@ -3,35 +3,32 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED
+from zipfile import ZipFile
 
 from pathvalidate import sanitize_filename
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    json_response,
-    page_file_for,
-    route_tail,
-    send_file,
-    thumb_file_for,
-)
-from fanic.paths import CBZ_DIR
-from fanic.repository import (
-    can_view_work,
-    get_manifest,
-    get_page_files,
-    get_work,
-    get_work_version_manifest,
-    list_work_chapter_members,
-    list_work_chapters,
-    list_work_page_rows,
-    list_work_versions,
-    list_works,
-    load_progress,
-    set_work_cbz_path,
-)
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import json_response
+from fanic.cylinder_sites.common import page_file_for
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import send_file
+from fanic.cylinder_sites.common import thumb_file_for
+from fanic.repository import can_view_work
+from fanic.repository import get_manifest
+from fanic.repository import get_page_files
+from fanic.repository import get_work
+from fanic.repository import get_work_version_manifest
+from fanic.repository import list_work_chapter_members
+from fanic.repository import list_work_chapters
+from fanic.repository import list_work_page_rows
+from fanic.repository import list_work_versions
+from fanic.repository import list_works
+from fanic.repository import load_progress
+from fanic.repository import set_work_cbz_path
+from fanic.settings import CBZ_DIR
 from fanic.utils import slugify
 
 

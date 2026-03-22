@@ -9,7 +9,7 @@ import cylinder
 import waitress
 
 from fanic.db import initialize_database
-from fanic.paths import ensure_storage_dirs
+from fanic.settings import ensure_storage_dirs
 
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
 CYLINDER_SITES_DIR: Final[Path] = PACKAGE_ROOT / "cylinder_sites"

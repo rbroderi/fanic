@@ -13,8 +13,8 @@ from typing import cast
 import tomli_w
 
 from fanic.db import get_connection
-from fanic.paths import CBZ_DIR
-from fanic.paths import WORKS_DIR
+from fanic.settings import CBZ_DIR
+from fanic.settings import WORKS_DIR
 from fanic.utils import slugify
 
 TAG_FIELD_TO_TYPE = {

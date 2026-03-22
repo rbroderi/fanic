@@ -23,9 +23,6 @@ from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
 from fanic.moderation import suggested_rating_for_nsfw
-from fanic.paths import CBZ_DIR
-from fanic.paths import WORKS_DIR
-from fanic.paths import ensure_storage_dirs
 from fanic.repository import WorkChapterRow
 from fanic.repository import WorkPageRow
 from fanic.repository import add_work_chapter
@@ -41,6 +38,9 @@ from fanic.repository import replace_work_pages
 from fanic.repository import replace_work_tags
 from fanic.repository import update_work_chapter
 from fanic.repository import upsert_work
+from fanic.settings import CBZ_DIR
+from fanic.settings import WORKS_DIR
+from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 from fanic.utils import slugify
 

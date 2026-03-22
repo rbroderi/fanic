@@ -4,12 +4,13 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from fanic.paths import DATA_ROOT
-from fanic.paths import DB_PATH
-from fanic.paths import PACKAGE_ROOT
-from fanic.paths import ensure_storage_dirs
+from fanic.settings import DATA_ROOT
+from fanic.settings import DB_PATH
+from fanic.settings import ensure_storage_dirs
+from fanic.settings import get_settings
 
-SCHEMA_PATH = PACKAGE_ROOT / "sql" / "schema.sql"
+_SETTINGS = get_settings()
+SCHEMA_PATH = _SETTINGS.package_root / "sql" / "schema.sql"
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
