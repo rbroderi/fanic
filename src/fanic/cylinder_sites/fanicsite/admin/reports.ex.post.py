@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
-from fanic.cylinder_sites.common import ADMIN_USERNAME
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import enforce_https_termination
+from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
+from fanic.cylinder_sites.report_statuses import ReportStatusType
 from fanic.repository import delete_content_report
 from fanic.repository import set_work_rating
 from fanic.repository import update_content_report_status
@@ -43,11 +44,11 @@ def _reports_redirect_with_filters(
         query["start_date"] = start_date
     if end_date:
         query["end_date"] = end_date
-    return _redirect(response, f"/reports?{urlencode(query)}")
+    return _redirect(response, f"/admin/reports?{urlencode(query)}")
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/reports":
+    if request.path != "/admin/reports":
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request):
@@ -57,9 +58,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Invalid CSRF token", 403)
 
     username = current_user(request)
-    if username != ADMIN_USERNAME:
+    if role_for_user(username) not in {"superadmin", "admin"}:
         return text_error(response, "Forbidden", 403)
-    admin_username = str(username if username else ADMIN_USERNAME)
+    admin_username = str(username if username else "")
 
     report_id_raw = request.form.get("report_id", "").strip()
     report_action = request.form.get("report_action", "").strip()
@@ -96,7 +97,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     if report_action == "mark-false":
-        updated = update_content_report_status(report_id, "false-report")
+        updated = update_content_report_status(
+            report_id,
+            ReportStatusType.FALSE_REPORT.name_to_dash(),
+        )
         return _reports_redirect_with_filters(
             response,
             msg="marked-false" if updated else "not-found",
@@ -108,7 +112,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     if report_action == "mark-research":
-        updated = update_content_report_status(report_id, "needs-research")
+        updated = update_content_report_status(
+            report_id,
+            ReportStatusType.NEEDS_RESEARCH.name_to_dash(),
+        )
         return _reports_redirect_with_filters(
             response,
             msg="marked-research" if updated else "not-found",
@@ -120,7 +127,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     if report_action == "mark-resolved":
-        updated = update_content_report_status(report_id, "resolved")
+        updated = update_content_report_status(
+            report_id,
+            ReportStatusType.RESOLVED.name_to_dash(),
+        )
         return _reports_redirect_with_filters(
             response,
             msg="marked-resolved" if updated else "not-found",
@@ -132,7 +142,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     if report_action == "mark-reopen":
-        updated = update_content_report_status(report_id, "re-open")
+        updated = update_content_report_status(
+            report_id,
+            ReportStatusType.RE_OPEN.name_to_dash(),
+        )
         return _reports_redirect_with_filters(
             response,
             msg="marked-reopen" if updated else "not-found",
@@ -172,7 +185,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 end_date=end_date,
             )
 
-        _ = update_content_report_status(report_id, "resolved")
+        _ = update_content_report_status(
+            report_id,
+            ReportStatusType.RESOLVED.name_to_dash(),
+        )
         return _reports_redirect_with_filters(
             response,
             msg="promoted-explicit",

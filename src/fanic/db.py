@@ -48,6 +48,61 @@ def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
 def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            email TEXT,
+            active INTEGER NOT NULL DEFAULT 1,
+            role TEXT NOT NULL DEFAULT 'user',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    user_columns = {
+        str(row[1]) for row in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "username" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''"
+        )
+    if "display_name" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''"
+        )
+    if "email" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if "active" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1"
+        )
+    if "role" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+        )
+    if "created_at" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        )
+    admin_username = _SETTINGS.admin_username.strip()
+    if admin_username:
+        connection.execute(
+            """
+            INSERT INTO users (id, username, display_name, email, active, role)
+            VALUES (?, ?, ?, NULL, 1, 'superadmin')
+            ON CONFLICT(username) DO UPDATE SET
+                active = 1,
+                role = 'superadmin'
+            """,
+            (
+                admin_username,
+                admin_username,
+                admin_username,
+            ),
+        )
+
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS user_preferences (
             username TEXT PRIMARY KEY,
             view_explicit_rated INTEGER NOT NULL DEFAULT 0,

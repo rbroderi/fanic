@@ -3,12 +3,12 @@ from __future__ import annotations
 from html import escape
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import ADMIN_USERNAME
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import rating_badge_html
 from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
@@ -29,10 +29,10 @@ from fanic.repository import list_work_versions
 from fanic.repository import work_kudos_count
 
 
-def _can_edit_work(username: str, uploader_username: str) -> bool:
-    return bool(username) and (
-        username == uploader_username or username == ADMIN_USERNAME
-    )
+def _can_edit_work(
+    username: str | None, uploader_username: str, *, is_admin: bool
+) -> bool:
+    return bool(username) and (username == uploader_username or is_admin)
 
 
 def _tag_names_csv(tags: object, tag_type: str) -> str:
@@ -145,7 +145,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         uploader = str(
             work.get("uploader_username") if work.get("uploader_username") else ""
         )
-        if not _can_edit_work(username, uploader):
+        user_role = role_for_user(username)
+        if not _can_edit_work(
+            username,
+            uploader,
+            is_admin=user_role in {"superadmin", "admin"},
+        ):
             return text_error(response, "Forbidden", 403)
 
         tags = work.get("tags", [])
@@ -438,8 +443,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     uploader = str(
         work.get("uploader_username") if work.get("uploader_username") else ""
     )
-    can_edit = _can_edit_work(username, uploader)
-    can_delete = username == ADMIN_USERNAME
+    user_role = role_for_user(username)
+    is_admin = user_role in {"superadmin", "admin"}
+    can_edit = _can_edit_work(username, uploader, is_admin=is_admin)
+    can_delete = is_admin
     comments = list_work_comments(work_id)
     kudos = work_kudos_count(work_id)
     has_kudoed = has_user_kudoed_work(work_id, username)

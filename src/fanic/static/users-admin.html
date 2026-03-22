@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reports | FANIC Admin</title>
+    <title>Users | FANIC Admin</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,7 +20,6 @@
           <nav class="site-nav" aria-label="Primary">
             <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
-            <a href="/admin/reports" aria-current="page">Reports</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -42,38 +41,38 @@
 
     <main class="layout">
       <section class="card">
-        <h2>Submitted Reports</h2>
-        <p class="profile-meta">Showing __REPORT_COUNT__ report(s).</p>
-        <p class="status-text __REPORT_STATUS_CLASS__" __REPORT_STATUS_HIDDEN_ATTR__>__REPORT_STATUS_TEXT__</p>
+        <h2>User Management</h2>
+        <p class="profile-meta">Create, role-manage, activate/deactivate, and remove local accounts.</p>
+        <p class="status-text __USERS_STATUS_CLASS__" __USERS_STATUS_HIDDEN_ATTR__>__USERS_STATUS_TEXT__</p>
 
-        <form method="get" action="/admin/reports" class="upload-form">
-          <label for="workIdFilter">Work ID</label>
-          <input id="workIdFilter" name="work_id" type="text" value="__REPORT_WORK_ID__" />
+        <form method="post" action="/admin/users" class="upload-form">
+          <input type="hidden" name="user_action" value="create" />
 
-          <label for="issueTypeFilter">Issue type</label>
-          <select id="issueTypeFilter" name="issue_type">
-            <option value="">All issue types</option>
-            __REPORT_ISSUE_OPTIONS_HTML__
+          <label for="newUsername">Username</label>
+          <input id="newUsername" name="username" type="text" required />
+
+          <label for="newDisplayName">Display name</label>
+          <input id="newDisplayName" name="display_name" type="text" />
+
+          <label for="newEmail">Email</label>
+          <input id="newEmail" name="email" type="email" />
+
+          <label for="newRole">Role</label>
+          <select id="newRole" name="role">
+            __USERS_ROLE_OPTIONS__
           </select>
 
-          <label for="statusFilter">Status</label>
-          <select id="statusFilter" name="status">
-            <option value="">All statuses</option>
-            __REPORT_STATUS_OPTIONS_HTML__
-          </select>
+          <label class="checkbox-row" for="newUserActive">
+            <input id="newUserActive" name="active" type="checkbox" value="1" checked />
+            <span>Active account</span>
+          </label>
 
-          <label for="startDateFilter">Start date</label>
-          <input id="startDateFilter" name="start_date" type="date" value="__REPORT_START_DATE__" />
-
-          <label for="endDateFilter">End date</label>
-          <input id="endDateFilter" name="end_date" type="date" value="__REPORT_END_DATE__" />
-
-          <button type="submit">Apply filters</button>
+          <button type="submit">Create user</button>
         </form>
       </section>
 
       <section class="comments-list">
-        __REPORT_ROWS_HTML__
+        __USERS_ROWS_HTML__
       </section>
     </main>
 

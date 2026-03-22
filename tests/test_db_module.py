@@ -9,6 +9,7 @@ from typing import cast
 import pytest
 
 import fanic.db as db
+from fanic.settings import get_settings
 
 
 def _table_exists_fn() -> Callable[[sqlite3.Connection, str], bool]:
@@ -78,6 +79,7 @@ def test_ensure_runtime_schema_adds_missing_user_preference_columns() -> None:
 def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
     ensure_runtime_schema = _ensure_runtime_schema_fn()
     table_exists = _table_exists_fn()
+    settings = get_settings()
     connection = sqlite3.connect(":memory:")
     try:
         connection.execute("CREATE TABLE user_preferences (username TEXT PRIMARY KEY)")
@@ -107,6 +109,25 @@ def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
         assert table_exists(connection, "work_chapters") is True
         assert table_exists(connection, "work_chapter_pages") is True
         assert table_exists(connection, "dmca_reports") is True
+        assert table_exists(connection, "users") is True
+        user_columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(users)").fetchall()
+        }
+        assert "id" in user_columns
+        assert "username" in user_columns
+        assert "display_name" in user_columns
+        assert "email" in user_columns
+        assert "active" in user_columns
+        assert "role" in user_columns
+        assert "created_at" in user_columns
+        admin_row = connection.execute(
+            "SELECT role, active FROM users WHERE username = ?",
+            (str(settings.admin_username),),
+        ).fetchone()
+        assert admin_row is not None
+        assert str(admin_row[0]) == "superadmin"
+        assert int(admin_row[1]) == 1
         dmca_columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(dmca_reports)").fetchall()
@@ -156,6 +177,7 @@ def test_initialize_database_reset_recreates_database(
     finally:
         connection.close()
     assert "works" in tables
+    assert "users" in tables
     assert "user_preferences" in tables
 
 

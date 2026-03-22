@@ -14,6 +14,14 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def _role_user(_: str | None) -> str:
+    return "user"
+
+
+def _role_admin(_: str | None) -> str:
+    return "admin"
+
+
 def test_reports_post_forbidden_for_non_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -21,7 +29,7 @@ def test_reports_post_forbidden_for_non_admin(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.post.py",
         "fanicsite_reports_ex_post_forbidden_test",
     )
 
@@ -36,9 +44,10 @@ def test_reports_post_forbidden_for_non_admin(
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
 
     request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={"report_id": "1", "report_action": "mark-false"},
     )
@@ -55,7 +64,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.post.py",
         "fanicsite_reports_ex_post_mark_false_test",
     )
 
@@ -65,7 +74,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return module.ADMIN_USERNAME
+        return "admin"
 
     captured: dict[str, object] = {}
 
@@ -77,6 +86,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(
         module,
         "update_content_report_status",
@@ -84,7 +94,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
     )
 
     request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={
             "report_id": "22",
@@ -101,7 +111,7 @@ def test_reports_post_marks_report_false_and_preserves_filters(
 
     assert result.status_code == 303
     location = result.headers.get("Location", "")
-    assert location.startswith("/reports?")
+    assert location.startswith("/admin/reports?")
     assert "msg=marked-false" in location
     assert "work_id=work-2" in location
     assert "issue_type=illegal-content" in location
@@ -117,7 +127,7 @@ def test_reports_post_remove_redirects_not_found_when_missing(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.post.py",
         "fanicsite_reports_ex_post_remove_missing_test",
     )
 
@@ -127,7 +137,7 @@ def test_reports_post_remove_redirects_not_found_when_missing(
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return module.ADMIN_USERNAME
+        return "admin"
 
     def fake_delete_content_report(report_id: int) -> bool:
         _ = report_id
@@ -136,10 +146,11 @@ def test_reports_post_remove_redirects_not_found_when_missing(
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(module, "delete_content_report", fake_delete_content_report)
 
     request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={"report_id": "999", "report_action": "remove"},
     )
@@ -147,7 +158,7 @@ def test_reports_post_remove_redirects_not_found_when_missing(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers.get("Location") == "/reports?msg=not-found"
+    assert result.headers.get("Location") == "/admin/reports?msg=not-found"
 
 
 def test_reports_post_marks_report_resolved_and_reopen(
@@ -157,7 +168,7 @@ def test_reports_post_marks_report_resolved_and_reopen(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.post.py",
         "fanicsite_reports_ex_post_resolve_reopen_test",
     )
 
@@ -167,7 +178,7 @@ def test_reports_post_marks_report_resolved_and_reopen(
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return module.ADMIN_USERNAME
+        return "admin"
 
     statuses: list[str] = []
 
@@ -179,6 +190,7 @@ def test_reports_post_marks_report_resolved_and_reopen(
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(
         module,
         "update_content_report_status",
@@ -186,24 +198,26 @@ def test_reports_post_marks_report_resolved_and_reopen(
     )
 
     resolve_request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={"report_id": "7", "report_action": "mark-resolved"},
     )
     resolve_response = dummy_response()
     resolve_result = module.main(resolve_request, resolve_response)
     assert resolve_result.status_code == 303
-    assert resolve_result.headers.get("Location") == "/reports?msg=marked-resolved"
+    assert (
+        resolve_result.headers.get("Location") == "/admin/reports?msg=marked-resolved"
+    )
 
     reopen_request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={"report_id": "7", "report_action": "mark-reopen"},
     )
     reopen_response = dummy_response()
     reopen_result = module.main(reopen_request, reopen_response)
     assert reopen_result.status_code == 303
-    assert reopen_result.headers.get("Location") == "/reports?msg=marked-reopen"
+    assert reopen_result.headers.get("Location") == "/admin/reports?msg=marked-reopen"
 
     assert statuses == ["resolved", "re-open"]
 
@@ -215,7 +229,7 @@ def test_reports_post_promote_explicit_marks_report_resolved(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.post.py",
         "fanicsite_reports_ex_post_promote_explicit_test",
     )
 
@@ -225,7 +239,7 @@ def test_reports_post_promote_explicit_marks_report_resolved(
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return module.ADMIN_USERNAME
+        return "admin"
 
     captured: dict[str, object] = {}
 
@@ -252,6 +266,7 @@ def test_reports_post_promote_explicit_marks_report_resolved(
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(module, "set_work_rating", fake_set_work_rating)
     monkeypatch.setattr(
         module,
@@ -260,7 +275,7 @@ def test_reports_post_promote_explicit_marks_report_resolved(
     )
 
     request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         method="POST",
         form={
             "report_id": "11",
@@ -272,9 +287,9 @@ def test_reports_post_promote_explicit_marks_report_resolved(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers.get("Location") == "/reports?msg=promoted-explicit"
+    assert result.headers.get("Location") == "/admin/reports?msg=promoted-explicit"
     assert captured["work_id"] == "work-11"
     assert captured["rating"] == "Explicit"
-    assert captured["editor_username"] == module.ADMIN_USERNAME
+    assert captured["editor_username"] == "admin"
     assert captured["edited_by_admin"] is True
     assert statuses == ["resolved"]

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
+from typing import Literal
 from typing import NotRequired
 from typing import TypedDict
 from typing import cast
@@ -23,6 +24,10 @@ TAG_FIELD_TO_TYPE = {
     "characters": "character",
     "freeform_tags": "freeform",
 }
+
+UserRole = Literal["superadmin", "admin", "user", "guest"]
+PRIVILEGED_USER_ROLES: set[UserRole] = {"superadmin", "admin"}
+MANAGED_USER_ROLES: set[UserRole] = {"superadmin", "admin", "user"}
 
 
 class WorkComment(TypedDict):
@@ -58,6 +63,240 @@ class WorkVersionSummary(TypedDict):
 class UserThemePreference(TypedDict):
     enabled: bool
     toml_text: str
+
+
+class LocalUserRow(TypedDict):
+    username: str
+    display_name: str
+    email: str | None
+    role: UserRole
+    active: bool
+    created_at: str
+
+
+def _normalize_user_role(role: object) -> UserRole:
+    normalized = str(role).strip().lower()
+    if normalized == "superadmin":
+        return "superadmin"
+    if normalized == "admin":
+        return "admin"
+    if normalized == "user":
+        return "user"
+    return "guest"
+
+
+def _validate_managed_role(role: UserRole) -> UserRole:
+    normalized_role = _normalize_user_role(role)
+    if normalized_role not in MANAGED_USER_ROLES:
+        raise ValueError("Role must be one of: superadmin, admin, user")
+    return normalized_role
+
+
+def upsert_user(
+    user_id: str,
+    username: str,
+    *,
+    display_name: str,
+    email: str | None,
+    active: bool,
+    role: UserRole,
+) -> None:
+    normalized_role = _validate_managed_role(role)
+    normalized_email = email.strip() if isinstance(email, str) else ""
+    stored_email = normalized_email if normalized_email else None
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO users (id, username, display_name, email, active, role)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                username = excluded.username,
+                display_name = excluded.display_name,
+                email = excluded.email,
+                active = excluded.active,
+                role = excluded.role
+            """,
+            (
+                user_id,
+                username,
+                display_name,
+                stored_email,
+                1 if active else 0,
+                normalized_role,
+            ),
+        )
+
+
+def ensure_local_user(username: str, *, role: UserRole = "user") -> None:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return
+    upsert_user(
+        normalized_username,
+        normalized_username,
+        display_name=normalized_username,
+        email=None,
+        active=True,
+        role=role,
+    )
+
+
+def create_user(
+    username: str,
+    *,
+    display_name: str,
+    email: str | None = None,
+    role: UserRole = "user",
+    active: bool = True,
+) -> None:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_display_name = display_name.strip()
+    if not normalized_display_name:
+        raise ValueError("display_name must not be empty")
+
+    normalized_role = _validate_managed_role(role)
+    normalized_email = email.strip() if isinstance(email, str) else ""
+    stored_email = normalized_email if normalized_email else None
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO users (id, username, display_name, email, active, role)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_username,
+                normalized_username,
+                normalized_display_name,
+                stored_email,
+                1 if active else 0,
+                normalized_role,
+            ),
+        )
+
+
+def set_user_role(username: str, role: UserRole) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_role = _validate_managed_role(role)
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "UPDATE users SET role = ? WHERE username = ?",
+            (normalized_role, normalized_username),
+        )
+    return cursor.rowcount > 0
+
+
+def set_user_active(username: str, active: bool) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "UPDATE users SET active = ? WHERE username = ?",
+            (1 if active else 0, normalized_username),
+        )
+    return cursor.rowcount > 0
+
+
+def get_user_role(username: str | None) -> UserRole:
+    normalized_username = username.strip() if isinstance(username, str) else ""
+    if not normalized_username:
+        return "guest"
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT role, active FROM users WHERE username = ?",
+            (normalized_username,),
+        ).fetchone()
+
+    if not row:
+        return "guest"
+    if not bool(int(row["active"])):
+        return "guest"
+    return _normalize_user_role(row["role"])
+
+
+def get_local_user(username: str) -> LocalUserRow | None:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT username, display_name, email, role, active, created_at
+            FROM users
+            WHERE username = ?
+            """,
+            (normalized_username,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "username": str(row["username"]),
+        "display_name": str(row["display_name"]),
+        "email": str(row["email"]) if row["email"] is not None else None,
+        "role": _normalize_user_role(row["role"]),
+        "active": bool(int(row["active"])),
+        "created_at": str(row["created_at"]),
+    }
+
+
+def list_local_users() -> list[LocalUserRow]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT username, display_name, email, role, active, created_at
+            FROM users
+            ORDER BY
+                CASE role
+                    WHEN 'superadmin' THEN 0
+                    WHEN 'admin' THEN 1
+                    WHEN 'user' THEN 2
+                    ELSE 3
+                END,
+                username COLLATE NOCASE ASC
+            """
+        ).fetchall()
+
+    return [
+        {
+            "username": str(row["username"]),
+            "display_name": str(row["display_name"]),
+            "email": str(row["email"]) if row["email"] is not None else None,
+            "role": _normalize_user_role(row["role"]),
+            "active": bool(int(row["active"])),
+            "created_at": str(row["created_at"]),
+        }
+        for row in rows
+    ]
+
+
+def delete_user(username: str) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    with get_connection() as connection:
+        connection.execute(
+            "DELETE FROM user_preferences WHERE username = ?",
+            (normalized_username,),
+        )
+        cursor = connection.execute(
+            "DELETE FROM users WHERE username = ?",
+            (normalized_username,),
+        )
+    return cursor.rowcount > 0
 
 
 class WorkPageRow(TypedDict):

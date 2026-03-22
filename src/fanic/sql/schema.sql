@@ -76,6 +76,16 @@ CREATE TABLE IF NOT EXISTS reading_progress (
     FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    email TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    role TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS user_preferences (
     username TEXT PRIMARY KEY,
     view_explicit_rated INTEGER NOT NULL DEFAULT 0,

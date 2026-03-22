@@ -155,7 +155,7 @@ def test_admin_can_lower_explicit_rating(
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return str(module.ADMIN_USERNAME)
+        return "admin"
 
     def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
         _ = (username, work)
@@ -194,6 +194,7 @@ def test_admin_can_lower_explicit_rating(
     monkeypatch.setattr(module, "validate_csrf", fake_validate_csrf)
     monkeypatch.setattr(module, "get_work", fake_get_work)
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", lambda username: "admin")
     monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
     monkeypatch.setattr(module, "update_work_metadata", fake_update_work_metadata)
     monkeypatch.setattr(

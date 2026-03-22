@@ -32,6 +32,18 @@ class UploadLike:
         Path(dst).write_text(self._content, encoding="utf-8")
 
 
+def _role_for_alice_or_guest(username: str | None) -> str:
+    return "user" if username == "alice" else "guest"
+
+
+def _role_superadmin(_: str | None) -> str:
+    return "superadmin"
+
+
+def _role_guest(_: str | None) -> str:
+    return "guest"
+
+
 def test_json_and_text_helpers(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_response: Callable[[], ResponseLike],
@@ -105,17 +117,26 @@ def test_route_helpers_and_user_menu(
     assert module.route_tail(request, ["reader"]) is None
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_in)
-    monkeypatch.setattr(module, "ADMIN_USERNAME", "admin")
+    monkeypatch.setattr(
+        module,
+        "role_for_user",
+        _role_for_alice_or_guest,
+    )
     logged_in = module.user_menu_replacements(request)
     assert logged_in["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == "hidden"
     assert logged_in["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == ""
     assert logged_in["__ADMIN_REPORTS_LINK__"] == ""
 
     monkeypatch.setattr(module, "current_user", fake_current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_superadmin)
     logged_in_admin = module.user_menu_replacements(request)
-    assert logged_in_admin["__ADMIN_REPORTS_LINK__"] == '<a href="/reports">Reports</a>'
+    assert (
+        logged_in_admin["__ADMIN_REPORTS_LINK__"]
+        == '<a href="/admin/reports">Reports</a><a href="/admin/users">Users</a>'
+    )
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_out)
+    monkeypatch.setattr(module, "role_for_user", _role_guest)
     logged_out = module.user_menu_replacements(request)
     assert logged_out["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == ""
     assert logged_out["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == "hidden"

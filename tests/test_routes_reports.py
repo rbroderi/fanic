@@ -14,6 +14,14 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def _role_user(_: str | None) -> str:
+    return "user"
+
+
+def _role_admin(_: str | None) -> str:
+    return "admin"
+
+
 def test_reports_route_forbidden_for_non_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -21,7 +29,7 @@ def test_reports_route_forbidden_for_non_admin(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.get.py",
         "fanicsite_reports_ex_get_forbidden_test",
     )
 
@@ -30,8 +38,9 @@ def test_reports_route_forbidden_for_non_admin(
         return "alice"
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
 
-    request = dummy_request(path="/reports", args={})
+    request = dummy_request(path="/admin/reports", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -45,13 +54,13 @@ def test_reports_route_renders_report_rows_for_admin(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/reports.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/admin/reports.ex.get.py",
         "fanicsite_reports_ex_get_admin_test",
     )
 
     def fake_current_user(request: Any) -> str:
         _ = request
-        return module.ADMIN_USERNAME
+        return "admin"
 
     def fake_list_content_reports(
         *,
@@ -102,11 +111,12 @@ def test_reports_route_renders_report_rows_for_admin(
         return response
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(module, "list_content_reports", fake_list_content_reports)
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
     request = dummy_request(
-        path="/reports",
+        path="/admin/reports",
         args={
             "work_id": "work-1",
             "issue_type": "illegal-content",

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from fanic.cylinder_sites.common import ADMIN_USERNAME
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import auth_lockout_seconds_remaining
 from fanic.cylinder_sites.common import clear_auth_failures
 from fanic.cylinder_sites.common import enforce_https_termination
 from fanic.cylinder_sites.common import record_auth_failure
+from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import set_login_cookie
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
@@ -38,8 +38,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if lockout_remaining > 0:
         return _redirect(response, f"/login?msg=locked&retry_after={lockout_remaining}")
 
+    role = role_for_user(username)
+    allowed_role = role in {"superadmin", "admin"}
     password_ok = verify_admin_password(password)
-    if username != ADMIN_USERNAME or not password_ok:
+    if not allowed_role or not password_ok:
         _ = record_auth_failure(request, username)
         return _redirect(response, "/login?msg=invalid")
 

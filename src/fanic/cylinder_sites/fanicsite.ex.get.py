@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from html import escape
 
-from fanic.cylinder_sites.common import ADMIN_USERNAME
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import rating_badge_html
 from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import text_error
 from fanic.repository import WorkListItem
 from fanic.repository import can_view_work
@@ -41,7 +41,7 @@ def _work_grid_html(works: Sequence[WorkListItem], can_delete: bool) -> str:
       """.format(work_id=work_id)
 
         parts.append(
-            """
+            f"""
       <article class="card work-card">
         {delete_html}
         <a href="/works/{work_id}">
@@ -51,16 +51,7 @@ def _work_grid_html(works: Sequence[WorkListItem], can_delete: bool) -> str:
         <p class="work-meta">{rating_html} | {status} | {page_count} pages</p>
         <p>{summary}</p>
       </article>
-    """.format(
-                delete_html=delete_html,
-                work_id=work_id,
-                cover_index=cover_index,
-                title=title,
-                rating_html=rating_html,
-                status=status,
-                page_count=page_count,
-                summary=summary,
-            )
+    """
         )
 
     return "".join(parts)
@@ -88,7 +79,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     }
     username = current_user(request)
     works = [work for work in list_works(filters) if can_view_work(username, work)]
-    can_delete = username == ADMIN_USERNAME
+    can_delete = role_for_user(username) in {"superadmin", "admin"}
 
     return render_html_template(
         request,

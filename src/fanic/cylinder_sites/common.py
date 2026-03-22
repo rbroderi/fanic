@@ -25,6 +25,8 @@ from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 
 from fanic.ingest import ingest_cbz
+from fanic.repository import UserRole
+from fanic.repository import get_user_role
 from fanic.repository import get_user_theme_preference
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
@@ -389,10 +391,17 @@ def log_exception(
 
 
 def is_admin_request(request: RequestLike) -> bool:
-    user = current_user(request)
-    if user is None:
-        return False
-    return user == ADMIN_USERNAME
+    role = current_user_role(request)
+    return role in {"superadmin", "admin"}
+
+
+def role_for_user(username: str | None) -> UserRole:
+    return get_user_role(username)
+
+
+def current_user_role(request: RequestLike) -> UserRole:
+    username = current_user(request)
+    return role_for_user(username)
 
 
 def admin_aware_detail(
@@ -847,7 +856,8 @@ def clear_login_cookie(response: ResponseLike) -> None:
 def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     username = current_user(request)
     logged_in = username is not None
-    is_admin = bool(username) and username == ADMIN_USERNAME
+    role = current_user_role(request)
+    is_admin = role in {"superadmin", "admin"}
     return {
         "__USER_MENU_STATUS__": f"Logged in as {escape(username)}."
         if logged_in and username
@@ -855,7 +865,11 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         "__USER_MENU_LOGIN_HIDDEN_ATTR__": "hidden" if logged_in else "",
         "__USER_MENU_PROFILE_HIDDEN_ATTR__": "" if logged_in else "hidden",
         "__USER_MENU_LOGOUT_HIDDEN_ATTR__": "" if logged_in else "hidden",
-        "__ADMIN_REPORTS_LINK__": '<a href="/reports">Reports</a>' if is_admin else "",
+        "__ADMIN_REPORTS_LINK__": (
+            '<a href="/admin/reports">Reports</a><a href="/admin/users">Users</a>'
+            if is_admin
+            else ""
+        ),
     }
 
 

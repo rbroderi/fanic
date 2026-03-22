@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import cast
 
-from fanic.cylinder_sites.common import ADMIN_USERNAME
 from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -12,6 +12,7 @@ from fanic.cylinder_sites.common import begin_upload_session
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import end_upload_session
 from fanic.cylinder_sites.common import enforce_https_termination
+from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import upload_policy_error_info
@@ -54,14 +55,42 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     return response
 
 
-def _can_edit_work(username: str | None, uploader_username: str) -> bool:
-    return bool(username) and (
-        username == uploader_username or username == ADMIN_USERNAME
-    )
+def _can_edit_work(
+    username: str | None, uploader_username: str, *, is_admin: bool
+) -> bool:
+    return bool(username) and (username == uploader_username or is_admin)
 
 
 def _is_explicit_rating(value: object) -> bool:
     return str(value).strip().casefold() == "explicit"
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items = cast(list[object], value)
+    return [str(item) for item in items]
+
+
+def _normalize_chapter_members(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    source = cast(dict[object, object], value)
+    normalized: dict[str, list[str]] = {}
+    for chapter_id, members in source.items():
+        if not isinstance(members, list):
+            continue
+        normalized[str(chapter_id)] = _normalize_str_list(cast(list[object], members))
+    return normalized
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -82,9 +111,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Work not found", 404)
 
     username = current_user(request)
+    user_role = role_for_user(username)
+    is_admin = user_role in {"superadmin", "admin"}
 
     if action == "delete":
-        if username != ADMIN_USERNAME:
+        if not is_admin:
             return text_error(response, "Forbidden", 403)
         _ = delete_work(work_id)
         return _redirect(response, "/")
@@ -116,7 +147,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 chapter_number = int(chapter_raw)
             except ValueError:
                 return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
-            max_chapter = int(work.get("page_count") if work.get("page_count") else 0)
+            max_chapter = _coerce_int(work.get("page_count"), 0)
             if chapter_number < 1 or chapter_number > max_chapter:
                 return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
         else:
@@ -131,7 +162,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     uploader = str(
         work.get("uploader_username") if work.get("uploader_username") else ""
     )
-    if not _can_edit_work(username, uploader):
+    if not _can_edit_work(username, uploader, is_admin=is_admin):
         return text_error(response, "Forbidden", 403)
 
     assert username is not None
@@ -327,21 +358,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             ordered_filenames_raw = request.form.get("ordered_filenames_json", "")
             chapter_members_raw = request.form.get("chapter_members_json", "{}")
 
-            ordered_filenames = json.loads(ordered_filenames_raw)
-            chapter_members = json.loads(chapter_members_raw)
-            if not isinstance(ordered_filenames, list):
+            ordered_filenames_obj = json.loads(ordered_filenames_raw)
+            chapter_members_obj = json.loads(chapter_members_raw)
+
+            ordered_filenames = _normalize_str_list(ordered_filenames_obj)
+            if not ordered_filenames and ordered_filenames_obj != []:
                 raise ValueError("Invalid ordered_filenames_json")
-            if not isinstance(chapter_members, dict):
+            chapter_members = _normalize_chapter_members(chapter_members_obj)
+            if not chapter_members and chapter_members_obj != {}:
                 raise ValueError("Invalid chapter_members_json")
 
             _ = editor_reorder_gallery(
                 work_id=work_id,
-                ordered_filenames=[str(name) for name in ordered_filenames],
-                chapter_members={
-                    str(chapter_id): [str(name) for name in members]
-                    for chapter_id, members in chapter_members.items()
-                    if isinstance(members, list)
-                },
+                ordered_filenames=ordered_filenames,
+                chapter_members=chapter_members,
                 uploader_username=username,
             )
             return _redirect(response, f"/works/{work_id}/edit?msg=page-reordered")
@@ -447,7 +477,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     current_rating = work.get("rating", "Not Rated")
     requested_rating = metadata.get("rating", "Not Rated")
     if (
-        username != ADMIN_USERNAME
+        not is_admin
         and _is_explicit_rating(current_rating)
         and not _is_explicit_rating(requested_rating)
     ):
@@ -457,12 +487,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         work_id,
         metadata,
         editor_username=username,
-        edited_by_admin=username == ADMIN_USERNAME,
+        edited_by_admin=is_admin,
     )
     _ = create_work_version_snapshot(
         work_id,
         action="metadata-edit",
         actor=username,
-        details={"edited_by_admin": username == ADMIN_USERNAME},
+        details={"edited_by_admin": is_admin},
     )
     return _redirect(response, f"/works/{work_id}/edit?msg=saved")

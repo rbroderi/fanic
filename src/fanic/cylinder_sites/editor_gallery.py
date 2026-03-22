@@ -173,13 +173,18 @@ def render_editor_chapters_html(
         start_page = int(start_page_raw if start_page_raw else 1)
         end_page_raw = chapter.get("end_page", start_page)
         end_page = int(end_page_raw if end_page_raw else start_page)
+        form_action_esc = escape(form_action)
+        action_field_esc = escape(action_field_name)
+        update_action_esc = escape(update_action_value)
+        delete_action_esc = escape(delete_action_value)
+        work_id_esc = escape(work_id)
         rows.append(
-            """
+            f"""
             <article class="card info-card editor-row">
                 <p><strong>Chapter {chapter_index}: {title}</strong> (pages {start_page}-{end_page})</p>
-                <form class="upload-form" method="post" action="{form_action}">
-                    <input type="hidden" name="{action_field_name}" value="{update_action_value}" />
-                    <input type="hidden" name="editor_work_id" value="{work_id}" />
+                <form class="upload-form" method="post" action="{form_action_esc}">
+                    <input type="hidden" name="{action_field_esc}" value="{update_action_esc}" />
+                    <input type="hidden" name="editor_work_id" value="{work_id_esc}" />
                     <input type="hidden" name="chapter_id" value="{chapter_id}" />
                     <label>Title</label>
                     <input type="text" name="chapter_title" value="{title}" required />
@@ -189,25 +194,13 @@ def render_editor_chapters_html(
                     <input type="number" name="chapter_end_page" min="1" value="{end_page}" required />
                     <button type="submit">Update chapter</button>
                 </form>
-                <form class="upload-form" method="post" action="{form_action}"{delete_confirm_attr}>
-                    <input type="hidden" name="{action_field_name}" value="{delete_action_value}" />
-                    <input type="hidden" name="editor_work_id" value="{work_id}" />
+                <form class="upload-form" method="post" action="{form_action_esc}"{confirm_attr}>
+                    <input type="hidden" name="{action_field_esc}" value="{delete_action_esc}" />
+                    <input type="hidden" name="editor_work_id" value="{work_id_esc}" />
                     <input type="hidden" name="chapter_id" value="{chapter_id}" />
                     <button type="submit" class="button-muted">Delete chapter</button>
                 </form>
             </article>
-            """.format(
-                chapter_index=chapter_index,
-                title=title,
-                start_page=start_page,
-                end_page=end_page,
-                form_action=escape(form_action),
-                action_field_name=escape(action_field_name),
-                update_action_value=escape(update_action_value),
-                delete_action_value=escape(delete_action_value),
-                work_id=escape(work_id),
-                chapter_id=chapter_id,
-                delete_confirm_attr=confirm_attr,
-            )
+            """
         )
     return "".join(rows)

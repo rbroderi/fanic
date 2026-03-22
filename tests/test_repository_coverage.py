@@ -317,3 +317,42 @@ def test_chapters_progress_and_delete_work_cleanup(
     assert repository.delete_work("work-1") is False
     assert cbz_path.exists() is False
     assert work_dir.exists() is False
+
+
+def test_user_role_management_operations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    assert repository.get_user_role("alice") == "guest"
+
+    repository.create_user(
+        "alice",
+        display_name="Alice",
+        email="alice@example.com",
+        role="user",
+        active=True,
+    )
+    assert repository.get_user_role("alice") == "user"
+
+    assert repository.set_user_role("alice", "admin") is True
+    assert repository.get_user_role("alice") == "admin"
+
+    assert repository.set_user_active("alice", False) is True
+    assert repository.get_user_role("alice") == "guest"
+
+    assert repository.set_user_active("alice", True) is True
+    assert repository.get_user_role("alice") == "admin"
+
+    with pytest.raises(ValueError):
+        repository.set_user_role("alice", "guest")
+
+    with pytest.raises(ValueError):
+        repository.create_user(
+            "",
+            display_name="",
+            email=None,
+            role="user",
+            active=True,
+        )

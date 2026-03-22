@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from dataclasses import dataclass
 from html import escape
 from urllib.parse import urljoin
 from urllib.parse import urlparse
@@ -10,6 +9,32 @@ from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_options_html
+
+
+@dataclass(frozen=True, slots=True)
+class StatusReplacements:
+    text: str
+    css_class: str
+    hidden_attr: str
+
+
+def _status_replacements(msg: str, report_id: str) -> StatusReplacements:
+    match msg:
+        case "submitted":
+            return StatusReplacements(
+                "Report submitted."
+                + (f" Reference #{escape(report_id)}." if report_id else ""),
+                "success",
+                "",
+            )
+        case "invalid":
+            return StatusReplacements(
+                "Please complete all required fields and certify your claim.",
+                "error",
+                "",
+            )
+        case _:
+            return StatusReplacements("", "", "hidden")
 
 
 def _request_base_url(request: RequestLike) -> str:
@@ -70,21 +95,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     msg = request.args.get("msg", "").strip()
     report_id = request.args.get("report_id", "").strip()
-
-    if msg == "submitted":
-        status_text = "Report submitted." + (
-            f" Reference #{escape(report_id)}." if report_id else ""
-        )
-        status_class = "success"
-        status_hidden = ""
-    elif msg == "invalid":
-        status_text = "Please complete all required fields and certify your claim."
-        status_class = "error"
-        status_hidden = ""
-    else:
-        status_text = ""
-        status_class = ""
-        status_hidden = "hidden"
+    status = _status_replacements(msg, report_id)
 
     work_id = request.args.get("work_id", "").strip()
     work_title = request.args.get("work_title", "").strip()
@@ -101,9 +112,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         response,
         "dmca.html",
         {
-            "__DMCA_STATUS_TEXT__": status_text,
-            "__DMCA_STATUS_CLASS__": status_class,
-            "__DMCA_STATUS_HIDDEN_ATTR__": status_hidden,
+            "__DMCA_STATUS_TEXT__": status.text,
+            "__DMCA_STATUS_CLASS__": status.css_class,
+            "__DMCA_STATUS_HIDDEN_ATTR__": status.hidden_attr,
             "__DMCA_WORK_ID__": escape(work_id),
             "__DMCA_WORK_TITLE__": escape(work_title),
             "__DMCA_CLAIMED_URL__": escape(claimed_url),
