@@ -102,6 +102,52 @@ def test_dmca_post_rejects_missing_required_fields(
     assert result.headers.get("Location") == "/dmca?msg=invalid"
 
 
+def test_dmca_get_normalizes_relative_claimed_url_to_absolute(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/dmca.ex.get.py",
+        "fanicsite_dmca_ex_get_absolute_claimed_url_test",
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        captured["template"] = template_name
+        captured["claimed_url"] = replacements["__DMCA_CLAIMED_URL__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(
+        path="/dmca",
+        args={
+            "work_id": "work-42",
+            "claimed_url": "/works/work-42",
+        },
+    )
+    request.host_url = "https://fanic.test/"
+
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert captured["template"] == "dmca.html"
+    assert captured["claimed_url"] == "https://fanic.test/works/work-42"
+
+
 def test_dmca_post_persists_report_and_redirects(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

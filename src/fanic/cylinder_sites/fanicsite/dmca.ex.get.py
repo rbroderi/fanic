@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from html import escape
+from urllib.parse import urljoin
+from urllib.parse import urlparse
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -8,6 +10,58 @@ from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_options_html
+
+
+def _request_base_url(request: RequestLike) -> str:
+    host_url_raw = getattr(request, "host_url", "")
+    host_url = host_url_raw.strip() if isinstance(host_url_raw, str) else ""
+    if host_url:
+        return host_url
+
+    url_root_raw = getattr(request, "url_root", "")
+    url_root = url_root_raw.strip() if isinstance(url_root_raw, str) else ""
+    if url_root:
+        return url_root
+
+    headers = getattr(request, "headers", None)
+    if headers is None or not hasattr(headers, "get"):
+        return ""
+
+    forwarded_proto_raw = headers.get("X-Forwarded-Proto", "")
+    forwarded_proto = (
+        str(forwarded_proto_raw).split(",")[0].strip() if forwarded_proto_raw else ""
+    )
+    forwarded_host_raw = headers.get("X-Forwarded-Host", "")
+    host_header_raw = headers.get("Host", "")
+    host_source = forwarded_host_raw if forwarded_host_raw else host_header_raw
+    host = str(host_source).split(",")[0].strip() if host_source else ""
+    if not host:
+        return ""
+
+    scheme = forwarded_proto if forwarded_proto else "https"
+    return f"{scheme}://{host}/"
+
+
+def _normalize_claimed_url(request: RequestLike, claimed_url: str) -> str:
+    cleaned = claimed_url.strip()
+    if not cleaned:
+        return ""
+
+    parsed = urlparse(cleaned)
+    if parsed.scheme and parsed.netloc:
+        return cleaned
+
+    base_url = _request_base_url(request)
+    if not base_url:
+        return cleaned
+
+    if cleaned.startswith("/"):
+        return urljoin(base_url, cleaned)
+
+    if cleaned.startswith("works/"):
+        return urljoin(base_url, f"/{cleaned}")
+
+    return cleaned
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -34,7 +88,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     work_id = request.args.get("work_id", "").strip()
     work_title = request.args.get("work_title", "").strip()
-    claimed_url = request.args.get("claimed_url", "").strip()
+    claimed_url = _normalize_claimed_url(
+        request,
+        request.args.get("claimed_url", ""),
+    )
     issue_type = normalize_report_issue_type(
         request.args.get("issue_type", "copyright-dmca")
     )

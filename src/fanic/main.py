@@ -303,9 +303,17 @@ def run_cleanup_once() -> int:
     return cleanup_on_shutdown()
 
 
+def _handle_shutdown_signal(signum: int, frame: object) -> None:
+    _ = frame
+    _ = run_cleanup_once()
+    if signum == signal.SIGINT:
+        raise KeyboardInterrupt
+    raise SystemExit(128 + int(signum))
+
+
 def _install_signal_handlers() -> None:
-    signal.signal(signal.SIGINT, run_cleanup_once)
-    signal.signal(signal.SIGTERM, run_cleanup_once)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
 
 
 if __name__ == "__main__":
