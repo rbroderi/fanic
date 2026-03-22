@@ -4,7 +4,9 @@ import hashlib
 import json
 import re
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
+from collections.abc import Mapping
+from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
 from typing import cast
@@ -12,32 +14,33 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
+from PIL import UnidentifiedImageError
 from tqdm import tqdm
 
 from fanic.db import get_connection
-from fanic.moderation import (
-    get_explicit_threshold,
-    moderate_image,
-    moderate_image_bytes,
-    suggested_rating_for_nsfw,
-)
-from fanic.paths import CBZ_DIR, WORKS_DIR, ensure_storage_dirs
-from fanic.repository import (
-    add_work_chapter,
-    create_work_version_snapshot,
-    delete_work_chapter,
-    get_work,
-    list_work_chapter_members,
-    list_work_chapters,
-    list_work_page_image_names,
-    list_work_page_rows,
-    replace_work_chapter_members,
-    replace_work_pages,
-    replace_work_tags,
-    update_work_chapter,
-    upsert_work,
-)
+from fanic.moderation import get_explicit_threshold
+from fanic.moderation import moderate_image
+from fanic.moderation import moderate_image_bytes
+from fanic.moderation import suggested_rating_for_nsfw
+from fanic.paths import CBZ_DIR
+from fanic.paths import WORKS_DIR
+from fanic.paths import ensure_storage_dirs
+from fanic.repository import WorkChapterRow
+from fanic.repository import WorkPageRow
+from fanic.repository import add_work_chapter
+from fanic.repository import create_work_version_snapshot
+from fanic.repository import delete_work_chapter
+from fanic.repository import get_work
+from fanic.repository import list_work_chapter_members
+from fanic.repository import list_work_chapters
+from fanic.repository import list_work_page_image_names
+from fanic.repository import list_work_page_rows
+from fanic.repository import replace_work_chapter_members
+from fanic.repository import replace_work_pages
+from fanic.repository import replace_work_tags
+from fanic.repository import update_work_chapter
+from fanic.repository import upsert_work
 from fanic.settings import get_settings
 from fanic.utils import slugify
 
@@ -78,7 +81,8 @@ def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
 
 def _content_addressed_rel_path(data: bytes, extension: str) -> str:
     digest = hashlib.sha256(data).hexdigest()
-    normalized_ext = extension.strip().lower().lstrip(".") or "bin"
+    stripped_ext = extension.strip().lower().lstrip(".")
+    normalized_ext = stripped_ext if stripped_ext else "bin"
     return f"_objects/{digest[:2]}/{digest}.{normalized_ext}"
 
 
@@ -181,15 +185,15 @@ def _normalize_rating(value: str) -> str:
 
 
 def _elevate_rating(current: object, suggested: str | None) -> str:
-    normalized_current = _normalize_rating(str(current or "Not Rated"))
-    normalized_suggested = _normalize_rating(str(suggested or ""))
+    normalized_current = _normalize_rating(str(current if current else "Not Rated"))
+    normalized_suggested = _normalize_rating(str(suggested if suggested else ""))
     if normalized_suggested == "Explicit" and normalized_current != "Explicit":
         return "Explicit"
     return normalized_current
 
 
 def _clean_xml_value(value: str | None) -> str:
-    return (value or "").strip()
+    return (value if value else "").strip()
 
 
 def parse_comicinfo_xml(xml_text: str) -> ComicInfoMetadata:
@@ -320,9 +324,11 @@ def ingest_cbz(
                     normalized_override[str(key)] = value
                 metadata.update(normalized_override)
 
-        title = str(metadata.get("title") or cbz_path.stem)
-        work_id = str(metadata.get("id") or uuid.uuid4().hex[:12])
-        slug = str(metadata.get("slug") or slugify(title))
+        title = str(metadata.get("title") if metadata.get("title") else cbz_path.stem)
+        work_id = str(
+            metadata.get("id") if metadata.get("id") else uuid.uuid4().hex[:12]
+        )
+        slug = str(metadata.get("slug") if metadata.get("slug") else slugify(title))
 
         work_dir = WORKS_DIR / work_id
         pages_dir = work_dir / "pages"
@@ -386,7 +392,7 @@ def ingest_cbz(
                 len(image_members),
             )
 
-        pages: list[dict[str, object]] = []
+        pages: list[WorkPageRow] = []
         max_nsfw_score = 0.0
         member_iter: object = image_members
         progress = None
@@ -596,8 +602,8 @@ def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, objec
 
         work_id = str(row["work_id"])
         page_index = int(row["page_index"])
-        image_filename = str(row["image_filename"] or "")
-        thumb_filename = str(row["thumb_filename"] or "")
+        image_filename = str(row["image_filename"] if row["image_filename"] else "")
+        thumb_filename = str(row["thumb_filename"] if row["thumb_filename"] else "")
 
         thumbs_dir = WORKS_DIR / work_id / "thumbs"
         pages_dir = WORKS_DIR / work_id / "pages"
@@ -684,11 +690,15 @@ def ingest_editor_page(
         raise FileNotFoundError(f"Work not found: {work_id}")
 
     if existing_work:
-        existing_uploader = str(existing_work.get("uploader_username") or "")
+        existing_uploader = str(
+            existing_work.get("uploader_username")
+            if existing_work.get("uploader_username")
+            else ""
+        )
         if existing_uploader and existing_uploader != uploader_username:
             raise PermissionError("Only the original uploader can append editor pages")
 
-    resolved_work_id = work_id or uuid.uuid4().hex[:12]
+    resolved_work_id = work_id if work_id else uuid.uuid4().hex[:12]
     work_dir = WORKS_DIR / resolved_work_id
     pages_dir = work_dir / "pages"
     thumbs_dir = work_dir / "thumbs"
@@ -723,7 +733,7 @@ def ingest_editor_page(
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert page image") from exc
 
-    inserted_page: dict[str, object] = {
+    inserted_page: WorkPageRow = {
         "page_index": 0,
         "image_filename": image_name,
         "thumb_filename": thumb_name,
@@ -737,15 +747,15 @@ def ingest_editor_page(
             insert_position = insert_after_page_index
     ordered_pages.insert(insert_position, inserted_page)
 
-    all_pages: list[dict[str, object]] = []
+    all_pages: list[WorkPageRow] = []
     for idx, page in enumerate(ordered_pages, start=1):
         all_pages.append(
             {
                 "page_index": idx,
-                "image_filename": page.get("image_filename"),
-                "thumb_filename": page.get("thumb_filename"),
-                "width": page.get("width"),
-                "height": page.get("height"),
+                "image_filename": page["image_filename"],
+                "thumb_filename": page["thumb_filename"],
+                "width": page["width"],
+                "height": page["height"],
             }
         )
 
@@ -753,24 +763,30 @@ def ingest_editor_page(
 
     title = str(
         metadata.get("title")
-        or (existing_work.get("title") if existing_work else "")
-        or image_path.stem
+        if metadata.get("title")
+        else (
+            existing_work.get("title")
+            if existing_work and existing_work.get("title")
+            else image_path.stem
+        )
     )
     slug = str(
         (existing_work.get("slug") if existing_work else None)
-        or metadata.get("slug")
-        or slugify(title)
+        if (existing_work and existing_work.get("slug"))
+        else (metadata.get("slug") if metadata.get("slug") else slugify(title))
     )
     status = str(
         metadata.get("status")
-        or (existing_work.get("status") if existing_work else "in_progress")
+        if metadata.get("status")
+        else (existing_work.get("status") if existing_work else "in_progress")
     )
     if status not in {"in_progress", "complete"}:
         status = "in_progress"
 
     cbz_path = str(
         (existing_work.get("cbz_path") if existing_work else None)
-        or (CBZ_DIR / f"{resolved_work_id}.cbz")
+        if (existing_work and existing_work.get("cbz_path"))
+        else (CBZ_DIR / f"{resolved_work_id}.cbz")
     )
     cbz_file = Path(cbz_path)
     if not cbz_file.exists():
@@ -790,12 +806,14 @@ def ingest_editor_page(
     rating_before = _normalize_rating(
         str(
             metadata.get("rating")
-            or (existing_work.get("rating") if existing_work else "Not Rated")
+            if metadata.get("rating")
+            else (existing_work.get("rating") if existing_work else "Not Rated")
         )
     )
     chosen_rating = _elevate_rating(
         metadata.get("rating")
-        or (existing_work.get("rating") if existing_work else "Not Rated"),
+        if metadata.get("rating")
+        else (existing_work.get("rating") if existing_work else "Not Rated"),
         auto_rating,
     )
 
@@ -805,12 +823,14 @@ def ingest_editor_page(
         "title": title,
         "summary": str(
             metadata.get("summary")
-            or (existing_work.get("summary") if existing_work else "")
+            if metadata.get("summary")
+            else (existing_work.get("summary") if existing_work else "")
         ),
         "rating": chosen_rating,
         "warnings": str(
             metadata.get("warnings")
-            or (
+            if metadata.get("warnings")
+            else (
                 existing_work.get("warnings")
                 if existing_work
                 else "No Archive Warnings Apply"
@@ -818,21 +838,27 @@ def ingest_editor_page(
         ),
         "language": str(
             metadata.get("language")
-            or (existing_work.get("language") if existing_work else "en")
+            if metadata.get("language")
+            else (existing_work.get("language") if existing_work else "en")
         ),
         "status": status,
         "creators": existing_work.get("creators", []) if existing_work else [],
         "series": metadata.get("series")
-        or (existing_work.get("series_name") if existing_work else None),
+        if metadata.get("series")
+        else (existing_work.get("series_name") if existing_work else None),
         "series_index": metadata.get("series_index")
-        or (existing_work.get("series_index") if existing_work else None),
+        if metadata.get("series_index")
+        else (existing_work.get("series_index") if existing_work else None),
         "published_at": metadata.get("published_at")
-        or (existing_work.get("published_at") if existing_work else None),
+        if metadata.get("published_at")
+        else (existing_work.get("published_at") if existing_work else None),
         "cover_page_index": cover_page_index,
         "page_count": len(all_pages),
         "cbz_path": str(cbz_file),
         "uploader_username": str(
-            existing_work.get("uploader_username") or uploader_username
+            existing_work.get("uploader_username")
+            if existing_work.get("uploader_username")
+            else uploader_username
         )
         if existing_work
         else uploader_username,
@@ -866,7 +892,7 @@ def ingest_editor_page(
 
 
 def _upsert_existing_work(
-    existing_work: dict[str, object], pages: list[dict[str, object]]
+    existing_work: dict[str, object], pages: list[WorkPageRow]
 ) -> None:
     cover_page_index = _as_int(existing_work.get("cover_page_index", 1), 1)
     work: dict[str, object] = {
@@ -895,7 +921,11 @@ def _require_editor_owner(work_id: str, uploader_username: str) -> dict[str, obj
     if not existing_work:
         raise FileNotFoundError(f"Work not found: {work_id}")
 
-    existing_uploader = str(existing_work.get("uploader_username") or "")
+    existing_uploader = str(
+        existing_work.get("uploader_username")
+        if existing_work.get("uploader_username")
+        else ""
+    )
     if existing_uploader and existing_uploader != uploader_username:
         raise PermissionError("Only the original uploader can manage editor pages")
     return existing_work
@@ -903,12 +933,15 @@ def _require_editor_owner(work_id: str, uploader_username: str) -> dict[str, obj
 
 def _chapter_seed_members_from_range(
     page_order: list[str],
-    chapter: dict[str, object],
+    chapter: WorkChapterRow,
 ) -> list[str]:
-    start_page = _as_int(chapter.get("start_page", 1), 1)
-    end_page = _as_int(chapter.get("end_page", start_page), start_page)
-    start_page = max(1, min(start_page, len(page_order) or 1))
-    end_page = max(start_page, min(end_page, len(page_order) or start_page))
+    start_page = chapter["start_page"]
+    end_page = chapter["end_page"]
+    page_order_len_or_one = len(page_order) if len(page_order) else 1
+    start_page = max(1, min(start_page, page_order_len_or_one))
+    end_page = max(
+        start_page, min(end_page, len(page_order) if len(page_order) else start_page)
+    )
     return page_order[start_page - 1 : end_page]
 
 
@@ -966,7 +999,7 @@ def editor_replace_page_image(
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
     current_page = next(
-        (p for p in pages if _as_int(p.get("page_index", 0), 0) == page_index),
+        (p for p in pages if p["page_index"] == page_index),
         None,
     )
     if not current_page:
@@ -974,7 +1007,7 @@ def editor_replace_page_image(
 
     pages_dir = WORKS_DIR / work_id / "pages"
     thumbs_dir = WORKS_DIR / work_id / "thumbs"
-    old_image_name = _as_str(current_page.get("image_filename", ""))
+    old_image_name = _as_str(current_page["image_filename"], "")
 
     width: int | None = None
     height: int | None = None
@@ -1000,9 +1033,9 @@ def editor_replace_page_image(
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert replacement page image") from exc
 
-    updated_pages: list[dict[str, object]] = []
+    updated_pages: list[WorkPageRow] = []
     for page in pages:
-        if _as_int(page.get("page_index", 0), 0) == page_index:
+        if page["page_index"] == page_index:
             updated_pages.append(
                 {
                     "page_index": page_index,
@@ -1058,24 +1091,24 @@ def editor_delete_page(
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
     current_page = next(
-        (p for p in pages if _as_int(p.get("page_index", 0), 0) == page_index),
+        (p for p in pages if p["page_index"] == page_index),
         None,
     )
     if not current_page:
         raise FileNotFoundError(f"Page index not found: {page_index}")
 
-    image_name = _as_str(current_page.get("image_filename", ""))
+    image_name = _as_str(current_page["image_filename"], "")
 
-    remaining = [p for p in pages if _as_int(p.get("page_index", 0), 0) != page_index]
-    renumbered: list[dict[str, object]] = []
+    remaining = [p for p in pages if p["page_index"] != page_index]
+    renumbered: list[WorkPageRow] = []
     for idx, page in enumerate(remaining, start=1):
         renumbered.append(
             {
                 "page_index": idx,
-                "image_filename": page.get("image_filename"),
-                "thumb_filename": page.get("thumb_filename"),
-                "width": page.get("width"),
-                "height": page.get("height"),
+                "image_filename": page["image_filename"],
+                "thumb_filename": page["thumb_filename"],
+                "width": page["width"],
+                "height": page["height"],
             }
         )
 
@@ -1114,15 +1147,15 @@ def editor_move_page(
     source = pages.pop(from_index - 1)
     pages.insert(to_index - 1, source)
 
-    reordered: list[dict[str, object]] = []
+    reordered: list[WorkPageRow] = []
     for idx, page in enumerate(pages, start=1):
         reordered.append(
             {
                 "page_index": idx,
-                "image_filename": page.get("image_filename"),
-                "thumb_filename": page.get("thumb_filename"),
-                "width": page.get("width"),
-                "height": page.get("height"),
+                "image_filename": page["image_filename"],
+                "thumb_filename": page["thumb_filename"],
+                "width": page["width"],
+                "height": page["height"],
             }
         )
 
@@ -1154,9 +1187,9 @@ def editor_reorder_gallery(
     if not pages:
         raise ValueError("No pages found")
 
-    by_filename: dict[str, dict[str, object]] = {}
+    by_filename: dict[str, WorkPageRow] = {}
     for page in pages:
-        name = _as_str(page.get("image_filename", ""))
+        name = _as_str(page["image_filename"], "")
         if name:
             by_filename[name] = page
 
@@ -1170,16 +1203,16 @@ def editor_reorder_gallery(
     if len(unique_order) != len(by_filename):
         raise ValueError("Ordered page list does not match existing pages")
 
-    reordered: list[dict[str, object]] = []
+    reordered: list[WorkPageRow] = []
     for idx, name in enumerate(unique_order, start=1):
         page = by_filename[name]
         reordered.append(
             {
                 "page_index": idx,
-                "image_filename": page.get("image_filename"),
-                "thumb_filename": page.get("thumb_filename"),
-                "width": page.get("width"),
-                "height": page.get("height"),
+                "image_filename": page["image_filename"],
+                "thumb_filename": page["thumb_filename"],
+                "width": page["width"],
+                "height": page["height"],
             }
         )
 

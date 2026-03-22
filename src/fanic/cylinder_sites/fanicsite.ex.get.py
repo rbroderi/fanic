@@ -1,23 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from html import escape
 
-from fanic.cylinder_sites.common import (
-    ADMIN_USERNAME,
-    RequestLike,
-    ResponseLike,
-    current_user,
-    rating_badge_html,
-    render_html_template,
-    text_error,
-)
-from fanic.repository import (
-    can_view_work,
-    list_works,
-)
+from fanic.cylinder_sites.common import ADMIN_USERNAME
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import rating_badge_html
+from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import text_error
+from fanic.repository import WorkListItem
+from fanic.repository import can_view_work
+from fanic.repository import list_works
 
 
-def _work_grid_html(works: list[dict[str, object]], can_delete: bool) -> str:
+def _work_grid_html(works: Sequence[WorkListItem], can_delete: bool) -> str:
     if not works:
         return "<p>No works yet. Ingest a CBZ to get started.</p>"
 
@@ -25,7 +23,8 @@ def _work_grid_html(works: list[dict[str, object]], can_delete: bool) -> str:
     for work in works:
         work_id = escape(str(work.get("id", "")))
         title = escape(str(work.get("title", "Untitled")))
-        summary = escape(str(work.get("summary", "") or "No summary yet."))
+        summary_raw = str(work.get("summary", ""))
+        summary = escape(summary_raw if summary_raw else "No summary yet.")
         rating_html = rating_badge_html(work.get("rating", "Not Rated"))
         status = escape(str(work.get("status", "in_progress")))
         page_count = escape(str(work.get("page_count", 0)))

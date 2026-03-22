@@ -3,14 +3,18 @@ from __future__ import annotations
 import json
 import shutil
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NotRequired
+from typing import TypedDict
+from typing import cast
 
 import tomli_w
 
 from fanic.db import get_connection
-from fanic.paths import CBZ_DIR, WORKS_DIR
+from fanic.paths import CBZ_DIR
+from fanic.paths import WORKS_DIR
 from fanic.utils import slugify
 
 TAG_FIELD_TO_TYPE = {
@@ -51,6 +55,23 @@ class WorkVersionSummary(TypedDict):
     page_count: int
 
 
+class WorkPageRow(TypedDict):
+    page_index: int
+    image_filename: str
+    thumb_filename: str | None
+    width: int | None
+    height: int | None
+
+
+class WorkChapterRow(TypedDict):
+    id: int
+    chapter_index: int
+    title: str
+    start_page: int
+    end_page: int
+    created_at: str
+
+
 def _versions_dir_for_work(work_id: str) -> Path:
     return WORKS_DIR / work_id / "versions"
 
@@ -64,15 +85,53 @@ def _new_version_id() -> str:
     return now.strftime("%Y%m%dT%H%M%S_%fZ")
 
 
+def _to_int(value: object, default: int = 0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped_value = value.strip()
+        if not stripped_value:
+            return default
+        try:
+            return int(stripped_value)
+        except ValueError:
+            return default
+    return default
+
+
+def _list_of_strings(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in cast(list[object], value):
+        text = str(item)
+        if text.strip():
+            result.append(text)
+    return result
+
+
+def _as_string_object_dict(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    return {str(key): item for key, item in cast(dict[object, object], value).items()}
+
+
 def _strip_none_values(value: object) -> object:
-    if isinstance(value, dict):
+    value_dict = _as_string_object_dict(value)
+    if value_dict is not None:
         return {
-            str(key): _strip_none_values(item)
-            for key, item in value.items()
-            if item is not None
+            str(key_obj): _strip_none_values(item_obj)
+            for key_obj, item_obj in value_dict.items()
+            if item_obj is not None
         }
     if isinstance(value, list):
-        return [_strip_none_values(item) for item in value]
+        return [_strip_none_values(item) for item in cast(list[object], value)]
     return value
 
 
@@ -95,34 +154,32 @@ def sync_work_metadata_toml(work_id: str) -> None:
     tags: list[dict[str, object]] = []
     raw_tags = work.get("tags", [])
     if isinstance(raw_tags, list):
-        for tag in raw_tags:
-            if isinstance(tag, dict):
+        for tag in cast(list[object], raw_tags):
+            tag_map = _as_string_object_dict(tag)
+            if tag_map is not None:
                 tags.append(
                     {
-                        "name": str(tag.get("name", "")),
-                        "slug": str(tag.get("slug", "")),
-                        "type": str(tag.get("type", "")),
+                        "name": str(tag_map.get("name", "")),
+                        "slug": str(tag_map.get("slug", "")),
+                        "type": str(tag_map.get("type", "")),
                     }
                 )
 
     raw_chapters = list_work_chapters(work_id)
     chapters: list[dict[str, object]] = []
     for chapter in raw_chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
         chapters.append(
             {
-                "id": chapter_id,
-                "chapter_index": int(chapter.get("chapter_index", 0) or 0),
-                "title": str(chapter.get("title", "")),
-                "start_page": int(chapter.get("start_page", 1) or 1),
-                "end_page": int(chapter.get("end_page", 1) or 1),
-                "created_at": chapter.get("created_at"),
+                "id": chapter["id"],
+                "chapter_index": chapter["chapter_index"],
+                "title": chapter["title"],
+                "start_page": chapter["start_page"],
+                "end_page": chapter["end_page"],
+                "created_at": chapter["created_at"],
             }
         )
 
-    creators = work.get("creators", [])
-    if not isinstance(creators, list):
-        creators = []
+    creators = _list_of_strings(work.get("creators", []))
 
     payload = {
         "work": {
@@ -138,8 +195,8 @@ def sync_work_metadata_toml(work_id: str) -> None:
             "series_name": work.get("series_name"),
             "series_index": work.get("series_index"),
             "published_at": work.get("published_at"),
-            "cover_page_index": int(work.get("cover_page_index", 1) or 1),
-            "page_count": int(work.get("page_count", 0) or 0),
+            "cover_page_index": _to_int(work.get("cover_page_index", 1), 1),
+            "page_count": _to_int(work.get("page_count", 0), 0),
             "cbz_path": str(work.get("cbz_path", "")),
             "uploader_username": work.get("uploader_username"),
             "created_at": work.get("created_at"),
@@ -147,7 +204,7 @@ def sync_work_metadata_toml(work_id: str) -> None:
             "last_metadata_editor": work.get("last_metadata_editor"),
             "last_metadata_edited_at": work.get("last_metadata_edited_at"),
             "last_metadata_edited_by_admin": bool(
-                int(work.get("last_metadata_edited_by_admin", 0) or 0)
+                _to_int(work.get("last_metadata_edited_by_admin", 0), 0)
             ),
         },
         "tags": tags,
@@ -156,7 +213,10 @@ def sync_work_metadata_toml(work_id: str) -> None:
         "comments": list_work_comments(work_id),
     }
 
-    clean_payload = _strip_none_values(payload)
+    clean_payload_obj = _strip_none_values(payload)
+    clean_payload = _as_string_object_dict(clean_payload_obj)
+    if clean_payload is None:
+        return
     work_dir = WORKS_DIR / work_id
     work_dir.mkdir(parents=True, exist_ok=True)
     metadata_toml_path = work_dir / "metadata.toml"
@@ -313,9 +373,7 @@ def list_tag_names(tag_type: str, limit: int = 200) -> list[str]:
 def upsert_work(work: dict[str, object]) -> None:
     warnings_value = work.get("warnings", "No Archive Warnings Apply")
     if isinstance(warnings_value, list):
-        warnings_text = ", ".join(
-            str(item) for item in warnings_value if str(item).strip()
-        )
+        warnings_text = ", ".join(_list_of_strings(cast(object, warnings_value)))
     else:
         warnings_text = str(warnings_value)
 
@@ -358,8 +416,8 @@ def upsert_work(work: dict[str, object]) -> None:
                 work.get("series"),
                 work.get("series_index"),
                 work.get("published_at"),
-                int(work.get("cover_page_index", 1)),
-                int(work["page_count"]),
+                _to_int(work.get("cover_page_index", 1), 1),
+                _to_int(work.get("page_count", 0), 0),
                 work["cbz_path"],
                 work.get("uploader_username"),
             ),
@@ -384,9 +442,7 @@ def update_work_metadata(
 ) -> None:
     warnings_value = metadata.get("warnings", "")
     if isinstance(warnings_value, list):
-        warnings_text = ", ".join(
-            str(item) for item in warnings_value if str(item).strip()
-        )
+        warnings_text = ", ".join(_list_of_strings(cast(object, warnings_value)))
     else:
         warnings_text = str(warnings_value)
 
@@ -417,9 +473,11 @@ def update_work_metadata(
                 warnings_text,
                 metadata.get("language", "en"),
                 metadata.get("status", "in_progress"),
-                metadata.get("series", "") or None,
+                metadata.get("series", "") if metadata.get("series", "") else None,
                 metadata.get("series_index"),
-                metadata.get("published_at", "") or None,
+                metadata.get("published_at", "")
+                if metadata.get("published_at", "")
+                else None,
                 editor_username,
                 1 if edited_by_admin else 0,
                 work_id,
@@ -430,7 +488,7 @@ def update_work_metadata(
     sync_work_metadata_toml(work_id)
 
 
-def replace_work_pages(work_id: str, pages: list[dict[str, object]]) -> None:
+def replace_work_pages(work_id: str, pages: list[WorkPageRow]) -> None:
     with get_connection() as connection:
         connection.execute("DELETE FROM pages WHERE work_id = ?", (work_id,))
         for page in pages:
@@ -442,8 +500,8 @@ def replace_work_pages(work_id: str, pages: list[dict[str, object]]) -> None:
                 """,
                 (
                     work_id,
-                    int(page["page_index"]),
-                    page["image_filename"],
+                    _to_int(page.get("page_index", 0), 0),
+                    str(page.get("image_filename", "")),
                     page.get("thumb_filename"),
                     page.get("width"),
                     page.get("height"),
@@ -474,20 +532,23 @@ def replace_work_tags(work_id: str, metadata: dict[str, object]) -> None:
     tag_pairs: list[tuple[str, str]] = []
 
     for field_name, tag_type in TAG_FIELD_TO_TYPE.items():
-        for name in metadata.get(field_name, []):
-            if name:
-                tag_pairs.append((name, tag_type))
+        names_value = metadata.get(field_name, [])
+        if isinstance(names_value, list):
+            for name in cast(list[object], names_value):
+                if isinstance(name, str) and name:
+                    tag_pairs.append((name, tag_type))
 
     rating = metadata.get("rating")
-    if rating:
+    if isinstance(rating, str) and rating:
         tag_pairs.append((rating, "rating"))
 
     warnings = metadata.get("warnings", [])
     if isinstance(warnings, str):
         warnings = [warnings]
-    for warning in warnings:
-        if warning:
-            tag_pairs.append((warning, "archive_warning"))
+    if isinstance(warnings, list):
+        for warning in cast(list[object], warnings):
+            if isinstance(warning, str) and warning:
+                tag_pairs.append((warning, "archive_warning"))
 
     with get_connection() as connection:
         connection.execute(
@@ -506,7 +567,7 @@ def replace_work_tags(work_id: str, metadata: dict[str, object]) -> None:
 
 
 def list_works(filters: dict[str, str]) -> list[WorkListItem]:
-    where = []
+    where: list[str] = []
     params: list[object] = []
 
     search = filters.get("q")
@@ -686,8 +747,15 @@ def create_work_version_snapshot(
     chapters = list_work_chapters(work_id)
     chapters_with_members: list[dict[str, object]] = []
     for chapter in chapters:
-        chapter_copy = dict(chapter)
-        chapter_id = int(chapter_copy.get("id", 0) or 0)
+        chapter_copy: dict[str, object] = {
+            "id": chapter["id"],
+            "chapter_index": chapter["chapter_index"],
+            "title": chapter["title"],
+            "start_page": chapter["start_page"],
+            "end_page": chapter["end_page"],
+            "created_at": chapter["created_at"],
+        }
+        chapter_id = chapter["id"]
         chapter_copy["members"] = list_work_chapter_members(chapter_id)
         chapters_with_members.append(chapter_copy)
 
@@ -696,21 +764,21 @@ def create_work_version_snapshot(
     version_dir = _versions_dir_for_work(work_id) / version_id
     version_dir.mkdir(parents=True, exist_ok=False)
 
-    manifest = {
+    manifest: dict[str, object] = {
         "version_id": version_id,
         "created_at": created_at,
         "work_id": work_id,
         "action": action,
-        "actor": actor or "",
-        "details": details or {},
+        "actor": actor if actor else "",
+        "details": details if details else {},
         "work": {
             "id": str(work.get("id", work_id)),
             "slug": str(work.get("slug", "")),
             "title": str(work.get("title", "Untitled")),
             "rating": str(work.get("rating", "Not Rated")),
             "status": str(work.get("status", "in_progress")),
-            "cover_page_index": int(work.get("cover_page_index", 1) or 1),
-            "page_count": int(work.get("page_count", 0) or 0),
+            "cover_page_index": _to_int(work.get("cover_page_index", 1), 1),
+            "page_count": _to_int(work.get("page_count", 0), 0),
             "updated_at": str(work.get("updated_at", "")),
         },
         "pages": [dict(page) for page in pages],
@@ -737,9 +805,7 @@ def get_work_version_manifest(
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    if not isinstance(raw, dict):
-        return None
-    return raw
+    return _as_string_object_dict(raw)
 
 
 def list_work_versions(work_id: str, limit: int = 50) -> list[WorkVersionSummary]:
@@ -765,23 +831,22 @@ def list_work_versions(work_id: str, limit: int = 50) -> list[WorkVersionSummary
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if not isinstance(raw, dict):
+        raw_map = _as_string_object_dict(raw)
+        if raw_map is None:
             continue
 
-        work_block = raw.get("work")
+        work_block = raw_map.get("work")
         page_count = 0
-        if isinstance(work_block, dict):
-            try:
-                page_count = int(work_block.get("page_count", 0) or 0)
-            except (TypeError, ValueError):
-                page_count = 0
+        work_block_map = _as_string_object_dict(work_block)
+        if work_block_map is not None:
+            page_count = _to_int(work_block_map.get("page_count", 0), 0)
 
         versions.append(
             {
-                "version_id": str(raw.get("version_id", path.name)),
-                "created_at": str(raw.get("created_at", "")),
-                "action": str(raw.get("action", "")),
-                "actor": str(raw.get("actor", "")),
+                "version_id": str(raw_map.get("version_id", path.name)),
+                "created_at": str(raw_map.get("created_at", "")),
+                "action": str(raw_map.get("action", "")),
+                "actor": str(raw_map.get("actor", "")),
                 "page_count": page_count,
             }
         )
@@ -802,7 +867,7 @@ def get_page_files(work_id: str, page_index: int) -> dict[str, str] | None:
         return {"image": row["image_filename"], "thumb": row["thumb_filename"]}
 
 
-def list_work_page_rows(work_id: str) -> list[dict[str, object]]:
+def list_work_page_rows(work_id: str) -> list[WorkPageRow]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -813,14 +878,33 @@ def list_work_page_rows(work_id: str) -> list[dict[str, object]]:
             """,
             (work_id,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    page_rows: list[WorkPageRow] = []
+    for row in rows:
+        page_rows.append(
+            {
+                "page_index": _to_int(row["page_index"], 0),
+                "image_filename": str(row["image_filename"]),
+                "thumb_filename": (
+                    str(row["thumb_filename"])
+                    if row["thumb_filename"] is not None
+                    else None
+                ),
+                "width": (
+                    _to_int(row["width"], 0) if row["width"] is not None else None
+                ),
+                "height": (
+                    _to_int(row["height"], 0) if row["height"] is not None else None
+                ),
+            }
+        )
+    return page_rows
 
 
 def list_work_page_image_names(work_id: str) -> list[str]:
-    return [str(row.get("image_filename", "")) for row in list_work_page_rows(work_id)]
+    return [row["image_filename"] for row in list_work_page_rows(work_id)]
 
 
-def list_work_chapters(work_id: str) -> list[dict[str, object]]:
+def list_work_chapters(work_id: str) -> list[WorkChapterRow]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -831,7 +915,19 @@ def list_work_chapters(work_id: str) -> list[dict[str, object]]:
             """,
             (work_id,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    chapter_rows: list[WorkChapterRow] = []
+    for row in rows:
+        chapter_rows.append(
+            {
+                "id": _to_int(row["id"], 0),
+                "chapter_index": _to_int(row["chapter_index"], 0),
+                "title": str(row["title"]),
+                "start_page": _to_int(row["start_page"], 1),
+                "end_page": _to_int(row["end_page"], 1),
+                "created_at": str(row["created_at"]),
+            }
+        )
+    return chapter_rows
 
 
 def add_work_chapter(
@@ -853,7 +949,7 @@ def add_work_chapter(
             """,
             (work_id, next_idx, title, start_page, end_page),
         )
-        chapter_id = int(cursor.lastrowid or 0)
+        chapter_id = int(cursor.lastrowid if cursor.lastrowid else 0)
 
     page_images = list_work_page_image_names(work_id)
     selected = page_images[max(0, start_page - 1) : max(0, end_page)]

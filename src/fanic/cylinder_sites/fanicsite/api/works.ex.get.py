@@ -66,11 +66,15 @@ def _build_comicinfo_xml(work: dict[str, object]) -> str:
     ET.SubElement(root, "Summary").text = str(work.get("summary", ""))
     ET.SubElement(root, "LanguageISO").text = str(work.get("language", "en"))
 
-    series_name = str(work.get("series_name", "") or "").strip()
+    series_name = str(
+        work.get("series_name", "") if work.get("series_name", "") else ""
+    ).strip()
     if series_name:
         ET.SubElement(root, "Series").text = series_name
 
-    series_index = str(work.get("series_index", "") or "").strip()
+    series_index = str(
+        work.get("series_index", "") if work.get("series_index", "") else ""
+    ).strip()
     if series_index:
         ET.SubElement(root, "Number").text = series_index
 
@@ -84,15 +88,17 @@ def _build_comicinfo_xml(work: dict[str, object]) -> str:
 
     ET.SubElement(root, "AgeRating").text = str(work.get("rating", "Not Rated"))
 
-    published_at = str(work.get("published_at", "") or "").strip()
+    published_at = str(
+        work.get("published_at", "") if work.get("published_at", "") else ""
+    ).strip()
     if published_at:
         parts = published_at.split("-")
         if len(parts) == 3:
             year, month, day = parts
             if year:
                 ET.SubElement(root, "Year").text = year
-                ET.SubElement(root, "Month").text = month or "01"
-                ET.SubElement(root, "Day").text = day or "01"
+                ET.SubElement(root, "Month").text = month if month else "01"
+                ET.SubElement(root, "Day").text = day if day else "01"
 
     xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     return xml_bytes.decode("utf-8")
@@ -102,26 +108,36 @@ def _chapter_members_with_fallback(
     chapter: dict[str, object],
     page_order: list[str],
 ) -> list[str]:
-    chapter_id = int(chapter.get("id", 0) or 0)
+    chapter_id = int(chapter.get("id", 0) if chapter.get("id", 0) else 0)
     members = list_work_chapter_members(chapter_id)
     if members:
         return [name for name in members if name in page_order]
 
-    start_page = int(chapter.get("start_page", 1) or 1)
-    end_page = int(chapter.get("end_page", start_page) or start_page)
-    start_page = max(1, min(start_page, len(page_order) or 1))
-    end_page = max(start_page, min(end_page, len(page_order) or start_page))
+    start_page = int(
+        chapter.get("start_page", 1) if chapter.get("start_page", 1) else 1
+    )
+    end_page = int(
+        chapter.get("end_page", start_page)
+        if chapter.get("end_page", start_page)
+        else start_page
+    )
+    start_page = max(1, min(start_page, len(page_order) if len(page_order) else 1))
+    end_page = max(
+        start_page,
+        min(end_page, len(page_order) if len(page_order) else start_page),
+    )
     return page_order[start_page - 1 : end_page]
 
 
 def _chapter_folder_name(chapter_index: int, title: str) -> str:
-    base = slugify(title) or "chapter"
+    base_slug = slugify(title)
+    base = base_slug if base_slug else "chapter"
     return _safe_filename(f"chapter-{chapter_index:03d}-{base}", "chapter")
 
 
 def _safe_filename(name: str, fallback: str) -> str:
     safe = sanitize_filename(name, replacement_text="_").strip(" .")
-    return safe or fallback
+    return safe if safe else fallback
 
 
 def _current_export_key(work_id: str, work: dict[str, object]) -> str:
@@ -129,7 +145,7 @@ def _current_export_key(work_id: str, work: dict[str, object]) -> str:
     if versions:
         return f"version:{str(versions[0].get('version_id', ''))}"
     updated_at = str(work.get("updated_at", ""))
-    page_count = int(work.get("page_count", 0) or 0)
+    page_count = int(work.get("page_count", 0) if work.get("page_count", 0) else 0)
     return f"legacy:{updated_at}:{page_count}"
 
 
@@ -157,7 +173,7 @@ def _write_cache_meta(cache_path: Path, payload: dict[str, object]) -> None:
 
 
 def _resolve_archive_path(work_id: str, work: dict[str, object]) -> Path:
-    cbz_path = str(work.get("cbz_path", "") or "").strip()
+    cbz_path = str(work.get("cbz_path", "") if work.get("cbz_path", "") else "").strip()
     if cbz_path:
         return Path(cbz_path)
     return CBZ_DIR / f"{work_id}.cbz"
@@ -176,8 +192,13 @@ def _build_cbz_export(
     if chapters:
         assigned: set[str] = set()
         for chapter in chapters:
-            chapter_index = int(chapter.get("chapter_index", 0) or 0)
-            title = str(chapter.get("title", "Chapter")).strip() or "Chapter"
+            chapter_index = int(
+                chapter.get("chapter_index", 0)
+                if chapter.get("chapter_index", 0)
+                else 0
+            )
+            chapter_title = str(chapter.get("title", "Chapter")).strip()
+            title = chapter_title if chapter_title else "Chapter"
             folder_name = _chapter_folder_name(chapter_index, title)
             members = _chapter_members_with_fallback(chapter, page_order)
             for image_name in members:
@@ -192,8 +213,12 @@ def _build_cbz_export(
         archive.writestr("ComicInfo.xml", _build_comicinfo_xml(work))
 
         for page in pages:
-            page_index = int(page.get("page_index", 0) or 0)
-            image_filename = str(page.get("image_filename", "") or "").strip()
+            page_index = int(
+                page.get("page_index", 0) if page.get("page_index", 0) else 0
+            )
+            image_filename = str(
+                page.get("image_filename", "") if page.get("image_filename", "") else ""
+            ).strip()
             if not image_filename:
                 continue
 
@@ -203,7 +228,7 @@ def _build_cbz_export(
                     f"Missing page image for export: {image_filename}"
                 )
 
-            extension = source_path.suffix or ".avif"
+            extension = source_path.suffix if source_path.suffix else ".avif"
             base_name = _safe_filename(
                 f"{page_index:04d}{extension.lower()}",
                 f"{page_index:04d}.avif",
@@ -266,8 +291,12 @@ def _version_page_files(
         if candidate_index != page_index:
             continue
 
-        image_name = str(page.get("image_filename", "") or "").strip()
-        thumb_name = str(page.get("thumb_filename", "") or "").strip()
+        image_name = str(
+            page.get("image_filename", "") if page.get("image_filename", "") else ""
+        ).strip()
+        thumb_name = str(
+            page.get("thumb_filename", "") if page.get("thumb_filename", "") else ""
+        ).strip()
         return {"image": image_name, "thumb": thumb_name}
 
     return None

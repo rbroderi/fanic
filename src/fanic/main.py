@@ -4,9 +4,10 @@ import argparse
 import logging
 from pathlib import Path
 
-from fanic.cylinder_main import serve
+from fanic.cylinder_main import serve as serve
 from fanic.db import initialize_database
-from fanic.ingest import convert_existing_thumbs_to_avif, ingest_cbz
+from fanic.ingest import convert_existing_thumbs_to_avif
+from fanic.ingest import ingest_cbz
 from fanic.settings import get_settings
 
 

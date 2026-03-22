@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from fanic.cylinder_main import create_app, serve, startup
-
-# Keep a module-level app object for server tooling compatibility.
-app = create_app()
-
-__all__ = ["app", "create_app", "serve", "startup"]
+from fanic.cylinder_main import create_app as create_app
+from fanic.cylinder_main import serve as serve
+from fanic.cylinder_main import startup as startup

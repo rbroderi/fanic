@@ -19,7 +19,7 @@ def _message_block(request: RequestLike) -> tuple[str, str]:
         return ("Invalid username or password. Please try again.", "error")
 
     if msg == "success":
-        user_text = username or "user"
+        user_text = username if username else "user"
         return (f"Success: logged in as {user_text}.", "success")
 
     if msg == "logged_out":

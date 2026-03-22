@@ -69,7 +69,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         try:
             with TemporaryDirectory() as temp_dir:
                 cbz_path = (
-                    Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
+                    Path(temp_dir)
+                    / Path(
+                        cbz_upload.filename if cbz_upload.filename else "upload.cbz"
+                    ).name
                 )
                 cbz_upload.save(cbz_path)
                 metadata = extract_comicinfo_metadata_from_cbz(cbz_path)
@@ -106,7 +109,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         form_metadata = _collect_metadata_from_form(request)
         with TemporaryDirectory() as temp_dir:
-            cbz_path = Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
+            cbz_path = (
+                Path(temp_dir)
+                / Path(
+                    cbz_upload.filename if cbz_upload.filename else "upload.cbz"
+                ).name
+            )
             cbz_upload.save(cbz_path)
 
             metadata_path: Path | None = None
@@ -186,10 +194,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "style": str(moderation.get("style", "unknown")),
                     "style_debug": moderation.get("style_debug", {}),
                     "style_confidences": moderation.get("style_confidences", {}),
-                    "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                    "nsfw_score": float(
+                        moderation.get("nsfw_score", 0.0)
+                        if moderation.get("nsfw_score", 0.0)
+                        else 0.0
+                    ),
                     "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                     "reasons": reasons,
-                    "source_member": str(moderation.get("source_member", "") or ""),
+                    "source_member": str(
+                        moderation.get("source_member", "")
+                        if moderation.get("source_member", "")
+                        else ""
+                    ),
                 },
             },
             400,

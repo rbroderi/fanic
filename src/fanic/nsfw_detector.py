@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, cast
+from typing import Any
+from typing import cast
 
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]

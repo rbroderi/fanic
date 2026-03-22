@@ -6,7 +6,9 @@ import time
 from html import escape
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Protocol, cast
+from typing import Callable
+from typing import Protocol
+from typing import cast
 
 from authlib.jose import jwt
 from authlib.jose.errors import JoseError
@@ -143,7 +145,7 @@ def send_file(
         return text_error(response, "Not found", 404)
 
     content_type, _ = mimetypes.guess_type(str(path))
-    response.content_type = content_type or "application/octet-stream"
+    response.content_type = content_type if content_type else "application/octet-stream"
     response.set_data(path.read_bytes())
 
     if filename:
@@ -231,7 +233,8 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
 
 
 def rating_badge_html(rating: object) -> str:
-    safe_rating = str(rating or "Not Rated").strip() or "Not Rated"
+    rating_text = str(rating if rating else "Not Rated").strip()
+    safe_rating = rating_text if rating_text else "Not Rated"
     icon_name = RATING_ICON_BY_NAME.get(safe_rating)
     safe_label = escape(safe_rating)
     if not icon_name:
@@ -274,9 +277,12 @@ def save_uploaded_ingest(
     cbz_upload: FileUploadLike,
     metadata_upload: FileUploadLike | None,
 ) -> dict[str, object]:
-    cbz_name = Path(cbz_upload.filename or "upload.cbz").name
+    cbz_filename = cbz_upload.filename if cbz_upload.filename else "upload.cbz"
+    cbz_name = Path(cbz_filename).name
     metadata_name = (
-        Path(metadata_upload.filename or "metadata.json").name
+        Path(
+            metadata_upload.filename if metadata_upload.filename else "metadata.json"
+        ).name
         if metadata_upload is not None
         else "metadata.json"
     )

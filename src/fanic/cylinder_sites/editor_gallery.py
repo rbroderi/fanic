@@ -4,6 +4,8 @@ import re
 from html import escape
 from pathlib import Path
 
+from _typeshed import ConvertibleToInt
+
 from fanic.repository import list_work_chapter_members
 
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
@@ -21,25 +23,32 @@ def _natural_filename_sort_key(filename: str) -> tuple[object, ...]:
 
 
 def _chapter_seed_members_from_range(
-    page_order: list[str], chapter: dict[str, object]
+    page_order: list[str], chapter: dict[str, ConvertibleToInt]
 ) -> list[str]:
-    start_page = int(chapter.get("start_page", 1) or 1)
-    end_page = int(chapter.get("end_page", start_page) or start_page)
-    start_page = max(1, min(start_page, len(page_order) or 1))
-    end_page = max(start_page, min(end_page, len(page_order) or start_page))
+    start_page_raw = chapter.get("start_page", 1)
+    start_page = int(start_page_raw if start_page_raw else 1)
+    end_page_raw = chapter.get("end_page", start_page)
+    end_page = int(end_page_raw if end_page_raw else start_page)
+    page_order_len_or_one = len(page_order) if len(page_order) else 1
+    start_page = max(1, min(start_page, page_order_len_or_one))
+    end_page = max(
+        start_page,
+        min(end_page, len(page_order) if len(page_order) else start_page),
+    )
     return page_order[start_page - 1 : end_page]
 
 
 def _page_thumb_button_html(
     work_id: str,
-    page_by_filename: dict[str, dict[str, object]],
+    page_by_filename: dict[str, dict[str, ConvertibleToInt]],
     image_filename: str,
 ) -> str:
     page = page_by_filename.get(image_filename)
     if not page:
         return ""
 
-    page_index = int(page.get("page_index", 0) or 0)
+    page_index_raw = page.get("page_index", 0)
+    page_index = int(page_index_raw if page_index_raw else 0)
     safe_name = escape(image_filename)
     safe_work_id = escape(work_id)
     return (
@@ -54,8 +63,8 @@ def _page_thumb_button_html(
 
 def render_editor_page_gallery_html(
     work_id: str,
-    pages: list[dict[str, object]],
-    chapters: list[dict[str, object]],
+    pages: list[dict[str, ConvertibleToInt]],
+    chapters: list[dict[str, ConvertibleToInt]],
 ) -> str:
     if not work_id:
         return ""
@@ -65,12 +74,12 @@ def render_editor_page_gallery_html(
     ordered_pages = sorted(
         pages,
         key=lambda page: (
-            int(page.get("page_index", 0) or 0),
+            int(page.get("page_index", 0) if page.get("page_index", 0) else 0),
             _natural_filename_sort_key(str(page.get("image_filename", ""))),
         ),
     )
 
-    page_by_filename: dict[str, dict[str, object]] = {}
+    page_by_filename: dict[str, dict[str, ConvertibleToInt]] = {}
     page_order: list[str] = []
     for page in ordered_pages:
         image_filename = str(page.get("image_filename", "")).strip()
@@ -83,8 +92,10 @@ def render_editor_page_gallery_html(
     section_parts: list[str] = []
 
     for chapter in chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
-        chapter_index = int(chapter.get("chapter_index", 0) or 0)
+        chapter_id_raw = chapter.get("id", 0)
+        chapter_id = int(chapter_id_raw if chapter_id_raw else 0)
+        chapter_index_raw = chapter.get("chapter_index", 0)
+        chapter_index = int(chapter_index_raw if chapter_index_raw else 0)
         title = escape(str(chapter.get("title", "Untitled Chapter")))
         members = list_work_chapter_members(chapter_id)
         if not members:
@@ -128,7 +139,7 @@ def render_editor_page_gallery_html(
 
 def render_editor_chapters_html(
     work_id: str,
-    chapters: list[dict[str, object]],
+    chapters: list[dict[str, ConvertibleToInt]],
     *,
     form_action: str,
     action_field_name: str,
@@ -149,11 +160,15 @@ def render_editor_chapters_html(
 
     rows: list[str] = []
     for chapter in chapters:
-        chapter_id = int(chapter.get("id", 0) or 0)
-        chapter_index = int(chapter.get("chapter_index", 0) or 0)
+        chapter_id_raw = chapter.get("id", 0)
+        chapter_id = int(chapter_id_raw if chapter_id_raw else 0)
+        chapter_index_raw = chapter.get("chapter_index", 0)
+        chapter_index = int(chapter_index_raw if chapter_index_raw else 0)
         title = escape(str(chapter.get("title", "Untitled Chapter")))
-        start_page = int(chapter.get("start_page", 1) or 1)
-        end_page = int(chapter.get("end_page", start_page) or start_page)
+        start_page_raw = chapter.get("start_page", 1)
+        start_page = int(start_page_raw if start_page_raw else 1)
+        end_page_raw = chapter.get("end_page", start_page)
+        end_page = int(end_page_raw if end_page_raw else start_page)
         rows.append(
             """
             <article class="card info-card editor-row">

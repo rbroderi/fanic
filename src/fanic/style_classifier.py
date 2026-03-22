@@ -5,21 +5,15 @@ import os
 import sys
 import time
 from contextlib import AbstractContextManager
-from typing import Any, cast
+from typing import Any
+from typing import cast
 
 import open_clip
+import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
 import torch
 from tqdm import tqdm
 
 from fanic.settings import get_settings
-
-try:
-    # Ensure PIL AVIF codec is registered when available.
-    import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
-
-    _ = pillow_avif
-except Exception:
-    pillow_avif = None
 
 _MODEL_NAME = "ViT-L-14"
 _MODEL_PRETRAINED = "openai"

@@ -43,3 +43,9 @@ reportUnusedCallResult = "none"
 reportAny = "none"
 reportExplicitAny = "none"
 reportImplicitStringConcatenation = "none"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.isort]
+force-single-line = true

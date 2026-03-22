@@ -45,8 +45,16 @@ def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
         "summary": request.form.get("summary", "").strip(),
         "rating": request.form.get("rating", "").strip(),
         "warnings": _csv(request.form.get("warnings", "")),
-        "status": request.form.get("status", "").strip() or "in_progress",
-        "language": request.form.get("language", "").strip() or "en",
+        "status": (
+            request.form.get("status", "").strip()
+            if request.form.get("status", "").strip()
+            else "in_progress"
+        ),
+        "language": (
+            request.form.get("language", "").strip()
+            if request.form.get("language", "").strip()
+            else "en"
+        ),
         "series": request.form.get("series", "").strip(),
         "series_index": request.form.get("series_index", "").strip(),
         "published_at": request.form.get("published_at", "").strip(),
@@ -69,9 +77,21 @@ def _editor_state_from_form(request: RequestLike) -> dict[str, str]:
     editor_work_id = request.form.get("editor_work_id", "").strip()
     editor_title = request.form.get("editor_title", "").strip()
     editor_summary = request.form.get("editor_summary", "").strip()
-    editor_rating = request.form.get("editor_rating", "").strip() or "Not Rated"
-    editor_status = request.form.get("editor_status", "").strip() or "in_progress"
-    editor_language = request.form.get("editor_language", "").strip() or "en"
+    editor_rating = (
+        request.form.get("editor_rating", "").strip()
+        if request.form.get("editor_rating", "").strip()
+        else "Not Rated"
+    )
+    editor_status = (
+        request.form.get("editor_status", "").strip()
+        if request.form.get("editor_status", "").strip()
+        else "in_progress"
+    )
+    editor_language = (
+        request.form.get("editor_language", "").strip()
+        if request.form.get("editor_language", "").strip()
+        else "en"
+    )
 
     if editor_work_id and (not editor_title or not editor_summary):
         work = get_work(editor_work_id)
@@ -181,7 +201,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             override_path: Path | None = None
             with TemporaryDirectory() as temp_dir:
                 cbz_path = (
-                    Path(temp_dir) / Path(cbz_upload.filename or "upload.cbz").name
+                    Path(temp_dir)
+                    / Path(
+                        cbz_upload.filename if cbz_upload.filename else "upload.cbz"
+                    ).name
                 )
                 cbz_upload.save(cbz_path)
                 if metadata:
@@ -222,16 +245,29 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 )
 
             work_id = str(result.get("work_id", ""))
-            work = get_work(work_id) or {}
+            fetched_work = get_work(work_id)
+            work = fetched_work if fetched_work else {}
             editor_state = {
                 "editor_work_id": work_id,
-                "editor_title": str(work.get("title", "") or ""),
-                "editor_summary": str(work.get("summary", "") or ""),
-                "editor_rating": str(work.get("rating", "Not Rated") or "Not Rated"),
-                "editor_status": str(
-                    work.get("status", "in_progress") or "in_progress"
+                "editor_title": str(
+                    work.get("title", "") if work.get("title", "") else ""
                 ),
-                "editor_language": str(work.get("language", "en") or "en"),
+                "editor_summary": str(
+                    work.get("summary", "") if work.get("summary", "") else ""
+                ),
+                "editor_rating": str(
+                    work.get("rating", "Not Rated")
+                    if work.get("rating", "Not Rated")
+                    else "Not Rated"
+                ),
+                "editor_status": str(
+                    work.get("status", "in_progress")
+                    if work.get("status", "in_progress")
+                    else "in_progress"
+                ),
+                "editor_language": str(
+                    work.get("language", "en") if work.get("language", "en") else "en"
+                ),
             }
 
             return _render_editor_result(
@@ -262,7 +298,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             if isinstance(reasons_obj, list):
                 reasons = [str(reason) for reason in reasons_obj]
 
-            source_member = str(moderation.get("source_member", "") or "")
+            source_member = str(
+                moderation.get("source_member", "")
+                if moderation.get("source_member", "")
+                else ""
+            )
             source_suffix = f" ({source_member})" if source_member else ""
             return render_ingest_page(
                 request,
@@ -283,7 +323,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         "style": str(moderation.get("style", "unknown")),
                         "style_debug": moderation.get("style_debug", {}),
                         "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_score": float(
+                            moderation.get("nsfw_score", 0.0)
+                            if moderation.get("nsfw_score", 0.0)
+                            else 0.0
+                        ),
                         "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                         "reasons": reasons,
                         "source_member": source_member,
@@ -339,14 +383,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         try:
             with TemporaryDirectory() as temp_dir:
                 page_path = (
-                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                    Path(temp_dir)
+                    / Path(
+                        page_upload.filename if page_upload.filename else "page.png"
+                    ).name
                 )
                 page_upload.save(page_path)
                 result = ingest_editor_page(
                     image_path=page_path,
                     metadata=editor_metadata,
                     uploader_username=username,
-                    work_id=editor_state["editor_work_id"] or None,
+                    work_id=(
+                        editor_state["editor_work_id"]
+                        if editor_state["editor_work_id"]
+                        else None
+                    ),
                 )
 
             work_id = str(result.get("work_id", ""))
@@ -396,7 +447,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         "style": str(moderation.get("style", "unknown")),
                         "style_debug": moderation.get("style_debug", {}),
                         "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_score": float(
+                            moderation.get("nsfw_score", 0.0)
+                            if moderation.get("nsfw_score", 0.0)
+                            else 0.0
+                        ),
                         "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                         "reasons": reasons,
                     },
@@ -426,7 +481,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             page_index = int(request.form.get("page_index", "0"))
             with TemporaryDirectory() as temp_dir:
                 page_path = (
-                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                    Path(temp_dir)
+                    / Path(
+                        page_upload.filename if page_upload.filename else "page.png"
+                    ).name
                 )
                 page_upload.save(page_path)
                 result = editor_replace_page_image(
@@ -475,7 +533,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         "style": str(moderation.get("style", "unknown")),
                         "style_debug": moderation.get("style_debug", {}),
                         "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(moderation.get("nsfw_score", 0.0) or 0.0),
+                        "nsfw_score": float(
+                            moderation.get("nsfw_score", 0.0)
+                            if moderation.get("nsfw_score", 0.0)
+                            else 0.0
+                        ),
                         "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                         "reasons": reasons,
                     },
@@ -587,7 +649,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if action == "editor-add-chapter":
         editor_state = _editor_state_from_form(request)
         try:
-            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            title = (
+                request.form.get("chapter_title", "").strip()
+                if request.form.get("chapter_title", "").strip()
+                else "Untitled Chapter"
+            )
             start_page = int(request.form.get("chapter_start_page", "0"))
             end_page = int(request.form.get("chapter_end_page", "0"))
             result = editor_add_chapter(
@@ -645,7 +711,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         editor_state = _editor_state_from_form(request)
         try:
             chapter_id = int(request.form.get("chapter_id", "0"))
-            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            title = (
+                request.form.get("chapter_title", "").strip()
+                if request.form.get("chapter_title", "").strip()
+                else "Untitled Chapter"
+            )
             start_page = int(request.form.get("chapter_start_page", "0"))
             end_page = int(request.form.get("chapter_end_page", "0"))
             updated = editor_update_chapter(

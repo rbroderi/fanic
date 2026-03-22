@@ -96,7 +96,7 @@ def _work_versions_list_html(work_id: str, selected_version_id: str) -> str:
         items.append(
             "<li>"
             + f'<a href="{version_href}"{selected_attr}>{created_at}</a>'
-            + f' <span class="profile-meta">({action} | {actor or "unknown"} | {page_count} pages)</span>'
+            + f' <span class="profile-meta">({action} | {actor if actor else "unknown"} | {page_count} pages)</span>'
             + "</li>"
         )
     return '<ul class="work-links">' + "".join(items) + "</ul>"
@@ -111,7 +111,16 @@ def _version_metadata_html(version_manifest: dict[str, object]) -> str:
         ("Version ID", escape(str(version_manifest.get("version_id", "")))),
         ("Created", escape(str(version_manifest.get("created_at", "")))),
         ("Action", escape(str(version_manifest.get("action", "")))),
-        ("Actor", escape(str(version_manifest.get("actor", "") or "unknown"))),
+        (
+            "Actor",
+            escape(
+                str(
+                    version_manifest.get("actor", "")
+                    if version_manifest.get("actor", "")
+                    else "unknown"
+                )
+            ),
+        ),
         ("Title", escape(str(work_block.get("title", "Untitled")))),
         ("Rating", escape(str(work_block.get("rating", "Not Rated")))),
         ("Status", escape(str(work_block.get("status", "in_progress")))),
@@ -140,13 +149,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not can_view_work(username, work):
             return text_error(response, "Work not found", 404)
 
-        uploader = str(work.get("uploader_username") or "")
+        uploader = str(
+            work.get("uploader_username") if work.get("uploader_username") else ""
+        )
         if not _can_edit_work(username, uploader):
             return text_error(response, "Forbidden", 403)
 
         tags = work.get("tags", [])
-        warnings_text = _tag_names_csv(tags, "archive_warning") or str(
-            work.get("warnings", "")
+        warnings_tags = _tag_names_csv(tags, "archive_warning")
+        warnings_text = (
+            warnings_tags if warnings_tags else str(work.get("warnings", ""))
         )
 
         save_msg = request.args.get("msg", "").strip()
@@ -240,12 +252,26 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 ),
                 "__EDIT_WARNINGS__": escape(warnings_text),
                 "__EDIT_LANGUAGE__": escape(str(work.get("language", "en"))),
-                "__EDIT_SERIES__": escape(str(work.get("series_name", "") or "")),
+                "__EDIT_SERIES__": escape(
+                    str(
+                        work.get("series_name", "")
+                        if work.get("series_name", "")
+                        else ""
+                    )
+                ),
                 "__EDIT_SERIES_INDEX__": escape(
-                    str(work.get("series_index", "") or "")
+                    str(
+                        work.get("series_index", "")
+                        if work.get("series_index", "")
+                        else ""
+                    )
                 ),
                 "__EDIT_PUBLISHED_AT__": escape(
-                    str(work.get("published_at", "") or "")
+                    str(
+                        work.get("published_at", "")
+                        if work.get("published_at", "")
+                        else ""
+                    )
                 ),
                 "__EDIT_FANDOMS__": escape(_tag_names_csv(tags, "fandom")),
                 "__EDIT_RELATIONSHIPS__": escape(_tag_names_csv(tags, "relationship")),
@@ -363,7 +389,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Work not found", 404)
 
     title = escape(str(work.get("title", "Untitled")))
-    summary = escape(str(work.get("summary", "") or "No summary provided."))
+    summary_raw = str(work.get("summary", ""))
+    summary = escape(summary_raw if summary_raw else "No summary provided.")
     rating_html = rating_badge_html(work.get("rating", "Not Rated"))
     status = escape(str(work.get("status", "in_progress")))
     page_count = escape(str(work.get("page_count", 0)))
@@ -380,7 +407,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 rendered_tags.append(f'<span class="tag">{tag_type}: {tag_name}</span>')
         tag_html = "".join(rendered_tags)
 
-    uploader = str(work.get("uploader_username") or "")
+    uploader = str(
+        work.get("uploader_username") if work.get("uploader_username") else ""
+    )
     can_edit = _can_edit_work(username, uploader)
     can_delete = username == ADMIN_USERNAME
     comments = list_work_comments(work_id)

@@ -4,7 +4,10 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from fanic.paths import DATA_ROOT, DB_PATH, PACKAGE_ROOT, ensure_storage_dirs
+from fanic.paths import DATA_ROOT
+from fanic.paths import DB_PATH
+from fanic.paths import PACKAGE_ROOT
+from fanic.paths import ensure_storage_dirs
 
 SCHEMA_PATH = PACKAGE_ROOT / "sql" / "schema.sql"
 

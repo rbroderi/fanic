@@ -7,6 +7,10 @@
         "--python-executable",
         "${workspaceFolder}/.venv/Scripts/python.exe"
     ],
+    "editor.rulers": [
+        88,
+        120
+    ],
     "python.analysis.typeCheckingMode": "off",
     "cSpell.words": [
         "FANIC",

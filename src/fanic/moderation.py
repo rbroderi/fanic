@@ -7,10 +7,8 @@ from typing import TypedDict
 
 from fanic.nsfw_detector import nsfw_score_with_confidences
 from fanic.settings import get_settings
-from fanic.style_classifier import (
-    classify_style_with_confidences,
-    get_style_classifier_debug_state,
-)
+from fanic.style_classifier import classify_style_with_confidences
+from fanic.style_classifier import get_style_classifier_debug_state
 
 
 class ModerationResult(TypedDict):
@@ -105,7 +103,7 @@ def moderate_image_bytes(image_bytes: bytes, suffix: str = ".png") -> Moderation
     try:
         # On Windows, PIL cannot reopen a NamedTemporaryFile while its handle is active.
         with NamedTemporaryFile(
-            suffix=suffix or ".png",
+            suffix=suffix if suffix else ".png",
             delete=False,
         ) as handle:
             _ = handle.write(image_bytes)

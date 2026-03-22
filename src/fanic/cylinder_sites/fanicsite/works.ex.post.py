@@ -104,7 +104,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 chapter_number = int(chapter_raw)
             except ValueError:
                 return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
-            max_chapter = int(work.get("page_count") or 0)
+            max_chapter = int(work.get("page_count") if work.get("page_count") else 0)
             if chapter_number < 1 or chapter_number > max_chapter:
                 return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
         else:
@@ -116,7 +116,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if action != "edit":
         return text_error(response, "Not found", 404)
 
-    uploader = str(work.get("uploader_username") or "")
+    uploader = str(
+        work.get("uploader_username") if work.get("uploader_username") else ""
+    )
     if not _can_edit_work(username, uploader):
         return text_error(response, "Forbidden", 403)
 
@@ -147,7 +149,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
             with TemporaryDirectory() as temp_dir:
                 page_path = (
-                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                    Path(temp_dir)
+                    / Path(
+                        page_upload.filename if page_upload.filename else "page.png"
+                    ).name
                 )
                 page_upload.save(page_path)
                 result = ingest_editor_page(
@@ -179,7 +184,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             page_index = int(request.form.get("page_index", "0"))
             with TemporaryDirectory() as temp_dir:
                 page_path = (
-                    Path(temp_dir) / Path(page_upload.filename or "page.png").name
+                    Path(temp_dir)
+                    / Path(
+                        page_upload.filename if page_upload.filename else "page.png"
+                    ).name
                 )
                 page_upload.save(page_path)
                 result = editor_replace_page_image(
@@ -255,7 +263,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     if edit_action == "editor-add-chapter":
         try:
-            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            title = (
+                request.form.get("chapter_title", "").strip()
+                if request.form.get("chapter_title", "").strip()
+                else "Untitled Chapter"
+            )
             start_page = int(request.form.get("chapter_start_page", "0"))
             end_page = int(request.form.get("chapter_end_page", "0"))
             _ = editor_add_chapter(
@@ -272,7 +284,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if edit_action == "editor-update-chapter":
         try:
             chapter_id = int(request.form.get("chapter_id", "0"))
-            title = request.form.get("chapter_title", "").strip() or "Untitled Chapter"
+            title = (
+                request.form.get("chapter_title", "").strip()
+                if request.form.get("chapter_title", "").strip()
+                else "Untitled Chapter"
+            )
             start_page = int(request.form.get("chapter_start_page", "0"))
             end_page = int(request.form.get("chapter_end_page", "0"))
             updated = editor_update_chapter(
@@ -317,12 +333,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     metadata: dict[str, object] = {
         "title": request.form.get("title", "").strip()
-        or str(work.get("title", "Untitled")),
+        if request.form.get("title", "").strip()
+        else str(work.get("title", "Untitled")),
         "summary": request.form.get("summary", "").strip(),
-        "rating": request.form.get("rating", "").strip() or "Not Rated",
+        "rating": (
+            request.form.get("rating", "").strip()
+            if request.form.get("rating", "").strip()
+            else "Not Rated"
+        ),
         "warnings": _csv(request.form.get("warnings", "")),
         "status": status,
-        "language": request.form.get("language", "").strip() or "en",
+        "language": (
+            request.form.get("language", "").strip()
+            if request.form.get("language", "").strip()
+            else "en"
+        ),
         "series": request.form.get("series", "").strip(),
         "series_index": series_index,
         "published_at": request.form.get("published_at", "").strip(),

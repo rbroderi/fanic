@@ -50,7 +50,7 @@ def _reader_pages_from_version_manifest(
             }
         )
 
-    built.sort(key=lambda row: int(row.get("index", 0) or 0))
+    built.sort(key=lambda row: int(row.get("index", 0) if row.get("index", 0) else 0))
     return built
 
 
@@ -93,7 +93,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         reader_pages = pages_obj if isinstance(pages_obj, list) else []
         chapters = manifest.get("chapters", [])
 
-    user_id = username or "anon"
+    user_id = username if username else "anon"
     page_index = load_progress(work_id, user_id)
     manifest_title = str(manifest.get("title", "FANIC Reader"))
     if version_id:

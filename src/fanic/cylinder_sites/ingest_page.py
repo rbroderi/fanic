@@ -2,29 +2,29 @@ from __future__ import annotations
 
 import json
 from html import escape
+from typing import Any
+from typing import cast
 
-from fanic.cylinder_sites.common import (
-    STATIC_ROOT,
-    RequestLike,
-    ResponseLike,
-    current_user,
-    user_menu_replacements,
-)
-from fanic.cylinder_sites.editor_gallery import (
-    render_editor_chapters_html,
-    render_editor_page_gallery_html,
-)
-from fanic.cylinder_sites.editor_metadata import (
-    RATING_CHOICES,
-    render_common_tag_datalist_replacements,
-    render_options_html,
-    selected_attr,
-)
+from _typeshed import ConvertibleToInt
+
+from fanic.cylinder_sites.common import STATIC_ROOT
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import user_menu_replacements
+from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
+from fanic.cylinder_sites.editor_gallery import render_editor_page_gallery_html
+from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
+from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
+from fanic.cylinder_sites.editor_metadata import render_options_html
+from fanic.cylinder_sites.editor_metadata import selected_attr
 
 
 def _as_csv(value: object) -> str:
     if isinstance(value, list):
-        return ", ".join(str(item) for item in value if str(item).strip())
+        return ", ".join(
+            str(item) for item in cast(list[Any], value) if str(item).strip()
+        )
     if isinstance(value, str):
         return value
     return ""
@@ -51,8 +51,8 @@ def render_ingest_page(
     editor_rating: str = "Not Rated",
     editor_status: str = "in_progress",
     editor_language: str = "en",
-    editor_pages: list[dict[str, object]] | None = None,
-    editor_chapters: list[dict[str, object]] | None = None,
+    editor_pages: list[dict[str, ConvertibleToInt]] | None = None,
+    editor_chapters: list[dict[str, ConvertibleToInt]] | None = None,
     ingest_status: str = "",
     ingest_status_kind: str = "",
     result_payload: dict[str, object] | None = None,
@@ -60,9 +60,11 @@ def render_ingest_page(
     user = current_user(request)
     logged_in = user is not None
 
-    data = metadata or {}
-    pages = editor_pages or []
-    chapters = editor_chapters or []
+    data = metadata if metadata else {}
+    pages: list[dict[str, ConvertibleToInt]] = editor_pages if editor_pages else []
+    chapters: list[dict[str, ConvertibleToInt]] = (
+        editor_chapters if editor_chapters else []
+    )
     ingest_html = (STATIC_ROOT / "ingest.html").read_text(encoding="utf-8")
 
     replacements = {

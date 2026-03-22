@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from html import escape
 
 from fanic.repository import list_tag_names
 
-RATING_CHOICES = [
-    "Not Rated",
-    "General Audiences",
-    "Teen And Up Audiences",
-    "Mature",
-    "Explicit",
-]
+
+class RatingChoice(StrEnum):
+    NOT_RATED = "Not Rated"
+    GENERAL_AUDIENCES = "General Audiences"
+    TEEN_AND_UP_AUDIENCES = "Teen And Up Audiences"
+    MATURE = "Mature"
+    EXPLICIT = "Explicit"
+
+
+RATING_CHOICES = [choice.value for choice in RatingChoice]
 
 
 def selected_attr(actual: str, expected: str) -> str:

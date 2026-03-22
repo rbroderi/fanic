@@ -19,6 +19,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         response,
         {
             "logged_in": username is not None,
-            "username": username or "",
+            "username": username if username else "",
         },
     )
