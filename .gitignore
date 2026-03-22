@@ -5,6 +5,10 @@
 # App-generated storage
 src/fanic/storage/
 
+# Local debug and runtime outputs
+.tmp_debug/
+logs/
+
 # Python bytecode/cache
 __pycache__/
 *.py[cod]
