@@ -18,3 +18,7 @@ autopep695 mode="check":
 # Backward-compatible alias for check mode.
 autopep695-check:
     just autopep695 check
+
+# Run pytest with coverage for the src package.
+test-cov *args:
+    uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}

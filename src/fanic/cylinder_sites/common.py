@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import time
+import tomllib
 from html import escape
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +16,7 @@ from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 
 from fanic.ingest import ingest_cbz
+from fanic.repository import get_user_theme_preference
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
 
@@ -48,6 +51,30 @@ SITE_FOOTER_HTML = (
     "</div>"
     "</footer>"
 )
+
+THEME_VAR_ALLOWLIST = {
+    "bg",
+    "paper",
+    "ink",
+    "accent",
+    "accent-soft",
+    "line",
+    "muted",
+    "tag-bg",
+    "panel-bg",
+    "header-bg",
+    "surface-strong",
+    "danger-bg",
+    "danger-line",
+    "danger-ink",
+    "reader-overlay-border",
+    "reader-overlay-bg",
+    "reader-overlay-ink",
+    "reader-page-bg",
+    "bg-glow-1",
+    "bg-glow-2",
+}
+SAFE_THEME_VALUE_PATTERN = re.compile(r"^[#(),.%/\-\sA-Za-z0-9]+$")
 
 JWTEncode = Callable[[object, object, object], bytes]
 JWTDecode = Callable[[str | bytes, object], dict[str, object]]
@@ -232,6 +259,77 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     }
 
 
+def _theme_value_is_safe(value: str) -> bool:
+    if not value or len(value) > 120:
+        return False
+    if "{" in value or "}" in value or ";" in value or "<" in value or ">" in value:
+        return False
+    return bool(SAFE_THEME_VALUE_PATTERN.match(value))
+
+
+def _normalize_theme_var_name(name: object) -> str:
+    text = str(name).strip()
+    while text.startswith("--"):
+        text = text[2:]
+    return text.replace("_", "-")
+
+
+def _extract_theme_overrides(toml_text: str) -> dict[str, dict[str, str]]:
+    parsed: dict[str, object] = tomllib.loads(toml_text)
+
+    result: dict[str, dict[str, str]] = {"light": {}, "dark": {}}
+    for theme_name in ("light", "dark"):
+        section = parsed.get(theme_name, {})
+        if not isinstance(section, dict):
+            continue
+        section_map = cast(dict[object, object], section)
+        for raw_name, raw_value in section_map.items():
+            var_name = _normalize_theme_var_name(raw_name)
+            if var_name not in THEME_VAR_ALLOWLIST:
+                continue
+            if not isinstance(raw_value, str):
+                continue
+            value = raw_value.strip()
+            if not _theme_value_is_safe(value):
+                continue
+            result[theme_name][var_name] = value
+    return result
+
+
+def _custom_theme_style_tag(request: RequestLike) -> str:
+    username = current_user(request)
+    preference = get_user_theme_preference(username)
+    if not preference["enabled"]:
+        return ""
+    toml_text = preference["toml_text"].strip()
+    if not toml_text:
+        return ""
+
+    try:
+        overrides = _extract_theme_overrides(toml_text)
+    except tomllib.TOMLDecodeError:
+        return ""
+
+    light_pairs = overrides["light"]
+    dark_pairs = overrides["dark"]
+    if not light_pairs and not dark_pairs:
+        return ""
+
+    css_chunks: list[str] = ['<style id="customThemeOverrides">\n']
+    if light_pairs:
+        css_chunks.append(":root {\n")
+        for name, value in light_pairs.items():
+            css_chunks.append(f"  --{name}: {value};\n")
+        css_chunks.append("}\n")
+    if dark_pairs:
+        css_chunks.append(':root[data-theme="dark"] {\n')
+        for name, value in dark_pairs.items():
+            css_chunks.append(f"  --{name}: {value};\n")
+        css_chunks.append("}\n")
+    css_chunks.append("</style>")
+    return "".join(css_chunks)
+
+
 def rating_badge_html(rating: object) -> str:
     rating_text = str(rating if rating else "Not Rated").strip()
     safe_rating = rating_text if rating_text else "Not Rated"
@@ -262,6 +360,10 @@ def render_html_template(
 
     for marker, value in merged.items():
         html = html.replace(marker, value)
+
+    custom_theme_style = _custom_theme_style_tag(request)
+    if custom_theme_style and "</head>" in html:
+        html = html.replace("</head>", f"{custom_theme_style}\n  </head>", 1)
 
     # Add the global footer to styled site pages without editing each template.
     if "/static/styles.css" in html and "</body>" in html:

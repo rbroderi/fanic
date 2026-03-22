@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-import os
-from typing import Any
-from typing import cast
-
-import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
-import torch
-from tqdm import tqdm
 
+from fanic.clip_backend import get_backend
 from fanic.settings import get_settings
 
-_MODEL_NAME = "ViT-L-14"
-_MODEL_PRETRAINED = "openai"
 _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
     "sfw": [
         "a safe-for-work comic or illustration",
@@ -41,17 +33,14 @@ _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
 }
 _NSFW_CLASS_NAMES = list(_NSFW_PROMPTS_BY_CLASS.keys())
 _SETTINGS = get_settings()
-_CACHE_DIR = _SETTINGS.openclip_cache_dir
 _DEFAULT_LOGIT_SCALE = _SETTINGS.nsfw_logit_scale
 
 _model: object | None = None
 _preprocess: object | None = None
-_tokenizer: object | None = None
 _text_emb: object | None = None
 _torch_mod: object | None = None
 _device: str = "cpu"
 _load_attempted = False
-_VERBOSE_LOAD = _SETTINGS.model_load_logs
 
 
 def _call0(obj: object | None, name: str) -> object | None:
@@ -144,19 +133,6 @@ def _get_no_grad_context(torch_mod: object | None) -> object | None:
         return None
 
 
-def _extract_model_and_preprocess(
-    created: object | None,
-) -> tuple[object, object] | None:
-    if not isinstance(created, tuple):
-        return None
-    try:
-        model: Any = cast(Any, created[0])
-        preprocess: Any = cast(Any, created[2])
-    except IndexError:
-        return None
-    return model, preprocess
-
-
 def _empty_nsfw_confidences() -> dict[str, float]:
     return {name: 0.0 for name in _NSFW_CLASS_NAMES}
 
@@ -164,7 +140,6 @@ def _empty_nsfw_confidences() -> dict[str, float]:
 def _ensure_loaded() -> bool:
     global _model
     global _preprocess
-    global _tokenizer
     global _text_emb
     global _torch_mod
     global _device
@@ -176,61 +151,22 @@ def _ensure_loaded() -> bool:
         return False
     _load_attempted = True
 
-    open_clip_mod = open_clip
-    torch_mod = torch
-    os.makedirs(_CACHE_DIR, exist_ok=True)
-    progress = tqdm(
-        total=5,
-        desc="Loading NSFW model",
-        unit="step",
-        leave=False,
-        disable=not _VERBOSE_LOAD,
-    )
+    backend = get_backend()
+    if backend is None:
+        return False
+
+    model, preprocess, tokenizer, torch_mod, device = backend
+    _model = model
+    _preprocess = preprocess
+    _torch_mod = torch_mod
+    _device = device
 
     try:
-        cuda_obj = getattr(torch_mod, "cuda", None)
-        is_available = _call0(cuda_obj, "is_available")
-        _device = "cuda" if bool(is_available) else "cpu"
-        _ = progress.update(1)
-        progress.set_postfix_str(f"device={_device}")
-
-        created = _call_kw(
-            open_clip_mod,
-            "create_model_and_transforms",
-            _MODEL_NAME,
-            pretrained=_MODEL_PRETRAINED,
-            force_quick_gelu=True,
-            cache_dir=_CACHE_DIR,
-        )
-        extracted = _extract_model_and_preprocess(created)
-        if extracted is None:
-            progress.close()
-            return False
-        model, preprocess = extracted
-        _ = progress.update(1)
-        progress.set_postfix_str("model created")
-
-        moved_model = _call1(model, "to", _device)
-        if moved_model is None:
-            return False
-
-        _model = moved_model
-        _ = _call0(_model, "eval")
-        _preprocess = preprocess
-        _tokenizer = _call1(open_clip_mod, "get_tokenizer", _MODEL_NAME)
-        if _tokenizer is None:
-            progress.close()
-            return False
-        _ = progress.update(1)
-        progress.set_postfix_str("tokenizer ready")
-
         no_grad = _get_no_grad_context(torch_mod)
         if no_grad is None:
-            progress.close()
             return False
 
         if not _enter_context(no_grad):
-            progress.close()
             return False
         try:
             all_prompts: list[str] = []
@@ -246,32 +182,26 @@ def _ensure_loaded() -> bool:
                 class_ranges.append((class_name, start, cursor))
 
             if not all_prompts:
-                progress.close()
                 return False
 
-            tokenized = _call1(_tokenizer, "__call__", all_prompts)
+            tokenized = _call1(tokenizer, "__call__", all_prompts)
             if tokenized is None:
-                progress.close()
                 return False
 
             text_tokens = _call1(tokenized, "to", _device)
             if text_tokens is None:
-                progress.close()
                 return False
 
             text_emb = _call1(_model, "encode_text", text_tokens)
             if text_emb is None:
-                progress.close()
                 return False
 
             text_norm = _call_kw(text_emb, "norm", dim=-1, keepdim=True)
             if text_norm is None:
-                progress.close()
                 return False
 
             text_emb_normed = _call1(text_emb, "__truediv__", text_norm)
             if text_emb_normed is None:
-                progress.close()
                 return False
 
             class_embeds: list[object] = []
@@ -279,53 +209,38 @@ def _ensure_loaded() -> bool:
                 _ = class_name
                 prompt_slice = _call1(text_emb_normed, "__getitem__", slice(start, end))
                 if prompt_slice is None:
-                    progress.close()
                     return False
 
                 class_mean = _call_kw(prompt_slice, "mean", dim=0)
                 if class_mean is None:
-                    progress.close()
                     return False
 
                 class_norm = _call_kw(class_mean, "norm", dim=-1, keepdim=True)
                 if class_norm is None:
-                    progress.close()
                     return False
 
                 class_mean_normed = _call1(class_mean, "__truediv__", class_norm)
                 if class_mean_normed is None:
-                    progress.close()
                     return False
 
                 class_embeds.append(class_mean_normed)
 
             if not class_embeds:
-                progress.close()
                 return False
 
             stacked_class_embeds = _call_kw(torch_mod, "stack", class_embeds, dim=0)
             if stacked_class_embeds is None:
-                progress.close()
                 return False
 
             _text_emb = stacked_class_embeds
-            _torch_mod = torch_mod
-            _ = progress.update(1)
-            progress.set_postfix_str("class prototypes ready")
         finally:
             _exit_context(no_grad)
     except Exception:
         _model = None
         _preprocess = None
-        _tokenizer = None
         _text_emb = None
         _torch_mod = None
-        progress.close()
         return False
-
-    _ = progress.update(1)
-    progress.set_postfix_str("ready")
-    progress.close()
 
     return True
 
@@ -427,5 +342,9 @@ def nsfw_score_with_confidences(path: str) -> tuple[float, dict[str, float]]:
     return _nsfw_score_internal(path)
 
 
+def initialize_nsfw_model() -> bool:
+    return _ensure_loaded()
+
+
 if _SETTINGS.preload_models:
-    _ = _ensure_loaded()
+    _ = initialize_nsfw_model()

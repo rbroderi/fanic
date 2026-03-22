@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 import time
 from contextlib import AbstractContextManager
 from typing import Any
 from typing import cast
 
-import open_clip
 import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
-import torch
-from tqdm import tqdm
 
+from fanic.clip_backend import get_backend
 from fanic.settings import get_settings
 
 _MODEL_NAME = "ViT-L-14"
@@ -72,7 +69,6 @@ _device: str = "cpu"
 _last_load_failed_at = 0.0
 _last_load_error = ""
 _last_classify_error = ""
-_VERBOSE_LOAD = _SETTINGS.model_load_logs
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -160,28 +156,6 @@ def _as_int_or_none(value: object | None) -> int | None:
     return None
 
 
-def _create_model_and_preprocess() -> tuple[object, object] | None:
-    created = _call_kw(
-        open_clip,
-        "create_model_and_transforms",
-        _MODEL_NAME,
-        pretrained=_MODEL_PRETRAINED,
-        force_quick_gelu=True,
-        cache_dir=_CACHE_DIR,
-    )
-    if not isinstance(created, tuple):
-        return None
-
-    created_tuple = cast(tuple[object, ...], created)
-    if len(created_tuple) < 3:
-        return None
-
-    model = created_tuple[0]
-    preprocess = created_tuple[2]
-
-    return model, preprocess
-
-
 def _ensure_loaded() -> bool:
     global _model
     global _preprocess
@@ -201,63 +175,23 @@ def _ensure_loaded() -> bool:
 
     _last_load_error = ""
 
-    open_clip_mod = open_clip
-    torch_mod = torch
-    os.makedirs(_CACHE_DIR, exist_ok=True)
-    progress = tqdm(
-        total=5,
-        desc="Loading style model",
-        unit="step",
-        leave=False,
-        disable=not _VERBOSE_LOAD,
-    )
-
     try:
-        cuda_obj = getattr(torch_mod, "cuda", None)
-        is_available = _call0(cuda_obj, "is_available")
-        _device = "cuda" if bool(is_available) else "cpu"
-        _ = progress.update(1)
-        progress.set_postfix_str(f"device={_device}")
-
-        created_model = _create_model_and_preprocess()
-        if created_model is None:
-            _LOGGER.warning(
-                "Style model initialization returned invalid result (model=%s pretrained=%s cache_dir=%s)",
-                _MODEL_NAME,
-                _MODEL_PRETRAINED,
-                _CACHE_DIR,
-            )
-            progress.close()
-            _last_load_error = "create_model_and_transforms returned invalid result"
+        backend = get_backend()
+        if backend is None:
+            _last_load_error = "shared clip backend not available"
             _last_load_failed_at = time.time()
             return False
-        _ = progress.update(1)
-        progress.set_postfix_str("model created")
-
-        model, preprocess = created_model
-        moved_model = _call1(model, "to", _device)
-        if moved_model is None:
-            return False
-
-        _model = moved_model
-        _ = _call0(_model, "eval")
+        model, preprocess, tokenizer, torch_mod, device = backend
+        _model = model
         _preprocess = preprocess
-        _tokenizer = _call1(open_clip_mod, "get_tokenizer", _MODEL_NAME)
-        if _tokenizer is None:
-            _LOGGER.warning(
-                "Style tokenizer initialization failed for model=%s", _MODEL_NAME
-            )
-            progress.close()
-            _last_load_error = "get_tokenizer returned None"
-            _last_load_failed_at = time.time()
-            return False
-        _ = progress.update(1)
-        progress.set_postfix_str("tokenizer ready")
+        _torch_mod = torch_mod
+        _device = device
+
+        _tokenizer = tokenizer
 
         no_grad = _call0_context_manager(torch_mod, "no_grad")
         if no_grad is None:
             _LOGGER.warning("Style torch.no_grad() unavailable during model init")
-            progress.close()
             _last_load_error = "torch.no_grad unavailable"
             _last_load_failed_at = time.time()
             return False
@@ -276,36 +210,30 @@ def _ensure_loaded() -> bool:
                 style_ranges.append((style_name, start, cursor))
 
             if not all_style_labels:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             tokenized = _call1(_tokenizer, "__call__", all_style_labels)
             if tokenized is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
             text_tokens = _call1(tokenized, "to", _device)
             if text_tokens is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             prompt_text_emb = _call1(_model, "encode_text", text_tokens)
             if prompt_text_emb is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             text_norm = _call_kw(prompt_text_emb, "norm", dim=-1, keepdim=True)
             if text_norm is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             prompt_text_emb_normed = _call1(prompt_text_emb, "__truediv__", text_norm)
             if prompt_text_emb_normed is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
@@ -316,45 +244,37 @@ def _ensure_loaded() -> bool:
                     prompt_text_emb_normed, "__getitem__", slice(start, end)
                 )
                 if prompt_slice is None:
-                    progress.close()
                     _last_load_failed_at = time.time()
                     return False
 
                 class_mean = _call_kw(prompt_slice, "mean", dim=0)
                 if class_mean is None:
-                    progress.close()
                     _last_load_failed_at = time.time()
                     return False
 
                 class_norm = _call_kw(class_mean, "norm", dim=-1, keepdim=True)
                 if class_norm is None:
-                    progress.close()
                     _last_load_failed_at = time.time()
                     return False
 
                 class_mean_normed = _call1(class_mean, "__truediv__", class_norm)
                 if class_mean_normed is None:
-                    progress.close()
                     _last_load_failed_at = time.time()
                     return False
 
                 class_embeds.append(class_mean_normed)
 
             if not class_embeds:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             stacked_class_embeds = _call_kw(torch_mod, "stack", class_embeds, dim=0)
             if stacked_class_embeds is None:
-                progress.close()
                 _last_load_failed_at = time.time()
                 return False
 
             _text_emb = stacked_class_embeds
             _torch_mod = torch_mod
-            _ = progress.update(1)
-            progress.set_postfix_str("class prototypes ready")
     except Exception as exc:
         _LOGGER.exception("Style model initialization failed")
         _model = None
@@ -364,12 +284,8 @@ def _ensure_loaded() -> bool:
         _torch_mod = None
         _last_load_error = repr(exc)
         _last_load_failed_at = time.time()
-        progress.close()
         return False
 
-    _ = progress.update(1)
-    progress.set_postfix_str("ready")
-    progress.close()
     _last_load_failed_at = 0.0
     _last_load_error = ""
 
@@ -546,5 +462,9 @@ def get_style_classifier_debug_state() -> dict[str, object]:
     }
 
 
+def initialize_style_model() -> bool:
+    return _ensure_loaded()
+
+
 if _SETTINGS.preload_models:
-    _ = _ensure_loaded()
+    _ = initialize_style_model()

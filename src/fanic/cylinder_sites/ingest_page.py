@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 from html import escape
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import cast
 
-from _typeshed import ConvertibleToInt
+if TYPE_CHECKING:
+    from _typeshed import ConvertibleToInt
+else:
+    type ConvertibleToInt = int | str | bytes
 
 from fanic.cylinder_sites.common import STATIC_ROOT
 from fanic.cylinder_sites.common import RequestLike

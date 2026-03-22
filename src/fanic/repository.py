@@ -55,6 +55,11 @@ class WorkVersionSummary(TypedDict):
     page_count: int
 
 
+class UserThemePreference(TypedDict):
+    enabled: bool
+    toml_text: str
+
+
 class WorkPageRow(TypedDict):
     page_index: int
     image_filename: str
@@ -255,13 +260,59 @@ def set_user_prefers_explicit(username: str, enabled: bool) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO user_preferences (username, view_explicit_rated)
-            VALUES (?, ?)
+            INSERT INTO user_preferences (username, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
+            VALUES (?, ?, 0, NULL)
             ON CONFLICT(username) DO UPDATE SET
                 view_explicit_rated = excluded.view_explicit_rated,
                 updated_at = CURRENT_TIMESTAMP
             """,
             (username, 1 if enabled else 0),
+        )
+
+
+def get_user_theme_preference(username: str | None) -> UserThemePreference:
+    if not username:
+        return {"enabled": False, "toml_text": ""}
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT custom_theme_enabled, custom_theme_toml FROM user_preferences WHERE username = ?",
+            (username,),
+        ).fetchone()
+
+    if not row:
+        return {"enabled": False, "toml_text": ""}
+
+    return {
+        "enabled": bool(int(row["custom_theme_enabled"])),
+        "toml_text": str(row["custom_theme_toml"] if row["custom_theme_toml"] else ""),
+    }
+
+
+def set_user_theme_preference(
+    username: str,
+    *,
+    enabled: bool,
+    toml_text: str | None,
+) -> None:
+    existing = get_user_theme_preference(username)
+    resolved_toml_text = toml_text if toml_text is not None else existing["toml_text"]
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO user_preferences (username, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
+            VALUES (?, 0, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                custom_theme_enabled = excluded.custom_theme_enabled,
+                custom_theme_toml = excluded.custom_theme_toml,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                username,
+                1 if enabled else 0,
+                resolved_toml_text,
+            ),
         )
 
 

@@ -3,8 +3,12 @@ from __future__ import annotations
 import re
 from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from _typeshed import ConvertibleToInt
+if TYPE_CHECKING:
+    from _typeshed import ConvertibleToInt
+else:
+    type ConvertibleToInt = int | str | bytes
 
 from fanic.repository import list_work_chapter_members
 

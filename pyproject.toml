@@ -23,11 +23,15 @@ dependencies = [
     "beartype>=0.22.9",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.11.0",
+    "lazi>=1.9.161",
 ]
 
 [project.optional-dependencies]
 dev = [
     "autopep695>=1.1.4",
+    "git-filter-repo>=2.47.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]

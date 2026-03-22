@@ -3,6 +3,9 @@ from __future__ import annotations
 import shutil
 import sqlite3
 from pathlib import Path
+from types import TracebackType
+from typing import Literal
+from typing import override
 
 from fanic.settings import DATA_ROOT
 from fanic.settings import DB_PATH
@@ -11,6 +14,23 @@ from fanic.settings import get_settings
 
 _SETTINGS = get_settings()
 SCHEMA_PATH = _SETTINGS.package_root / "sql" / "schema.sql"
+
+
+class _ManagedConnection(sqlite3.Connection):
+    """Connection that closes itself when exiting a context manager."""
+
+    @override
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
+        try:
+            super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+        return False
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
@@ -27,10 +47,24 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS user_preferences (
             username TEXT PRIMARY KEY,
             view_explicit_rated INTEGER NOT NULL DEFAULT 0,
+            custom_theme_enabled INTEGER NOT NULL DEFAULT 0,
+            custom_theme_toml TEXT,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
+    preference_columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(user_preferences)").fetchall()
+    }
+    if "custom_theme_enabled" not in preference_columns:
+        connection.execute(
+            "ALTER TABLE user_preferences ADD COLUMN custom_theme_enabled INTEGER NOT NULL DEFAULT 0"
+        )
+    if "custom_theme_toml" not in preference_columns:
+        connection.execute(
+            "ALTER TABLE user_preferences ADD COLUMN custom_theme_toml TEXT"
+        )
     if not _table_exists(connection, "works"):
         return
 
@@ -101,7 +135,7 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
 
 def get_connection() -> sqlite3.Connection:
     ensure_storage_dirs()
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(DB_PATH, factory=_ManagedConnection)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
     _ensure_runtime_schema(connection)
@@ -120,7 +154,7 @@ def initialize_database(
         _reset_runtime_data()
     ensure_storage_dirs()
     sql = schema_path.read_text(encoding="utf-8")
-    with sqlite3.connect(DB_PATH) as connection:
+    with sqlite3.connect(DB_PATH, factory=_ManagedConnection) as connection:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.executescript(sql)

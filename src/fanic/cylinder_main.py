@@ -9,6 +9,7 @@ import cylinder
 import waitress
 
 from fanic.db import initialize_database
+from fanic.moderation import initialize_moderation_models
 from fanic.settings import ensure_storage_dirs
 
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
@@ -19,6 +20,7 @@ SITE_NAME: Final[str] = "fanicsite"
 def startup() -> None:
     ensure_storage_dirs()
     initialize_database()
+    _ = initialize_moderation_models()
 
 
 def app_map() -> tuple[str, str, dict[str, object]]:
