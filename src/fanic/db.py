@@ -147,9 +147,7 @@ def _reset_runtime_data() -> None:
         shutil.rmtree(DATA_ROOT)
 
 
-def initialize_database(
-    schema_path: Path = SCHEMA_PATH, *, reset: bool = False
-) -> None:
+def initialize_database(schema_path: Path = SCHEMA_PATH, *, reset: bool = False) -> int:
     if reset:
         _reset_runtime_data()
     ensure_storage_dirs()
@@ -159,3 +157,4 @@ def initialize_database(
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.executescript(sql)
         _ensure_runtime_schema(connection)
+    return 0

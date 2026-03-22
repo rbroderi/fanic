@@ -90,11 +90,37 @@ function setTheme(theme) {
   applyTheme(resolvedTheme);
 }
 
+function syncCustomThemeOverrideState(enabled) {
+  const overrideStyle = document.getElementById("customThemeOverrides");
+  if (!overrideStyle || !(overrideStyle instanceof HTMLStyleElement)) {
+    return;
+  }
+  overrideStyle.disabled = !enabled;
+}
+
+function bindCustomThemePreferenceToggle() {
+  const customThemeToggle = document.getElementById("customThemeEnabled");
+  if (!customThemeToggle || !(customThemeToggle instanceof HTMLInputElement)) {
+    return;
+  }
+  if (customThemeToggle.dataset.themeBound === "true") {
+    syncCustomThemeOverrideState(customThemeToggle.checked);
+    return;
+  }
+
+  syncCustomThemeOverrideState(customThemeToggle.checked);
+  customThemeToggle.addEventListener("change", () => {
+    syncCustomThemeOverrideState(customThemeToggle.checked);
+  });
+  customThemeToggle.dataset.themeBound = "true";
+}
+
 applyTheme(preferredTheme());
 ensureUserMenuThemeToggle();
 for (const toggle of themeToggles()) {
   bindThemeToggle(toggle);
 }
+bindCustomThemePreferenceToggle();
 applyTheme(preferredTheme());
 
 if (userMenuButton && userMenuPanel && userMenuStatus && userMenuLogin && userMenuProfile && userMenuLogout) {

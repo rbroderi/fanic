@@ -38,15 +38,19 @@ def test_managed_connection_closes_on_context_exit(
 
 def test_table_exists_helper_detects_existing_and_missing_tables() -> None:
     table_exists = _table_exists_fn()
-    with sqlite3.connect(":memory:") as connection:
+    connection = sqlite3.connect(":memory:")
+    try:
         connection.execute("CREATE TABLE demo (id INTEGER)")
         assert table_exists(connection, "demo") is True
         assert table_exists(connection, "missing") is False
+    finally:
+        connection.close()
 
 
 def test_ensure_runtime_schema_adds_missing_user_preference_columns() -> None:
     ensure_runtime_schema = _ensure_runtime_schema_fn()
-    with sqlite3.connect(":memory:") as connection:
+    connection = sqlite3.connect(":memory:")
+    try:
         connection.execute(
             """
             CREATE TABLE user_preferences (
@@ -66,12 +70,15 @@ def test_ensure_runtime_schema_adds_missing_user_preference_columns() -> None:
         }
         assert "custom_theme_enabled" in columns
         assert "custom_theme_toml" in columns
+    finally:
+        connection.close()
 
 
 def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
     ensure_runtime_schema = _ensure_runtime_schema_fn()
     table_exists = _table_exists_fn()
-    with sqlite3.connect(":memory:") as connection:
+    connection = sqlite3.connect(":memory:")
+    try:
         connection.execute("CREATE TABLE user_preferences (username TEXT PRIMARY KEY)")
         connection.execute(
             """
@@ -98,6 +105,8 @@ def test_ensure_runtime_schema_backfills_works_columns_and_tables() -> None:
         assert table_exists(connection, "work_kudos") is True
         assert table_exists(connection, "work_chapters") is True
         assert table_exists(connection, "work_chapter_pages") is True
+    finally:
+        connection.close()
 
 
 def test_initialize_database_reset_recreates_database(
@@ -128,12 +137,15 @@ def test_initialize_database_reset_recreates_database(
     assert db_path.exists() is True
     assert marker.exists() is False
 
-    with sqlite3.connect(db_path) as connection:
+    connection = sqlite3.connect(db_path)
+    try:
         tables = {
             str(row[0])
             for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         }
+    finally:
+        connection.close()
     assert "works" in tables
     assert "user_preferences" in tables

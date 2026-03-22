@@ -138,3 +138,74 @@ def test_profile_get_marks_custom_theme_checked(
 
     assert result.status_code == 200
     assert captured["checked"] == "checked"
+
+
+def test_profile_post_disabling_custom_theme_stops_override_injection(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    post_module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/profile.ex.post.py",
+        "fanicsite_profile_ex_post_disable_theme_test",
+    )
+    common_module = load_route_module(
+        "src/fanic/cylinder_sites/common.py",
+        "fanicsite_common_disable_theme_test",
+    )
+
+    state: dict[str, object] = {
+        "enabled": True,
+        "toml_text": '[light]\naccent = "#268bd2"\n',
+    }
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    def fake_set_user_theme_preference(
+        username: str,
+        *,
+        enabled: bool,
+        toml_text: str | None,
+    ) -> None:
+        _ = username
+        state["enabled"] = enabled
+        state["toml_text"] = toml_text if toml_text is not None else state["toml_text"]
+
+    def fake_get_user_theme_preference(username: str) -> dict[str, object]:
+        _ = username
+        return {
+            "enabled": bool(state["enabled"]),
+            "toml_text": str(state["toml_text"]),
+        }
+
+    monkeypatch.setattr(post_module, "current_user", fake_current_user)
+    monkeypatch.setattr(
+        post_module,
+        "set_user_theme_preference",
+        fake_set_user_theme_preference,
+    )
+    monkeypatch.setattr(common_module, "current_user", fake_current_user)
+    monkeypatch.setattr(
+        common_module,
+        "get_user_theme_preference",
+        fake_get_user_theme_preference,
+    )
+
+    request = dummy_request(
+        path="/profile",
+        method="POST",
+        form={"profile_action": "theme"},
+        files={},
+    )
+    response = dummy_response()
+    result = post_module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/profile?msg=theme_saved"
+    assert state["enabled"] is False
+
+    get_request = dummy_request(path="/profile", args={})
+    assert common_module._custom_theme_style_tag(get_request) == ""

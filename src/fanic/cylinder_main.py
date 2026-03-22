@@ -15,6 +15,7 @@ from fanic.settings import ensure_storage_dirs
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
 CYLINDER_SITES_DIR: Final[Path] = PACKAGE_ROOT / "cylinder_sites"
 SITE_NAME: Final[str] = "fanicsite"
+OK = 0
 
 
 def startup() -> None:
@@ -32,6 +33,10 @@ def create_app() -> WSGIApplication:
     return cast(WSGIApplication, cylinder.get_app(app_map))  # pyright: ignore[reportUnknownMemberType]
 
 
-def serve(host: str, port: int) -> None:
+def serve(host: str, port: int) -> int:
     app = create_app()
-    waitress.serve(app, host=host, port=port)
+    try:
+        waitress.serve(app, host=host, port=port)
+    except KeyboardInterrupt:
+        print("Shutting down gracefully...", flush=True)
+    return OK
