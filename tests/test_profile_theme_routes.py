@@ -104,9 +104,26 @@ def test_profile_get_marks_custom_theme_checked(
         _ = username
         return {"enabled": True, "toml_text": '[dark]\naccent="#b58900"'}
 
+    class FakeSettings:
+        profile_history_limit = 7
+
+    def fake_list_recent_reading_history(
+        user_id: str,
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        _ = (user_id, limit)
+        return []
+
     monkeypatch.setattr(module, "current_user", fake_current_user)
     monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
     monkeypatch.setattr(module, "user_prefers_explicit", fake_user_prefers_explicit)
+    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(
+        module,
+        "list_recent_reading_history",
+        fake_list_recent_reading_history,
+    )
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
@@ -129,6 +146,7 @@ def test_profile_get_marks_custom_theme_checked(
         captured["public_link_hidden"] = replacements[
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"
         ]
+        captured["history_hidden"] = replacements["__PROFILE_HISTORY_HIDDEN_ATTR__"]
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -144,6 +162,7 @@ def test_profile_get_marks_custom_theme_checked(
     assert captured["checked"] == "checked"
     assert captured["settings_hidden"] == ""
     assert captured["public_link_hidden"] == ""
+    assert captured["history_hidden"] == ""
 
 
 def test_users_public_profile_uses_public_template(

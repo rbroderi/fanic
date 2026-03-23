@@ -8,8 +8,10 @@ from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import text_error
 from fanic.repository import get_user_theme_preference
+from fanic.repository import list_recent_reading_history
 from fanic.repository import list_works_by_uploader
 from fanic.repository import user_prefers_explicit
+from fanic.settings import get_settings
 
 
 def _uploaded_works_html(works: list[dict[str, object]]) -> str:
@@ -25,6 +27,23 @@ def _uploaded_works_html(works: list[dict[str, object]]) -> str:
         items.append(
             f'<li><a href="/works/{work_id}">{title}</a> '
             f'<span class="profile-meta">({status}, {page_count} pages)</span></li>'
+        )
+    return '<ul class="work-links">' + "".join(items) + "</ul>"
+
+
+def _recent_history_html(history_rows: list[dict[str, object]]) -> str:
+    if not history_rows:
+        return '<p class="profile-meta">No reading history yet.</p>'
+
+    items: list[str] = []
+    for row in history_rows:
+        work_id = escape(str(row.get("work_id", "")))
+        work_title = escape(str(row.get("work_title", "Untitled")))
+        page_index = escape(str(row.get("page_index", 1)))
+        updated_at = escape(str(row.get("updated_at", "")))
+        items.append(
+            f'<li><a href="/reader/{work_id}">{work_title}</a> '
+            f'<span class="profile-meta">(continue at page {page_index}; last viewed {updated_at})</span></li>'
         )
     return '<ul class="work-links">' + "".join(items) + "</ul>"
 
@@ -79,8 +98,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status_hidden,
             "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "hidden",
             "__PROFILE_UPLOADED_WORKS_HTML__": "",
+            "__PROFILE_HISTORY_HIDDEN_ATTR__": "hidden",
+            "__PROFILE_HISTORY_LIMIT__": "0",
+            "__PROFILE_HISTORY_HTML__": "",
         }
     else:
+        history_limit = get_settings().profile_history_limit
+        recent_history = list_recent_reading_history(username, limit=history_limit)
         uploaded_works = list_works_by_uploader(username)
         view_explicit_checked = "checked" if user_prefers_explicit(username) else ""
         theme_preference = get_user_theme_preference(username)
@@ -108,6 +132,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status_hidden,
             "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "",
             "__PROFILE_UPLOADED_WORKS_HTML__": _uploaded_works_html(uploaded_works),
+            "__PROFILE_HISTORY_HIDDEN_ATTR__": "",
+            "__PROFILE_HISTORY_LIMIT__": escape(str(history_limit)),
+            "__PROFILE_HISTORY_HTML__": _recent_history_html(recent_history),
         }
 
     return render_html_template(request, response, "profile.html", replacements)

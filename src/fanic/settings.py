@@ -224,6 +224,10 @@ class FanicSettings(BaseSettings):
         default=1,
         alias="FANIC_UPLOAD_MAX_CONCURRENT_PER_USER",
     )
+    profile_history_limit: int = Field(
+        default=100,
+        alias="FANIC_PROFILE_HISTORY_LIMIT",
+    )
 
     max_cbz_upload_bytes: int = Field(
         default=from_unit("MiB", 256.0),

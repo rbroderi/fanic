@@ -74,6 +74,13 @@ class LocalUserRow(TypedDict):
     created_at: str
 
 
+class RecentReadingHistoryRow(TypedDict):
+    work_id: str
+    work_title: str
+    page_index: int
+    updated_at: str
+
+
 def _normalize_user_role(role: object) -> UserRole:
     normalized = str(role).strip().lower()
     if normalized == "superadmin":
@@ -1609,6 +1616,45 @@ def load_progress(work_id: str, user_id: str) -> int:
         if not row:
             return 1
         return int(row["page_index"])
+
+
+def list_recent_reading_history(
+    user_id: str,
+    *,
+    limit: int,
+) -> list[RecentReadingHistoryRow]:
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        return []
+
+    normalized_limit = int(limit)
+    if normalized_limit < 1:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT rp.work_id, w.title, rp.page_index, rp.updated_at
+            FROM reading_progress rp
+            JOIN works w ON w.id = rp.work_id
+            WHERE rp.user_id = ?
+            ORDER BY rp.updated_at DESC
+            LIMIT ?
+            """,
+            (normalized_user_id, normalized_limit),
+        ).fetchall()
+
+    history_rows: list[RecentReadingHistoryRow] = []
+    for row in rows:
+        history_rows.append(
+            {
+                "work_id": str(row["work_id"]),
+                "work_title": str(row["title"]),
+                "page_index": _to_int(row["page_index"], 1),
+                "updated_at": str(row["updated_at"]),
+            }
+        )
+    return history_rows
 
 
 def delete_work(work_id: str) -> bool:
