@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from html import escape
+from typing import Any
+from typing import cast
 
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    render_html_template,
-    route_tail,
-    text_error,
-)
-from fanic.repository import (
-    can_view_work,
-    get_manifest,
-    get_work,
-    get_work_version_manifest,
-    load_progress,
-)
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import route_tail
+from fanic.cylinder_sites.common import text_error
+from fanic.repository import can_view_work
+from fanic.repository import get_manifest
+from fanic.repository import get_work
+from fanic.repository import get_work_version_manifest
+from fanic.repository import load_progress
 
 
 def _reader_pages_from_version_manifest(
@@ -26,13 +25,14 @@ def _reader_pages_from_version_manifest(
     manifest: dict[str, object],
 ) -> list[dict[str, object]]:
     pages_obj = manifest.get("pages")
-    if not isinstance(pages_obj, list):
+    if not isinstance(pages_obj, Sequence):
         return []
 
     built: list[dict[str, object]] = []
-    for page in pages_obj:
-        if not isinstance(page, dict):
+    for page_obj in pages_obj:
+        if not isinstance(page_obj, dict):
             continue
+        page = cast(dict[str, Any], page_obj)
         page_index_obj = page.get("page_index", 0)
         try:
             page_index = int(page_index_obj)
@@ -50,12 +50,12 @@ def _reader_pages_from_version_manifest(
             }
         )
 
-    built.sort(key=lambda row: int(row.get("index", 0) if row.get("index", 0) else 0))
+    built.sort(key=lambda row: cast(int, row["index"]))
     return built
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["reader"])
+    tail = route_tail(request, ["tools", "reader"])
     if tail is None or len(tail) != 1:
         return text_error(response, "Not found", 404)
 
@@ -90,7 +90,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if manifest is None:
             return text_error(response, "Work not found", 404)
         pages_obj = manifest.get("pages", [])
-        reader_pages = pages_obj if isinstance(pages_obj, list) else []
+        if isinstance(pages_obj, Sequence):
+            reader_pages = [
+                cast(dict[str, object], row)
+                for row in pages_obj
+                if isinstance(row, dict)
+            ]
+        else:
+            reader_pages = []
         chapters = manifest.get("chapters", [])
 
     user_id = username if username else "anon"

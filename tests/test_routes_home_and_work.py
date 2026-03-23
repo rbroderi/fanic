@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections.abc import Callable
 from types import ModuleType
@@ -500,7 +500,7 @@ def test_work_versions_route_renders_selected_version(
     assert result.status_code == 200
     assert rendered["template"] == "work-versions.html"
     assert rendered["status"] == "Viewing version v1"
-    assert rendered["reader_href"] == "/reader/work-1?version_id=v1"
+    assert rendered["reader_href"] == "/tools/reader/work-1?version_id=v1"
 
 
 def test_work_versions_route_returns_404_for_missing_version(
@@ -742,3 +742,4 @@ def test_work_detail_status_messages(
     assert result.status_code == 200
     assert captured["status_class"] == expected_class
     assert captured["status_text"] != ""
+

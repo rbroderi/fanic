@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -21,7 +21,7 @@
             <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
             <a href="/ingest">Upload comic</a>
-            <a href="/profile">Profile</a>
+            <a href="/user/profile">Profile</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -30,9 +30,9 @@
             </button>
             <div id="userMenuPanel" class="user-menu-panel" hidden>
               <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
                 <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
               </form>
             </div>
@@ -49,12 +49,10 @@
         <p id="profileDetails">__PROFILE_DETAILS__</p>
       </section>
 
-      <section class="card info-card">
-        <h3>Uploaded Works</h3>
-        <div>__PROFILE_UPLOADED_WORKS_HTML__</div>
-      </section>
+      __PROFILE_SHARED_SECTIONS__
     </main>
 
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+

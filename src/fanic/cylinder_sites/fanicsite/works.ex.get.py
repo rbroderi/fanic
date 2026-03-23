@@ -1,7 +1,16 @@
-from __future__ import annotations
-
+﻿from collections.abc import Mapping
+from collections.abc import Sequence
+from dataclasses import dataclass
 from html import escape
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import cast
 from urllib.parse import quote
+
+if TYPE_CHECKING:
+    from _typeshed import ConvertibleToInt
+else:
+    type ConvertibleToInt = int | str | bytes
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -26,7 +35,15 @@ from fanic.repository import list_work_chapters
 from fanic.repository import list_work_comments
 from fanic.repository import list_work_page_rows
 from fanic.repository import list_work_versions
+from fanic.repository import load_progress
 from fanic.repository import work_kudos_count
+
+
+@dataclass(frozen=True, slots=True)
+class StatusMessage:
+    text: str
+    css_class: str
+    hidden_attr: str
 
 
 def _can_edit_work(
@@ -39,9 +56,10 @@ def _tag_names_csv(tags: object, tag_type: str) -> str:
     if not isinstance(tags, list):
         return ""
     names: list[str] = []
-    for tag in tags:
+    for tag in cast(list[Any], tags):
         if not isinstance(tag, dict):
             continue
+        tag = cast(dict[str, Any], tag)
         if str(tag.get("type", "")) != tag_type:
             continue
         name = str(tag.get("name", "")).strip()
@@ -50,7 +68,7 @@ def _tag_names_csv(tags: object, tag_type: str) -> str:
     return ", ".join(names)
 
 
-def _comment_cards_html(comments: list[dict[str, object]]) -> str:
+def _comment_cards_html(comments: Sequence[Mapping[str, object]]) -> str:
     if not comments:
         return '<p class="profile-meta">No comments yet.</p>'
 
@@ -96,10 +114,11 @@ def _work_versions_list_html(work_id: str, selected_version_id: str) -> str:
 
 
 def _version_metadata_html(version_manifest: dict[str, object]) -> str:
-    work_block = version_manifest.get("work")
+    work_block: object | dict[str, Any] | None = version_manifest.get("work")
     if not isinstance(work_block, dict):
         work_block = {}
 
+    work_block = cast(dict[str, Any], work_block)
     rows = [
         ("Version ID", escape(str(version_manifest.get("version_id", "")))),
         ("Created", escape(str(version_manifest.get("created_at", "")))),
@@ -125,6 +144,148 @@ def _version_metadata_html(version_manifest: dict[str, object]) -> str:
         parts.append(f"<dt><strong>{label}</strong></dt><dd>{value}</dd>")
     parts.append("</dl>")
     return "".join(parts)
+
+
+def _status_for_edit_message(save_msg: str) -> StatusMessage:
+    text = ""
+    css_class = ""
+    hidden_attr = "hidden"
+    match save_msg:
+        case "saved":
+            text = "Metadata saved."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-added":
+            text = "Page uploaded."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-added-rating-elevated":
+            text = "Page uploaded. Rating auto-elevated based on moderation detection."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-replaced":
+            text = "Page replaced."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-replaced-rating-elevated":
+            text = "Page replaced. Rating auto-elevated based on moderation detection."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-deleted":
+            text = "Page deleted."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-moved":
+            text = "Page moved."
+            css_class = "success"
+            hidden_attr = ""
+        case "page-reordered":
+            text = "Gallery order saved. Page order and chapter assignments updated."
+            css_class = "success"
+            hidden_attr = ""
+        case "chapter-added":
+            text = "Chapter added."
+            css_class = "success"
+            hidden_attr = ""
+        case "chapter-updated":
+            text = "Chapter updated."
+            css_class = "success"
+            hidden_attr = ""
+        case "chapter-deleted":
+            text = "Chapter deleted."
+            css_class = "success"
+            hidden_attr = ""
+        case (
+            "page-file-required"
+            | "page-add-failed"
+            | "page-add-too-large"
+            | "page-add-unsupported-extension"
+            | "page-add-unsupported-content-type"
+            | "page-add-rate-limited"
+            | "page-add-busy"
+            | "page-replace-failed"
+            | "page-replace-too-large"
+            | "page-replace-unsupported-extension"
+            | "page-replace-unsupported-content-type"
+            | "page-replace-rate-limited"
+            | "page-replace-busy"
+            | "page-delete-failed"
+            | "page-move-failed"
+            | "page-reorder-failed"
+            | "chapter-add-failed"
+            | "chapter-update-failed"
+            | "chapter-delete-failed"
+        ):
+            css_class = "error"
+            hidden_attr = ""
+            match save_msg:
+                case "page-add-too-large" | "page-replace-too-large":
+                    text = "Upload rejected: file is larger than the configured limit."
+                case (
+                    "page-add-unsupported-extension"
+                    | "page-replace-unsupported-extension"
+                ):
+                    text = "Upload rejected: file extension is not allowed."
+                case (
+                    "page-add-unsupported-content-type"
+                    | "page-replace-unsupported-content-type"
+                ):
+                    text = "Upload rejected: content type is not allowed."
+                case "page-add-rate-limited" | "page-replace-rate-limited":
+                    text = "Upload rate limit reached. Please wait and try again."
+                case "page-add-busy" | "page-replace-busy":
+                    text = "Too many active uploads. Please retry shortly."
+                case _:
+                    text = "Edit action failed. Check inputs and permissions."
+        case "page-blocked":
+            text = "Upload blocked by moderation policy (photorealistic images are not allowed)."
+            css_class = "error"
+            hidden_attr = ""
+        case "explicit-rating-locked":
+            text = "Only admins can lower a work from Explicit to a lower rating."
+            css_class = "error"
+            hidden_attr = ""
+        case _:
+            text = ""
+            css_class = ""
+            hidden_attr = "hidden"
+    return StatusMessage(text, css_class, hidden_attr)
+
+
+def _status_for_work_message(msg: str) -> StatusMessage:
+    text = ""
+    css_class = ""
+    hidden_attr = ""
+    match msg:
+        case "comment-saved":
+            text = "Comment posted."
+            css_class = "success"
+            hidden_attr = ""
+        case "kudos-saved":
+            text = "Kudos sent."
+            css_class = "success"
+            hidden_attr = ""
+        case "already-kudoed":
+            text = "You already left kudos for this work."
+            css_class = ""
+            hidden_attr = ""
+        case "login-required":
+            text = "Login required to leave comments or kudos."
+            css_class = "error"
+            hidden_attr = ""
+        case "comment-empty":
+            text = "Comment cannot be empty."
+            css_class = "error"
+            hidden_attr = ""
+        case "chapter-invalid":
+            text = "Chapter number must be between 1 and page count."
+            css_class = "error"
+            hidden_attr = ""
+        case _:
+            text = ""
+            css_class = ""
+            hidden_attr = "hidden"
+    return StatusMessage(text, css_class, hidden_attr)
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -160,116 +321,40 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
         save_msg = request.args.get("msg", "").strip()
-        if save_msg == "saved":
-            status_text = "Metadata saved."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-added":
-            status_text = "Page uploaded."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-added-rating-elevated":
-            status_text = (
-                "Page uploaded. Rating auto-elevated based on moderation detection."
-            )
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-replaced":
-            status_text = "Page replaced."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-replaced-rating-elevated":
-            status_text = (
-                "Page replaced. Rating auto-elevated based on moderation detection."
-            )
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-deleted":
-            status_text = "Page deleted."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-moved":
-            status_text = "Page moved."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "page-reordered":
-            status_text = (
-                "Gallery order saved. Page order and chapter assignments updated."
-            )
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "chapter-added":
-            status_text = "Chapter added."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "chapter-updated":
-            status_text = "Chapter updated."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg == "chapter-deleted":
-            status_text = "Chapter deleted."
-            status_class = "success"
-            status_hidden = ""
-        elif save_msg in {
-            "page-file-required",
-            "page-add-failed",
-            "page-add-too-large",
-            "page-add-unsupported-extension",
-            "page-add-unsupported-content-type",
-            "page-add-rate-limited",
-            "page-add-busy",
-            "page-replace-failed",
-            "page-replace-too-large",
-            "page-replace-unsupported-extension",
-            "page-replace-unsupported-content-type",
-            "page-replace-rate-limited",
-            "page-replace-busy",
-            "page-delete-failed",
-            "page-move-failed",
-            "page-reorder-failed",
-            "chapter-add-failed",
-            "chapter-update-failed",
-            "chapter-delete-failed",
-        }:
-            if save_msg in {"page-add-too-large", "page-replace-too-large"}:
-                status_text = (
-                    "Upload rejected: file is larger than the configured limit."
-                )
-            elif save_msg in {
-                "page-add-unsupported-extension",
-                "page-replace-unsupported-extension",
-            }:
-                status_text = "Upload rejected: file extension is not allowed."
-            elif save_msg in {
-                "page-add-unsupported-content-type",
-                "page-replace-unsupported-content-type",
-            }:
-                status_text = "Upload rejected: content type is not allowed."
-            elif save_msg in {"page-add-rate-limited", "page-replace-rate-limited"}:
-                status_text = "Upload rate limit reached. Please wait and try again."
-            elif save_msg in {"page-add-busy", "page-replace-busy"}:
-                status_text = "Too many active uploads. Please retry shortly."
-            else:
-                status_text = "Edit action failed. Check inputs and permissions."
-            status_class = "error"
-            status_hidden = ""
-        elif save_msg == "page-blocked":
-            status_text = "Upload blocked by moderation policy (photorealistic images are not allowed)."
-            status_class = "error"
-            status_hidden = ""
-        elif save_msg == "explicit-rating-locked":
-            status_text = (
-                "Only admins can lower a work from Explicit to a lower rating."
-            )
-            status_class = "error"
-            status_hidden = ""
-        else:
-            status_text = ""
-            status_class = ""
-            status_hidden = "hidden"
+        edit_status = _status_for_edit_message(save_msg)
 
-        pages = list_work_page_rows(work_id)
-        chapters = list_work_chapters(work_id)
+        pages = cast(list[dict[str, Any]], list_work_page_rows(work_id))
+        chapters = cast(list[dict[str, Any]], list_work_chapters(work_id))
+        # Normalize TypedDict rows to plain dict rows for editor helper signatures.
+        gallery_pages: list[dict[str, ConvertibleToInt]] = []
+        for page in pages:
+            page_index_obj = page.get("page_index")
+            if page_index_obj is None:
+                page_index_obj = page.get("page_number", 0)
+            image_filename_obj = page.get("image_filename")
+            if image_filename_obj is None:
+                image_filename_obj = page.get("filename", "")
+            gallery_pages.append(
+                {
+                    "page_index": int(page_index_obj),
+                    "image_filename": str(image_filename_obj),
+                }
+            )
+
+        gallery_chapters: list[dict[str, ConvertibleToInt]] = []
+        for chapter in chapters:
+            chapter_index_obj = chapter.get("chapter_index")
+            if chapter_index_obj is None:
+                chapter_index_obj = chapter.get("number", 0)
+            gallery_chapters.append(
+                {
+                    "id": int(chapter.get("id", 0)),
+                    "chapter_index": int(chapter_index_obj),
+                    "title": str(chapter.get("title", "Untitled Chapter")),
+                    "start_page": int(chapter.get("start_page", 1)),
+                    "end_page": int(chapter.get("end_page", 1)),
+                }
+            )
 
         return render_html_template(
             request,
@@ -316,9 +401,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__STATUS_COMPLETE_SELECTED__": selected_attr(
                     str(work.get("status", "in_progress")), "complete"
                 ),
-                "__EDIT_STATUS_TEXT__": status_text,
-                "__EDIT_STATUS_CLASS__": status_class,
-                "__EDIT_STATUS_HIDDEN_ATTR__": status_hidden,
+                "__EDIT_STATUS_TEXT__": edit_status.text,
+                "__EDIT_STATUS_CLASS__": edit_status.css_class,
+                "__EDIT_STATUS_HIDDEN_ATTR__": edit_status.hidden_attr,
                 "__EDITOR_WORK_ID__": escape(work_id),
                 "__EDITOR_TITLE__": escape(str(work.get("title", "Untitled"))),
                 "__EDITOR_SUMMARY__": escape(str(work.get("summary", ""))),
@@ -335,12 +420,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__EDITOR_LANGUAGE__": escape(str(work.get("language", "en"))),
                 "__EDITOR_PAGE_GALLERY_HTML__": render_editor_page_gallery_html(
                     work_id,
-                    pages,
-                    chapters,
+                    gallery_pages,
+                    gallery_chapters,
                 ),
                 "__EDITOR_CHAPTERS_HTML__": render_editor_chapters_html(
                     work_id,
-                    chapters,
+                    gallery_chapters,
                     form_action=f"/works/{work_id}/edit",
                     action_field_name="edit_action",
                     update_action_value="editor-update-chapter",
@@ -370,11 +455,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 {
                     "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
                     "__WORK_HREF__": f"/works/{escape(work_id)}",
-                    "__WORK_READER_HREF__": f"/reader/{escape(work_id)}",
+                    "__WORK_READER_HREF__": f"/tools/reader/{escape(work_id)}",
                     "__WORK_VERSIONS_LIST_HTML__": '<p class="profile-meta">No versions recorded yet.</p>',
                     "__VERSION_STATUS__": "No versions recorded yet.",
                     "__VERSION_STATUS_CLASS__": "",
-                    "__VERSION_READER_HREF__": f"/reader/{escape(work_id)}",
+                    "__VERSION_READER_HREF__": f"/tools/reader/{escape(work_id)}",
                     "__VERSION_METADATA_HTML__": '<p class="profile-meta">No snapshot metadata available.</p>',
                 },
             )
@@ -397,14 +482,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             {
                 "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
                 "__WORK_HREF__": f"/works/{escape(work_id)}",
-                "__WORK_READER_HREF__": f"/reader/{escape(work_id)}",
+                "__WORK_READER_HREF__": f"/tools/reader/{escape(work_id)}",
                 "__WORK_VERSIONS_LIST_HTML__": _work_versions_list_html(
                     work_id,
                     selected_version_id,
                 ),
                 "__VERSION_STATUS__": escape(f"Viewing version {selected_version_id}"),
                 "__VERSION_STATUS_CLASS__": "success",
-                "__VERSION_READER_HREF__": f"/reader/{escape(work_id)}?version_id={quoted_version}",
+                "__VERSION_READER_HREF__": f"/tools/reader/{escape(work_id)}?version_id={quoted_version}",
                 "__VERSION_METADATA_HTML__": _version_metadata_html(version_manifest),
             },
         )
@@ -429,12 +514,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     page_count = escape(str(work.get("page_count", 0)))
     cover_index = escape(str(work.get("cover_page_index", 1)))
 
-    tags = work.get("tags", [])
+    tags_obj = work.get("tags", [])
     tag_html = ""
-    if isinstance(tags, list):
+    if isinstance(tags_obj, list):
         rendered_tags: list[str] = []
-        for tag in tags:
-            if isinstance(tag, dict):
+        for tag_obj in cast(list[Any], tags_obj):
+            if isinstance(tag_obj, dict):
+                tag = cast(dict[str, Any], tag_obj)
                 tag_type = escape(str(tag.get("type", "tag")))
                 tag_name = escape(str(tag.get("name", "")))
                 rendered_tags.append(f'<span class="tag">{tag_type}: {tag_name}</span>')
@@ -450,36 +536,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     comments = list_work_comments(work_id)
     kudos = work_kudos_count(work_id)
     has_kudoed = has_user_kudoed_work(work_id, username)
+    progress_user_id = username if username else "anon"
+    bookmark_page_index = load_progress(work_id, progress_user_id)
 
     msg = request.args.get("msg", "").strip()
-    if msg == "comment-saved":
-        work_status_text = "Comment posted."
-        work_status_class = "success"
-        work_status_hidden = ""
-    elif msg == "kudos-saved":
-        work_status_text = "Kudos sent."
-        work_status_class = "success"
-        work_status_hidden = ""
-    elif msg == "already-kudoed":
-        work_status_text = "You already left kudos for this work."
-        work_status_class = ""
-        work_status_hidden = ""
-    elif msg == "login-required":
-        work_status_text = "Login required to leave comments or kudos."
-        work_status_class = "error"
-        work_status_hidden = ""
-    elif msg == "comment-empty":
-        work_status_text = "Comment cannot be empty."
-        work_status_class = "error"
-        work_status_hidden = ""
-    elif msg == "chapter-invalid":
-        work_status_text = "Chapter number must be between 1 and page count."
-        work_status_class = "error"
-        work_status_hidden = ""
-    else:
-        work_status_text = ""
-        work_status_class = ""
-        work_status_hidden = "hidden"
+    work_status = _status_for_work_message(msg)
 
     return render_html_template(
         request,
@@ -490,7 +551,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_SUMMARY__": summary,
             "__WORK_META__": f"{rating_html} | {status} | {page_count} pages",
             "__WORK_COVER_SRC__": f"/api/works/{escape(work_id)}/pages/{cover_index}/image",
-            "__WORK_READ_HREF__": f"/reader/{escape(work_id)}",
+            "__WORK_READ_HREF__": f"/tools/reader/{escape(work_id)}",
             "__WORK_DOWNLOAD_HREF__": f"/api/works/{escape(work_id)}/download",
             "__WORK_VERSIONS_HREF__": f"/works/{escape(work_id)}/versions",
             "__WORK_TAGS_HTML__": tag_html,
@@ -502,9 +563,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__KUDOS_DISABLED_ATTR__": "disabled"
             if (not username or has_kudoed)
             else "",
-            "__WORK_STATUS_TEXT__": work_status_text,
-            "__WORK_STATUS_CLASS__": work_status_class,
-            "__WORK_STATUS_HIDDEN_ATTR__": work_status_hidden,
+            "__WORK_STATUS_TEXT__": work_status.text,
+            "__WORK_STATUS_CLASS__": work_status.css_class,
+            "__WORK_STATUS_HIDDEN_ATTR__": work_status.hidden_attr,
             "__COMMENTS_HTML__": _comment_cards_html(comments),
             "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html(
                 "copyright-dmca"
@@ -512,5 +573,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__DMCA_WORK_ID__": escape(work_id),
             "__DMCA_WORK_TITLE__": title,
             "__DMCA_CLAIMED_URL__": f"/works/{escape(work_id)}",
+            "__WORK_BOOKMARK_WORK_ID__": escape(work_id),
+            "__WORK_BOOKMARK_USER_ID__": escape(progress_user_id),
+            "__WORK_BOOKMARK_PAGE_INDEX__": escape(str(bookmark_page_index)),
         },
     )
+

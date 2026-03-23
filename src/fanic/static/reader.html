@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -28,9 +28,9 @@
             </button>
             <div id="userMenuPanel" class="user-menu-panel" hidden>
               <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
                 <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
               </form>
             </div>
@@ -62,6 +62,12 @@
           <div>
             <a id="workLink" href="__READER_WORK_HREF__">Work</a>
           </div>
+          <div>
+            <button id="bookmarkBtn" type="button" aria-haspopup="dialog" aria-controls="bookmarkDialog" title="Bookmark this work">
+              <i class="fa-regular fa-bookmark" aria-hidden="true"></i>
+              <span class="sr-only">Bookmark this work</span>
+            </button>
+          </div>
         </div>
         <img id="readerImage" class="reader-image" alt="Comic page" />
         <div class="reader-hit left" id="hitLeft"></div>
@@ -70,8 +76,24 @@
       <section class="mobile-list" id="mobileList"></section>
     </main>
 
+    <div id="bookmarkDialog" class="bookmark-dialog" hidden>
+      <div class="bookmark-dialog-card" role="dialog" aria-modal="true" aria-labelledby="bookmarkDialogTitle">
+        <h3 id="bookmarkDialogTitle">Add Bookmark</h3>
+        <p class="profile-meta">Save this work to your profile bookmarks with an optional note.</p>
+        <label for="bookmarkMessage">Message (optional)</label>
+        <textarea id="bookmarkMessage" rows="3" maxlength="1024" placeholder="Optional note"></textarea>
+        <p id="bookmarkStatus" class="status-text" hidden></p>
+        <div class="bookmark-dialog-actions">
+          <button id="bookmarkCancelBtn" type="button" class="button-muted">Cancel</button>
+          <button id="bookmarkSaveBtn" type="button">Save bookmark</button>
+        </div>
+      </div>
+    </div>
+
     <script id="readerBootstrap" type="application/json">__READER_BOOTSTRAP_JSON__</script>
     <script src="/static/user-menu.js"></script>
     <script src="/static/reader.js"></script>
   </body>
 </html>
+
+

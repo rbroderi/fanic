@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -49,9 +49,9 @@
             </button>
             <div id="userMenuPanel" class="user-menu-panel" hidden>
               <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
                 <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
               </form>
             </div>
@@ -68,6 +68,18 @@
           <a id="downloadLink" href="__WORK_DOWNLOAD_HREF__">Download CBZ</a>
           |
           <a id="versionsLink" href="__WORK_VERSIONS_HREF__">Previous versions</a>
+          |
+          <button
+            id="workBookmarkButton"
+            type="button"
+            title="Bookmark this work"
+            data-work-id="__WORK_BOOKMARK_WORK_ID__"
+            data-user-id="__WORK_BOOKMARK_USER_ID__"
+            data-page-index="__WORK_BOOKMARK_PAGE_INDEX__"
+          >
+            <i class="fa-regular fa-bookmark" aria-hidden="true"></i>
+            <span class="sr-only">Bookmark this work</span>
+          </button>
           |
           <button id="reportWorkButton" type="button">Report</button>
         </p>
@@ -135,6 +147,20 @@
       </section>
     </div>
 
+    <div id="workBookmarkDialog" class="bookmark-dialog" hidden>
+      <div class="bookmark-dialog-card" role="dialog" aria-modal="true" aria-labelledby="workBookmarkDialogTitle">
+        <h3 id="workBookmarkDialogTitle">Add Bookmark</h3>
+        <p class="profile-meta">Save this work to your profile bookmarks with an optional note.</p>
+        <label for="workBookmarkMessage">Message (optional)</label>
+        <textarea id="workBookmarkMessage" rows="3" maxlength="1024" placeholder="Optional note"></textarea>
+        <p id="workBookmarkStatus" class="status-text" hidden></p>
+        <div class="bookmark-dialog-actions">
+          <button id="workBookmarkCancel" type="button" class="button-muted">Cancel</button>
+          <button id="workBookmarkSave" type="button">Save bookmark</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/user-menu.js"></script>
     <script>
       (function () {
@@ -163,6 +189,107 @@
           }
         });
       })();
+
+      (function () {
+        var openButton = document.getElementById("workBookmarkButton");
+        var dialog = document.getElementById("workBookmarkDialog");
+        var messageInput = document.getElementById("workBookmarkMessage");
+        var statusNode = document.getElementById("workBookmarkStatus");
+        var cancelButton = document.getElementById("workBookmarkCancel");
+        var saveButton = document.getElementById("workBookmarkSave");
+        if (!openButton || !dialog || !messageInput || !saveButton) {
+          return;
+        }
+
+        function setStatus(text, cssClass) {
+          if (!statusNode) {
+            return;
+          }
+          statusNode.hidden = false;
+          statusNode.className = "status-text " + cssClass;
+          statusNode.textContent = text;
+        }
+
+        function closeDialog() {
+          dialog.hidden = true;
+        }
+
+        function openDialog() {
+          dialog.hidden = false;
+          messageInput.value = "";
+          if (statusNode) {
+            statusNode.hidden = true;
+            statusNode.textContent = "";
+            statusNode.className = "status-text";
+          }
+          messageInput.focus();
+        }
+
+        openButton.addEventListener("click", openDialog);
+        if (cancelButton) {
+          cancelButton.addEventListener("click", closeDialog);
+        }
+
+        dialog.addEventListener("click", function (event) {
+          if (event.target === dialog) {
+            closeDialog();
+          }
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (dialog.hidden) {
+            return;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeDialog();
+          }
+        });
+
+        saveButton.addEventListener("click", async function () {
+          var workId = openButton.dataset.workId || "";
+          var userId = openButton.dataset.userId || "";
+          var pageIndex = openButton.dataset.pageIndex || "1";
+          if (!workId) {
+            setStatus("Missing work id.", "error");
+            return;
+          }
+          if (!userId || userId === "anon") {
+            setStatus("Login required to add bookmarks.", "error");
+            return;
+          }
+
+          var payload = new URLSearchParams();
+          payload.set("user_id", userId);
+          payload.set("page_index", pageIndex);
+          payload.set("message", messageInput.value.trim());
+
+          var result = await fetch("/api/works/" + encodeURIComponent(workId) + "/bookmark", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: payload.toString(),
+          });
+
+          if (!result.ok) {
+            var payloadObject = {};
+            try {
+              payloadObject = await result.json();
+            } catch (_error) {
+              payloadObject = {};
+            }
+            var detail = typeof payloadObject.detail === "string" ? payloadObject.detail : "Unable to save bookmark.";
+            setStatus(detail, "error");
+            return;
+          }
+
+          setStatus("Bookmark saved.", "success");
+          window.setTimeout(function () {
+            closeDialog();
+          }, 500);
+        });
+      })();
     </script>
   </body>
 </html>
+
+

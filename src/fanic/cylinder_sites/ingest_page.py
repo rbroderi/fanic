@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from html import escape
@@ -99,7 +99,7 @@ def render_ingest_page(
         "__EDITOR_LANGUAGE__": escape(editor_language),
         "__EDITOR_LINKS_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
         "__EDITOR_WORK_HREF__": f"/works/{escape(editor_work_id)}",
-        "__EDITOR_READER_HREF__": f"/reader/{escape(editor_work_id)}",
+        "__EDITOR_READER_HREF__": f"/tools/reader/{escape(editor_work_id)}",
         "__EDITOR_MANAGER_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
         "__EDITOR_PAGE_GALLERY_HTML__": render_editor_page_gallery_html(
             editor_work_id,
@@ -162,3 +162,4 @@ def render_ingest_page(
     response.content_type = "text/html; charset=utf-8"
     response.set_data(ingest_html)
     return response
+

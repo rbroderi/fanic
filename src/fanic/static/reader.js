@@ -41,6 +41,12 @@ const zoomInBtn = document.getElementById("zoomInBtn");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
 const zoomResetBtn = document.getElementById("zoomResetBtn");
 const readerStage = document.querySelector(".reader-stage");
+const bookmarkBtn = document.getElementById("bookmarkBtn");
+const bookmarkDialog = document.getElementById("bookmarkDialog");
+const bookmarkMessage = document.getElementById("bookmarkMessage");
+const bookmarkStatus = document.getElementById("bookmarkStatus");
+const bookmarkCancelBtn = document.getElementById("bookmarkCancelBtn");
+const bookmarkSaveBtn = document.getElementById("bookmarkSaveBtn");
 
 function applyZoom() {
   readerImage.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
@@ -119,6 +125,69 @@ async function saveProgress() {
   await fetch(`/api/works/${state.workId}/progress?page_index=${state.index}&user_id=${state.userId}`, {
     method: "POST",
   });
+}
+
+function setBookmarkStatus(message, cssClass) {
+  if (!bookmarkStatus) {
+    return;
+  }
+  bookmarkStatus.hidden = false;
+  bookmarkStatus.textContent = message;
+  bookmarkStatus.className = `status-text ${cssClass}`;
+}
+
+function closeBookmarkDialog() {
+  if (!bookmarkDialog) {
+    return;
+  }
+  bookmarkDialog.hidden = true;
+}
+
+function openBookmarkDialog() {
+  if (!bookmarkDialog || !bookmarkMessage) {
+    return;
+  }
+  bookmarkDialog.hidden = false;
+  bookmarkMessage.value = "";
+  if (bookmarkStatus) {
+    bookmarkStatus.hidden = true;
+    bookmarkStatus.textContent = "";
+    bookmarkStatus.className = "status-text";
+  }
+  bookmarkMessage.focus();
+}
+
+async function saveBookmark() {
+  if (state.userId === "anon") {
+    setBookmarkStatus("Login required to add bookmarks.", "error");
+    return;
+  }
+  if (!bookmarkMessage) {
+    return;
+  }
+
+  const payload = new URLSearchParams();
+  payload.set("user_id", state.userId);
+  payload.set("page_index", String(state.index));
+  payload.set("message", bookmarkMessage.value.trim());
+
+  const result = await fetch(`/api/works/${state.workId}/bookmark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: payload.toString(),
+  });
+
+  if (!result.ok) {
+    const payloadObject = await result.json().catch(() => ({}));
+    const detail = typeof payloadObject?.detail === "string" ? payloadObject.detail : "Unable to save bookmark.";
+    setBookmarkStatus(detail, "error");
+    return;
+  }
+
+  setBookmarkStatus("Bookmark saved.", "success");
+  window.setTimeout(() => {
+    closeBookmarkDialog();
+  }, 500);
 }
 
 function renderPage(index) {
@@ -227,8 +296,24 @@ function bindControls() {
     },
     true,
   );
+  bookmarkBtn?.addEventListener("click", openBookmarkDialog);
+  bookmarkCancelBtn?.addEventListener("click", closeBookmarkDialog);
+  bookmarkSaveBtn?.addEventListener("click", () => {
+    saveBookmark();
+  });
+  bookmarkDialog?.addEventListener("click", (event) => {
+    if (event.target === bookmarkDialog) {
+      closeBookmarkDialog();
+    }
+  });
 
   document.addEventListener("keydown", (event) => {
+    if (!bookmarkDialog?.hidden && event.key === "Escape") {
+      event.preventDefault();
+      closeBookmarkDialog();
+      return;
+    }
+
     const tagName = event.target instanceof HTMLElement ? event.target.tagName : "";
     if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") {
       return;

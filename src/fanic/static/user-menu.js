@@ -65,6 +65,32 @@ function ensureUserMenuThemeToggle() {
   }
 }
 
+function ensureUserMenuNotificationLink() {
+  if (!userMenuPanel || !userMenuProfile) {
+    return;
+  }
+  if (document.getElementById("userMenuNotification")) {
+    return;
+  }
+
+  const notificationLink = document.createElement("a");
+  notificationLink.id = "userMenuNotification";
+  notificationLink.className = "user-menu-link";
+  notificationLink.href = "/user/notifications";
+  notificationLink.innerHTML = '<i class="fa-regular fa-bell" aria-hidden="true"></i> Notifications';
+
+  if (userMenuProfile.hasAttribute("hidden")) {
+    notificationLink.setAttribute("hidden", "hidden");
+  }
+
+  const logoutForm = document.getElementById("userMenuLogoutForm");
+  if (logoutForm && logoutForm.parentElement === userMenuPanel) {
+    userMenuPanel.insertBefore(notificationLink, logoutForm);
+  } else {
+    userMenuPanel.append(notificationLink);
+  }
+}
+
 function preferredTheme() {
   const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
   if (storedTheme === THEME_LIGHT || storedTheme === THEME_DARK) {
@@ -124,6 +150,7 @@ function bindCustomThemePreferenceToggle() {
 }
 
 applyTheme(preferredTheme());
+ensureUserMenuNotificationLink();
 ensureUserMenuThemeToggle();
 for (const toggle of themeToggles()) {
   bindThemeToggle(toggle);

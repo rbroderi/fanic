@@ -3,39 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Terms and Conditions</title>
-    <meta name="description" content="Terms and Conditions for FANIC." />
+    <title>Notifications - FANIC</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="/static/styles.css" />
-    <style>
-      .terms-shell {
-        max-width: 980px;
-        margin: 0 auto;
-      }
-
-      .terms-shell h1,
-      .terms-shell h2 {
-        margin: 0 0 0.75rem;
-      }
-
-      .terms-shell section + section {
-        margin-top: 1.25rem;
-      }
-
-      .terms-shell p,
-      .terms-shell li {
-        margin: 0.5rem 0 0;
-      }
-
-      .terms-shell ul {
-        margin: 0;
-        padding-left: 1.25rem;
-      }
-    </style>
   </head>
   <body>
     <header class="site-header">
@@ -47,8 +21,8 @@
             <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
             <a href="/ingest">Upload comic</a>
-            <a href="/cbz-format">CBZ SPEC INFO</a>
-            <a href="/terms" aria-current="page">Terms</a>
+            <a href="/user/profile">Profile</a>
+            <a href="/user/notifications" aria-current="page">Notification</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -68,33 +42,19 @@
       </div>
     </header>
 
-    <main class="layout terms-shell">
-      <section class="card">
-        <h1>Terms and Conditions</h1>
-        <p>
-          These Terms and Conditions govern uploads and publication of works on FANIC.
-        </p>
+    <main class="layout">
+      <section class="card info-card">
+        <h2>Notifications</h2>
+        <p class="profile-meta">Unread: __NOTIFICATION_UNREAD_COUNT__</p>
+        <p class="status-text __NOTIFICATION_STATUS_CLASS__" __NOTIFICATION_STATUS_HIDDEN_ATTR__>__NOTIFICATION_STATUS__</p>
+        <form method="post" action="/user/notifications" __NOTIFICATION_MARK_ALL_HIDDEN_ATTR__>
+          <input type="hidden" name="notification_action" value="mark-all-read" />
+          <button type="submit">Mark all read</button>
+        </form>
+      </section>
 
-        <section>
-          <h2>License Granted to FANIC</h2>
-          <p>
-            By uploading a work, you grant FANIC a limited license to host, display, copy, and back up that work solely as required to operate, secure, and provide the website service.
-          </p>
-        </section>
-
-        <section>
-          <h2>Rights and Ownership Requirement</h2>
-          <p>
-            You represent and warrant that you have the rights, permissions, or lawful authority necessary to upload all content you submit.
-          </p>
-        </section>
-
-        <section>
-          <h2>Publication History and Record</h2>
-          <p>
-            Posted works are treated as an immutable publication record. Any updates, edits, or replacements are retained as part of work history, and all versions and changes are available for anyone to view.
-          </p>
-        </section>
+      <section class="comments-list">
+        __NOTIFICATION_ITEMS_HTML__
       </section>
     </main>
 

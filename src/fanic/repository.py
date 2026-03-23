@@ -81,6 +81,30 @@ class RecentReadingHistoryRow(TypedDict):
     updated_at: str
 
 
+class UserBookmarkRow(TypedDict):
+    username: str
+    work_id: str
+    work_title: str
+    author_username: str
+    page_index: int
+    message: str
+    updated_at: str
+    rating: str
+    status: str
+
+
+class NotificationRow(TypedDict):
+    id: int
+    username: str
+    actor_username: str
+    work_id: str
+    kind: str
+    message: str
+    href: str
+    is_read: bool
+    created_at: str
+
+
 def _normalize_user_role(role: object) -> UserRole:
     normalized = str(role).strip().lower()
     if normalized == "superadmin":
@@ -831,6 +855,157 @@ def work_kudos_count(work_id: str) -> int:
     if not row:
         return 0
     return int(row["count"])
+
+
+def create_notification(
+    username: str,
+    *,
+    actor_username: str,
+    work_id: str | None,
+    kind: str,
+    message: str,
+    href: str,
+) -> int:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_actor = actor_username.strip()
+    if not normalized_actor:
+        raise ValueError("actor_username must not be empty")
+
+    normalized_kind = kind.strip()
+    stored_kind = normalized_kind if normalized_kind else "generic"
+
+    normalized_message = message.strip()
+    if not normalized_message:
+        raise ValueError("message must not be empty")
+
+    normalized_href = href.strip()
+    stored_work_id = (
+        work_id.strip() if isinstance(work_id, str) and work_id.strip() else None
+    )
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO notifications (username, actor_username, work_id, kind, message, href)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_username,
+                normalized_actor,
+                stored_work_id,
+                stored_kind,
+                normalized_message,
+                normalized_href,
+            ),
+        )
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to persist notification")
+    return int(cursor.lastrowid)
+
+
+def list_user_notifications(
+    username: str,
+    *,
+    limit: int = 100,
+) -> list[NotificationRow]:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, username, actor_username, work_id, kind, message, href, is_read, created_at
+            FROM notifications
+            WHERE username = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (normalized_username, int(limit)),
+        ).fetchall()
+
+    notifications: list[NotificationRow] = []
+    for row in rows:
+        work_id_obj = row["work_id"]
+        notifications.append(
+            {
+                "id": int(row["id"]),
+                "username": str(row["username"]),
+                "actor_username": str(row["actor_username"]),
+                "work_id": str(work_id_obj) if work_id_obj is not None else "",
+                "kind": str(row["kind"]),
+                "message": str(row["message"]),
+                "href": str(row["href"]),
+                "is_read": bool(int(row["is_read"])),
+                "created_at": str(row["created_at"]),
+            }
+        )
+    return notifications
+
+
+def count_unread_notifications(username: str | None) -> int:
+    normalized_username = username.strip() if isinstance(username, str) else ""
+    if not normalized_username:
+        return 0
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM notifications WHERE username = ? AND is_read = 0",
+            (normalized_username,),
+        ).fetchone()
+    if not row:
+        return 0
+    return int(row["count"])
+
+
+def mark_notification_read(username: str, notification_id: int) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE notifications
+            SET is_read = 1
+            WHERE id = ? AND username = ?
+            """,
+            (int(notification_id), normalized_username),
+        )
+    return cursor.rowcount > 0
+
+
+def mark_all_notifications_read(username: str) -> int:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return 0
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE notifications
+            SET is_read = 1
+            WHERE username = ? AND is_read = 0
+            """,
+            (normalized_username,),
+        )
+    return int(cursor.rowcount)
+
+
+def delete_notification(username: str, notification_id: int) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM notifications WHERE id = ? AND username = ?",
+            (int(notification_id), normalized_username),
+        )
+    return cursor.rowcount > 0
 
 
 def count_uploaded_pages_for_user(username: str | None) -> int:
@@ -1655,6 +1830,101 @@ def list_recent_reading_history(
             }
         )
     return history_rows
+
+
+def upsert_user_bookmark(
+    username: str,
+    work_id: str,
+    *,
+    page_index: int,
+    message: str,
+) -> bool:
+    normalized_username = username.strip()
+    normalized_work_id = work_id.strip()
+    if not normalized_username or not normalized_work_id:
+        return False
+
+    stored_page_index = max(1, int(page_index))
+    stored_message = message.strip()
+
+    with get_connection() as connection:
+        work_row = connection.execute(
+            "SELECT 1 FROM works WHERE id = ?",
+            (normalized_work_id,),
+        ).fetchone()
+        if work_row is None:
+            return False
+
+        connection.execute(
+            """
+            INSERT INTO user_bookmarks (username, work_id, page_index, message)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(username, work_id) DO UPDATE SET
+                page_index = excluded.page_index,
+                message = excluded.message,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                normalized_username,
+                normalized_work_id,
+                stored_page_index,
+                stored_message,
+            ),
+        )
+    return True
+
+
+def list_user_bookmarks(
+    username: str,
+    *,
+    limit: int = 250,
+) -> list[UserBookmarkRow]:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return []
+
+    normalized_limit = int(limit)
+    if normalized_limit < 1:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                ub.username,
+                ub.work_id,
+                w.title,
+                COALESCE(w.uploader_username, '') AS author_username,
+                ub.page_index,
+                ub.message,
+                ub.updated_at,
+                w.rating,
+                w.status
+            FROM user_bookmarks ub
+            JOIN works w ON w.id = ub.work_id
+            WHERE ub.username = ?
+            ORDER BY ub.updated_at DESC
+            LIMIT ?
+            """,
+            (normalized_username, normalized_limit),
+        ).fetchall()
+
+    bookmark_rows: list[UserBookmarkRow] = []
+    for row in rows:
+        bookmark_rows.append(
+            {
+                "username": str(row["username"]),
+                "work_id": str(row["work_id"]),
+                "work_title": str(row["title"]),
+                "author_username": str(row["author_username"]),
+                "page_index": _to_int(row["page_index"], 1),
+                "message": str(row["message"]),
+                "updated_at": str(row["updated_at"]),
+                "rating": str(row["rating"]),
+                "status": str(row["status"]),
+            }
+        )
+    return bookmark_rows
 
 
 def delete_work(work_id: str) -> bool:

@@ -33,8 +33,8 @@ def test_profile_post_saves_theme_toml(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/profile.ex.post.py",
-        "fanicsite_profile_ex_post_test",
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_test",
     )
 
     def fake_current_user(request: Any) -> str:
@@ -61,7 +61,7 @@ def test_profile_post_saves_theme_toml(
 
     upload = DummyUpload("theme.toml", '[dark]\naccent = "#268bd2"\n')
     request = dummy_request(
-        path="/profile",
+        path="/user/profile",
         method="POST",
         form={"profile_action": "theme", "custom_theme_enabled": "on"},
         files={"theme_toml": upload},
@@ -70,7 +70,7 @@ def test_profile_post_saves_theme_toml(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/profile?msg=theme_saved"
+    assert result.headers["Location"] == "/user/profile?msg=theme_saved"
     assert saved["username"] == "alice"
     assert saved["enabled"] is True
     assert isinstance(saved["toml_text"], str)
@@ -84,8 +84,8 @@ def test_profile_get_marks_custom_theme_checked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/profile.ex.get.py",
-        "fanicsite_profile_ex_get_test",
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.get.py",
+        "fanicsite_user_profile_ex_get_test",
     )
 
     def fake_current_user(request: Any) -> str:
@@ -105,7 +105,7 @@ def test_profile_get_marks_custom_theme_checked(
         return {"enabled": True, "toml_text": '[dark]\naccent="#b58900"'}
 
     class FakeSettings:
-        profile_history_limit = 7
+        profile_history_limit: int = 7
 
     def fake_list_recent_reading_history(
         user_id: str,
@@ -114,6 +114,14 @@ def test_profile_get_marks_custom_theme_checked(
     ) -> list[dict[str, Any]]:
         _ = (user_id, limit)
         return []
+
+    def fake_list_user_bookmarks(username: str) -> list[dict[str, Any]]:
+        _ = username
+        return []
+
+    def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
     monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
@@ -124,6 +132,8 @@ def test_profile_get_marks_custom_theme_checked(
         "list_recent_reading_history",
         fake_list_recent_reading_history,
     )
+    monkeypatch.setattr(module, "list_user_bookmarks", fake_list_user_bookmarks)
+    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
@@ -154,7 +164,7 @@ def test_profile_get_marks_custom_theme_checked(
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/profile", args={})
+    request = dummy_request(path="/user/profile", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -171,10 +181,11 @@ def test_users_public_profile_uses_public_template(
     dummy_response: Callable[[], ResponseLike],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = load_route_module(
+    route_module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_public_profile_test",
     )
+    handler_module = route_module.ex_get_handler
 
     def fake_current_user(request: Any) -> str:
         _ = request
@@ -184,13 +195,20 @@ def test_users_public_profile_uses_public_template(
         _ = username
         return []
 
+    def fake_list_user_bookmarks(username: str) -> list[dict[str, Any]]:
+        _ = username
+        return []
+
     def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
         _ = (username, work)
         return True
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    monkeypatch.setattr(handler_module, "current_user", fake_current_user)
+    monkeypatch.setattr(
+        handler_module, "list_works_by_uploader", fake_list_works_by_uploader
+    )
+    monkeypatch.setattr(handler_module, "list_user_bookmarks", fake_list_user_bookmarks)
+    monkeypatch.setattr(handler_module, "can_view_work", fake_can_view_work)
 
     captured: dict[str, str] = {}
 
@@ -216,11 +234,13 @@ def test_users_public_profile_uses_public_template(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    monkeypatch.setattr(
+        handler_module, "render_html_template", fake_render_html_template
+    )
 
     request = dummy_request(path="/users/admin", args={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = route_module.main(request, response)
 
     assert result.status_code == 200
     assert captured["template"] == "profile-public.html"
@@ -236,8 +256,8 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     post_module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/profile.ex.post.py",
-        "fanicsite_profile_ex_post_disable_theme_test",
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_disable_theme_test",
     )
     common_module = load_route_module(
         "src/fanic/cylinder_sites/common.py",
@@ -284,7 +304,7 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
     )
 
     request = dummy_request(
-        path="/profile",
+        path="/user/profile",
         method="POST",
         form={"profile_action": "theme"},
         files={},
@@ -293,8 +313,8 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
     result = post_module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/profile?msg=theme_saved"
+    assert result.headers["Location"] == "/user/profile?msg=theme_saved"
     assert state["enabled"] is False
 
-    get_request = dummy_request(path="/profile", args={})
+    get_request = dummy_request(path="/user/profile", args={})
     assert common_module._custom_theme_style_tag(get_request) == ""

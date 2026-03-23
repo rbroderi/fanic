@@ -30,6 +30,7 @@ from fanic.ingest import ingest_editor_page
 from fanic.repository import add_work_comment
 from fanic.repository import add_work_kudo
 from fanic.repository import can_view_work
+from fanic.repository import create_notification
 from fanic.repository import create_work_version_snapshot
 from fanic.repository import delete_work
 from fanic.repository import get_work
@@ -127,6 +128,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not username:
             return _redirect(response, f"/works/{work_id}?msg=login-required")
         inserted = add_work_kudo(work_id, username)
+        if inserted:
+            uploader_username = str(
+                work.get("uploader_username") if work.get("uploader_username") else ""
+            )
+            if uploader_username and uploader_username != username:
+                work_title = str(work.get("title", "Untitled"))
+                _ = create_notification(
+                    uploader_username,
+                    actor_username=username,
+                    work_id=work_id,
+                    kind="kudo",
+                    message=f'{username} left kudos on your work "{work_title}".',
+                    href=f"/works/{work_id}",
+                )
         return _redirect(
             response,
             f"/works/{work_id}?msg={'kudos-saved' if inserted else 'already-kudoed'}",
@@ -154,6 +169,22 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             chapter_number = None
 
         add_work_comment(work_id, username, body, chapter_number=chapter_number)
+        uploader_username = str(
+            work.get("uploader_username") if work.get("uploader_username") else ""
+        )
+        if uploader_username and uploader_username != username:
+            work_title = str(work.get("title", "Untitled"))
+            chapter_text = (
+                f" on chapter {chapter_number}" if chapter_number is not None else ""
+            )
+            _ = create_notification(
+                uploader_username,
+                actor_username=username,
+                work_id=work_id,
+                kind="comment",
+                message=f'{username} commented{chapter_text} on your work "{work_title}".',
+                href=f"/works/{work_id}",
+            )
         return _redirect(response, f"/works/{work_id}?msg=comment-saved")
 
     if action != "edit":

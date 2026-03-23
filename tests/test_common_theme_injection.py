@@ -44,7 +44,7 @@ def test_render_html_template_injects_custom_theme_style(
         fake_get_user_theme_preference,
     )
 
-    request = dummy_request(path="/profile", args={})
+    request = dummy_request(path="/user/profile", args={})
     response = dummy_response()
     render_html_template: Callable[
         [Any, ResponseLike, str, dict[str, str]], ResponseLike

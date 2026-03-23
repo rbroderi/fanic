@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -21,7 +21,7 @@
             <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
             <a href="/ingest">Upload comic</a>
-            <a href="/login" aria-current="page">Login</a>
+            <a href="/account/login" aria-current="page">Login</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -30,9 +30,9 @@
             </button>
             <div id="userMenuPanel" class="user-menu-panel" hidden>
               <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
                 <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
               </form>
             </div>
@@ -48,7 +48,7 @@
       </section>
 
       <section class="card info-card">
-        <form id="loginForm" class="auth-form" method="post" action="/login">
+        <form id="loginForm" class="auth-form" method="post" action="/account/login">
           <div id="loginCredentials" __LOGIN_CREDENTIALS_HIDDEN_ATTR__>
             <label for="username">Username</label>
             <input id="username" name="username" type="text" autocomplete="username" required />
@@ -61,7 +61,7 @@
             <button id="loginBtn" type="submit" __LOGIN_BUTTON_HIDDEN_ATTR__>Login</button>
           </div>
         </form>
-        <form id="logoutForm" class="auth-inline" method="post" action="/logout" __LOGOUT_HIDDEN_ATTR__>
+        <form id="logoutForm" class="auth-inline" method="post" action="/account/logout" __LOGOUT_HIDDEN_ATTR__>
           <button id="logoutBtn" type="submit" class="button-muted">Logout</button>
         </form>
         <p id="loginMessage" class="auth-message __LOGIN_MESSAGE_CLASS__" __LOGIN_MESSAGE_HIDDEN_ATTR__>__LOGIN_MESSAGE__</p>
@@ -71,3 +71,5 @@
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+
+

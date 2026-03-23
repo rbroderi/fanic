@@ -76,6 +76,30 @@ CREATE TABLE IF NOT EXISTS reading_progress (
     FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS user_bookmarks (
+    username TEXT NOT NULL,
+    work_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL DEFAULT 1,
+    message TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (username, work_id),
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    actor_username TEXT NOT NULL,
+    work_id TEXT,
+    kind TEXT NOT NULL DEFAULT 'generic',
+    message TEXT NOT NULL,
+    href TEXT NOT NULL DEFAULT '',
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -157,3 +181,6 @@ CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at);
 CREATE INDEX IF NOT EXISTS idx_dmca_reports_work_id ON dmca_reports(work_id);
+CREATE INDEX IF NOT EXISTS idx_user_bookmarks_username_updated_at ON user_bookmarks(username, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_username_created_at ON notifications(username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_username_is_read ON notifications(username, is_read);

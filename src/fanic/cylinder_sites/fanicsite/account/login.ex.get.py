@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from html import escape
 
 from fanic.cylinder_sites.common import RequestLike
@@ -50,7 +50,7 @@ def _message_block(request: RequestLike) -> LoginMessage:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/login":
+    if request.path != "/account/login":
         return text_error(response, "Not found", 404)
 
     username = current_user(request)
@@ -75,3 +75,4 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__LOGIN_MESSAGE__": escape(login_message.text),
         },
     )
+

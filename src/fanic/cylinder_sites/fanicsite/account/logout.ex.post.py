@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -17,7 +17,7 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/logout":
+    if request.path != "/account/logout":
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):
@@ -27,4 +27,5 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Invalid CSRF token", 403)
 
     clear_login_cookie(response)
-    return _redirect(response, "/login?msg=logged_out")
+    return _redirect(response, "/account/login?msg=logged_out")
+

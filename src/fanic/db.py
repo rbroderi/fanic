@@ -210,6 +210,36 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_bookmarks (
+            username TEXT NOT NULL,
+            work_id TEXT NOT NULL,
+            page_index INTEGER NOT NULL DEFAULT 1,
+            message TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (username, work_id),
+            FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            actor_username TEXT NOT NULL,
+            work_id TEXT,
+            kind TEXT NOT NULL DEFAULT 'generic',
+            message TEXT NOT NULL,
+            href TEXT NOT NULL DEFAULT '',
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE SET NULL
+        )
+        """
+    )
     dmca_columns = {
         str(row[1])
         for row in connection.execute("PRAGMA table_info(dmca_reports)").fetchall()
@@ -234,6 +264,15 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_work_kudos_work_id ON work_kudos(work_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_bookmarks_username_updated_at ON user_bookmarks(username, updated_at DESC)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notifications_username_created_at ON notifications(username, created_at DESC)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notifications_username_is_read ON notifications(username, is_read)"
     )
 
 

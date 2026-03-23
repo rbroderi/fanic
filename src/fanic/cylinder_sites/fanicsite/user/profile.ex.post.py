@@ -24,7 +24,7 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/profile":
+    if request.path != "/user/profile":
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):
@@ -56,17 +56,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     uploaded_toml_text = upload_path.read_text(encoding="utf-8")
                 _ = tomllib.loads(uploaded_toml_text)
             except (OSError, UnicodeDecodeError):
-                return _redirect(response, "/profile?msg=theme_upload_error")
+                return _redirect(response, "/user/profile?msg=theme_upload_error")
             except tomllib.TOMLDecodeError:
-                return _redirect(response, "/profile?msg=theme_parse_error")
+                return _redirect(response, "/user/profile?msg=theme_parse_error")
 
         set_user_theme_preference(
             username,
             enabled=custom_theme_enabled,
             toml_text=uploaded_toml_text,
         )
-        return _redirect(response, "/profile?msg=theme_saved")
+        return _redirect(response, "/user/profile?msg=theme_saved")
 
     view_explicit = request.form.get("view_explicit_rated", "") == "on"
     set_user_prefers_explicit(username, view_explicit)
-    return _redirect(response, "/profile?msg=saved")
+    return _redirect(response, "/user/profile?msg=saved")

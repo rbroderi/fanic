@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -29,9 +29,9 @@
             </button>
             <div id="userMenuPanel" class="user-menu-panel" hidden>
               <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
                 <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
               </form>
             </div>
@@ -80,3 +80,5 @@
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+
+

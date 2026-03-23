@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -22,29 +22,30 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/login":
+    if request.path != "/account/login":
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):
         return response
 
     if not validate_csrf(request):
-        return _redirect(response, "/login?msg=csrf-invalid")
+        return _redirect(response, "/account/login?msg=csrf-invalid")
 
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "")
 
     lockout_remaining = auth_lockout_seconds_remaining(request, username)
     if lockout_remaining > 0:
-        return _redirect(response, f"/login?msg=locked&retry_after={lockout_remaining}")
+        return _redirect(response, f"/account/login?msg=locked&retry_after={lockout_remaining}")
 
     role = role_for_user(username)
     allowed_role = role in {"superadmin", "admin"}
     password_ok = verify_admin_password(password)
     if not allowed_role or not password_ok:
         _ = record_auth_failure(request, username)
-        return _redirect(response, "/login?msg=invalid")
+        return _redirect(response, "/account/login?msg=invalid")
 
     clear_auth_failures(request, username)
     set_login_cookie(response, username)
-    return _redirect(response, "/login?msg=success")
+    return _redirect(response, "/account/login?msg=success")
+

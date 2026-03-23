@@ -212,6 +212,26 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     assert len(comments) == 1
     assert comments[0]["chapter_number"] == 1
 
+    notification_id = repository.create_notification(
+        "alice",
+        actor_username="bob",
+        work_id="work-1",
+        kind="comment",
+        message="bob commented on your work.",
+        href="/works/work-1",
+    )
+    assert notification_id > 0
+    assert repository.count_unread_notifications("alice") == 1
+    notification_rows = repository.list_user_notifications("alice", limit=10)
+    assert len(notification_rows) == 1
+    assert notification_rows[0]["kind"] == "comment"
+    assert notification_rows[0]["is_read"] is False
+    assert repository.mark_notification_read("alice", notification_id) is True
+    assert repository.count_unread_notifications("alice") == 0
+    assert repository.mark_all_notifications_read("alice") == 0
+    assert repository.delete_notification("alice", notification_id) is True
+    assert repository.list_user_notifications("alice", limit=10) == []
+
     tags = work.get("tags", [])
     assert isinstance(tags, list)
     tag_items = cast(list[object], tags)

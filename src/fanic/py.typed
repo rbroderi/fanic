@@ -1,0 +1,351 @@
+﻿from __future__ import annotations
+
+import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
+
+from fanic.clip_backend import get_backend
+from fanic.settings import get_settings
+
+_NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
+    "sfw": [
+        "a safe-for-work comic or illustration",
+        "a non-sexual drawing or artwork",
+        "a fully clothed character illustration",
+        "a wholesome non-explicit scene",
+        "a comic panel with no nudity and no sexual activity",
+        "an action or adventure comic scene",
+        "a portrait illustration with non-sexual pose",
+        "a romantic but non-sexual artwork",
+        "a cartoon character scene with no erotic content",
+        "a family friendly anime or manga panel",
+    ],
+    "explicit": [
+        "a pornographic, explicit nudity image",
+        "a sexually explicit adult image",
+        "uncensored genital nudity",
+        "graphic sexual content",
+        "visible genitals with sexual focus",
+        "oral sex or penetrative sexual act",
+        "explicit intercourse in an illustration",
+        "erotic porn scene with exposed nipples and genitals",
+        "fetish artwork with clear sexual act",
+        "adult explicit hentai or pornographic comic panel",
+    ],
+}
+_NSFW_CLASS_NAMES = list(_NSFW_PROMPTS_BY_CLASS.keys())
+_SETTINGS = get_settings()
+_DEFAULT_LOGIT_SCALE = _SETTINGS.nsfw_logit_scale
+
+_model: object | None = None
+_preprocess: object | None = None
+_text_emb: object | None = None
+_torch_mod: object | None = None
+_device: str = "cpu"
+_load_attempted = False
+
+
+def _call0(obj: object | None, name: str) -> object | None:
+    if obj is None:
+        return None
+    member = getattr(obj, name, None)
+    if not callable(member):
+        return None
+    try:
+        return member()
+    except Exception:
+        return None
+
+
+def _call1(obj: object | None, name: str, arg1: object) -> object | None:
+    if obj is None:
+        return None
+    member = getattr(obj, name, None)
+    if not callable(member):
+        return None
+    try:
+        return member(arg1)
+    except Exception:
+        return None
+
+
+def _call_kw(
+    obj: object | None,
+    name: str,
+    *args: object,
+    **kwargs: object,
+) -> object | None:
+    if obj is None:
+        return None
+    member = getattr(obj, name, None)
+    if not callable(member):
+        return None
+    try:
+        return member(*args, **kwargs)
+    except Exception:
+        return None
+
+
+def _as_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _as_prob_0_1(value: object) -> float:
+    parsed = _as_float(value)
+    if parsed is None:
+        return 0.0
+    return max(0.0, min(1.0, parsed))
+
+
+def _enter_context(manager: object | None) -> bool:
+    if manager is None:
+        return False
+    member = getattr(manager, "__enter__", None)
+    if not callable(member):
+        return False
+    try:
+        _ = member()
+    except Exception:
+        return False
+    return True
+
+
+def _exit_context(manager: object | None) -> None:
+    if manager is None:
+        return
+    _ = _call_kw(manager, "__exit__", None, None, None)
+
+
+def _get_no_grad_context(torch_mod: object | None) -> object | None:
+    no_grad_factory = getattr(torch_mod, "no_grad", None)
+    if not callable(no_grad_factory):
+        return None
+    try:
+        return no_grad_factory()
+    except Exception:
+        return None
+
+
+def _empty_nsfw_confidences() -> dict[str, float]:
+    return {name: 0.0 for name in _NSFW_CLASS_NAMES}
+
+
+def _ensure_loaded() -> bool:
+    global _model
+    global _preprocess
+    global _text_emb
+    global _torch_mod
+    global _device
+    global _load_attempted
+
+    if _model is not None and _preprocess is not None and _text_emb is not None:
+        return True
+    if _load_attempted:
+        return False
+    _load_attempted = True
+
+    backend = get_backend()
+    if backend is None:
+        return False
+
+    model, preprocess, tokenizer, torch_mod, device = backend
+    _model = model
+    _preprocess = preprocess
+    _torch_mod = torch_mod
+    _device = device
+
+    try:
+        no_grad = _get_no_grad_context(torch_mod)
+        if no_grad is None:
+            return False
+
+        if not _enter_context(no_grad):
+            return False
+        try:
+            all_prompts: list[str] = []
+            class_ranges: list[tuple[str, int, int]] = []
+            cursor = 0
+            for class_name in _NSFW_CLASS_NAMES:
+                prompts = _NSFW_PROMPTS_BY_CLASS.get(class_name, [])
+                if not prompts:
+                    continue
+                start = cursor
+                all_prompts.extend(prompts)
+                cursor += len(prompts)
+                class_ranges.append((class_name, start, cursor))
+
+            if not all_prompts:
+                return False
+
+            tokenized = _call1(tokenizer, "__call__", all_prompts)
+            if tokenized is None:
+                return False
+
+            text_tokens = _call1(tokenized, "to", _device)
+            if text_tokens is None:
+                return False
+
+            text_emb = _call1(_model, "encode_text", text_tokens)
+            if text_emb is None:
+                return False
+
+            text_norm = _call_kw(text_emb, "norm", dim=-1, keepdim=True)
+            if text_norm is None:
+                return False
+
+            text_emb_normed = _call1(text_emb, "__truediv__", text_norm)
+            if text_emb_normed is None:
+                return False
+
+            class_embeds: list[object] = []
+            for class_name, start, end in class_ranges:
+                _ = class_name
+                prompt_slice = _call1(text_emb_normed, "__getitem__", slice(start, end))
+                if prompt_slice is None:
+                    return False
+
+                class_mean = _call_kw(prompt_slice, "mean", dim=0)
+                if class_mean is None:
+                    return False
+
+                class_norm = _call_kw(class_mean, "norm", dim=-1, keepdim=True)
+                if class_norm is None:
+                    return False
+
+                class_mean_normed = _call1(class_mean, "__truediv__", class_norm)
+                if class_mean_normed is None:
+                    return False
+
+                class_embeds.append(class_mean_normed)
+
+            if not class_embeds:
+                return False
+
+            stacked_class_embeds = _call_kw(torch_mod, "stack", class_embeds, dim=0)
+            if stacked_class_embeds is None:
+                return False
+
+            _text_emb = stacked_class_embeds
+        finally:
+            _exit_context(no_grad)
+    except Exception:
+        _model = None
+        _preprocess = None
+        _text_emb = None
+        _torch_mod = None
+        return False
+
+    return True
+
+
+def _nsfw_score_internal(path: str) -> tuple[float, dict[str, float]]:
+    """Return explicit probability and per-class confidences."""
+    if not _ensure_loaded():
+        return 0.0, _empty_nsfw_confidences()
+
+    try:
+        from PIL import Image
+
+        image = Image.open(path).convert("RGB")
+        preprocessed = _call1(_preprocess, "__call__", image)
+        if preprocessed is None:
+            return 0.0, _empty_nsfw_confidences()
+
+        unsqueezed = _call1(preprocessed, "unsqueeze", 0)
+        if unsqueezed is None:
+            return 0.0, _empty_nsfw_confidences()
+
+        image_tensor = _call1(unsqueezed, "to", _device)
+        if image_tensor is None:
+            return 0.0, _empty_nsfw_confidences()
+
+        no_grad = _get_no_grad_context(_torch_mod)
+        if no_grad is None:
+            return 0.0, _empty_nsfw_confidences()
+
+        if not _enter_context(no_grad):
+            return 0.0, _empty_nsfw_confidences()
+        try:
+            image_emb = _call1(_model, "encode_image", image_tensor)
+            if image_emb is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            image_norm = _call_kw(image_emb, "norm", dim=-1, keepdim=True)
+            if image_norm is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            image_emb_normed = _call1(image_emb, "__truediv__", image_norm)
+            if image_emb_normed is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            text_emb_t = getattr(_text_emb, "T", None)
+            if text_emb_t is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            logits = _call1(image_emb_normed, "__matmul__", text_emb_t)
+            if logits is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            logit_scale_value = _DEFAULT_LOGIT_SCALE
+            model_logit_scale = getattr(_model, "logit_scale", None)
+            model_logit_scale_exp = _call0(model_logit_scale, "exp")
+            model_logit_scale_item = _call0(model_logit_scale_exp, "item")
+            extracted_scale = _as_float(model_logit_scale_item)
+            if extracted_scale is not None and extracted_scale > 0:
+                logit_scale_value = extracted_scale
+
+            scaled_logits = _call1(logits, "__mul__", logit_scale_value)
+            if scaled_logits is not None:
+                logits = scaled_logits
+
+            logits0 = _call1(logits, "__getitem__", 0)
+            if logits0 is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            softmaxed = _call_kw(logits0, "softmax", dim=0)
+            if softmaxed is None:
+                return 0.0, _empty_nsfw_confidences()
+
+            confidences = _empty_nsfw_confidences()
+            for i, class_name in enumerate(_NSFW_CLASS_NAMES):
+                class_prob_obj = _call1(softmaxed, "__getitem__", i)
+                if class_prob_obj is None:
+                    continue
+                item = _call0(class_prob_obj, "item")
+                if item is None:
+                    continue
+                confidences[class_name] = _as_prob_0_1(item)
+
+            explicit_prob = confidences.get("explicit", 0.0)
+            return explicit_prob, confidences
+        finally:
+            _exit_context(no_grad)
+    except Exception:
+        return 0.0, _empty_nsfw_confidences()
+
+
+def nsfw_score(path: str) -> float:
+    """Return explicit probability in the range [0.0, 1.0]."""
+    score, _ = _nsfw_score_internal(path)
+    return score
+
+
+def nsfw_score_with_confidences(path: str) -> tuple[float, dict[str, float]]:
+    """Return explicit probability and confidence for each NSFW class."""
+    return _nsfw_score_internal(path)
+
+
+def initialize_nsfw_model() -> bool:
+    return _ensure_loaded()
+
+
+if _SETTINGS.preload_models:
+    _ = initialize_nsfw_model()
+

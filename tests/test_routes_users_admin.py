@@ -98,10 +98,9 @@ def test_users_get_dashboard_uses_admin_template(
 
     monkeypatch.setattr(module, "current_user", _current_user_admin)
     monkeypatch.setattr(module, "role_for_user", _role_superadmin)
-    monkeypatch.setattr(
-        module,
-        "list_local_users",
-        lambda **_kwargs: [
+
+    def fake_list_local_users(**_kwargs: Any) -> list[dict[str, Any]]:
+        return [
             {
                 "username": "alice",
                 "display_name": "Alice",
@@ -110,7 +109,12 @@ def test_users_get_dashboard_uses_admin_template(
                 "active": True,
                 "created_at": "2026-03-22T00:00:00Z",
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        module,
+        "list_local_users",
+        fake_list_local_users,
     )
     monkeypatch.setattr(module, "count_local_users", lambda: 1)
 
