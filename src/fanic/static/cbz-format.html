@@ -43,11 +43,11 @@
 
     <main class="layout">
       <section class="card info-card">
-        <h2>FANIC CBZ Interchange Profile 1.0</h2>
+        <h2>FANIC CBZ Ingest Profile (Current Behavior)</h2>
         <p>
-          This white paper defines the CBZ profile used by FANIC for ingest, storage, and display.
-          It uses common comic-reader practice (including GonVisor-style ComicInfo.xml metadata) as a baseline,
-          then narrows behavior so producers and consumers get deterministic results.
+          This document describes how FANIC currently ingests and normalizes CBZ uploads.
+          It reflects actual runtime behavior in the site, including chapter import rules,
+          page ordering, metadata parsing, and editor-side chapter management.
         </p>
       </section>
 
@@ -58,7 +58,8 @@
           <li>Archive structure and file naming conventions.</li>
           <li>Metadata sources and precedence.</li>
           <li>ComicInfo.xml field mapping into FANIC work metadata.</li>
-          <li>Page ordering rules.</li>
+          <li>Page ordering and optional explicit page_order override behavior.</li>
+          <li>Chapter auto-import from archive directories and chapter lifecycle rules.</li>
           <li>Ingest-time normalization behavior.</li>
         </ul>
         <p>It does not redefine ZIP itself and does not mandate reader UI behavior.</p>
@@ -67,13 +68,15 @@
       <section class="card info-card">
         <h3>2. Archive Container</h3>
         <p>A FANIC CBZ is a ZIP archive with extension <strong>.cbz</strong>.</p>
-        <p>Supported image members for ingest discovery:</p>
+        <p>FANIC accepts most image formats that Pillow can decode, including:</p>
         <ul>
           <li>.jpg / .jpeg</li>
           <li>.png</li>
+          <li>.bmp</li>
           <li>.webp</li>
           <li>.gif</li>
           <li>.avif</li>
+          <li>.tiff / .tif</li>
         </ul>
         <p>Directory structure inside the ZIP is allowed; all matching image entries are considered.</p>
       </section>
@@ -96,24 +99,42 @@
         <h3>4. Page Ordering</h3>
         <p>Ordering rules are:</p>
         <ol>
-          <li>Pages are sorted lexicographically by archive member path during ingest.</li>
+          <li>By default, pages are sorted by FANIC natural member sort (directory + filename with numeric awareness).</li>
+          <li>If metadata includes page_order, FANIC prioritizes that explicit filename order first, then falls back to natural sort.</li>
           <li>Ordering can be adjusted after ingest using the editor page manager.</li>
         </ol>
       </section>
 
       <section class="card info-card">
-        <h3>5. Image Normalization</h3>
+        <h3>5. Chapters (Current FANIC Behavior)</h3>
+        <p>FANIC chapter behavior is directory-driven at ingest time:</p>
+        <ol>
+          <li>Auto chapters are created only from non-root image directories in the CBZ (for example, chapter-01/, chapter-02/).</li>
+          <li>Images stored at archive root are valid pages but do not create an automatic chapter.</li>
+          <li>Auto chapter title is the directory path text (trimmed).</li>
+          <li>Each chapter range (start_page/end_page) is derived from imported page positions after final ordering.</li>
+          <li>Chapter page membership is stored explicitly, then kept in sync when pages are reordered, replaced, or deleted in the editor.</li>
+          <li>If a chapter loses all members after edits, FANIC removes that chapter.</li>
+        </ol>
+        <p>
+          Re-importing pages from CBZ replaces previously imported auto chapters for that work,
+          then rebuilds chapters from the current archive directory structure.
+        </p>
+      </section>
+
+      <section class="card info-card">
+        <h3>6. Image Normalization</h3>
         <p>During ingest, each page image is transcoded and stored as:</p>
         <ul>
           <li>Page image format: AVIF</li>
-          <li>Page image quality: 60</li>
-          <li>Thumbnail format: WEBP (quality 82)</li>
+          <li>Page image quality: adaptive quality selection based on account page count policy</li>
+          <li>Thumbnail format: AVIF</li>
         </ul>
         <p>Any unreadable or non-decodable discovered image causes ingest failure.</p>
       </section>
 
       <section class="card info-card">
-        <h3>6. ComicInfo.xml Mapping (GonVisor-Compatible Baseline)</h3>
+        <h3>7. ComicInfo.xml Mapping (GonVisor-Compatible Baseline)</h3>
         <p>
           FANIC treats ComicInfo.xml as the baseline metadata contract used by many comic readers including GonVisor.
           The following fields are mapped when present.
@@ -141,7 +162,7 @@
       </section>
 
       <section class="card info-card">
-        <h3>7. Rating Enum</h3>
+        <h3>8. Rating Enum</h3>
         <p>FANIC canonical ratings are:</p>
         <ul>
           <li>Not Rated</li>
@@ -154,25 +175,28 @@
       </section>
 
       <section class="card info-card">
-        <h3>8. Recommended Producer Layout</h3>
+        <h3>9. Recommended Producer Layout</h3>
         <pre class="code-block">my-comic.cbz
 |- ComicInfo.xml
-|- 001-cover.jpg
-|- 002-page.jpg
-|- 003-page.jpg
+|- chapter-01/001-cover.jpg
+|- chapter-01/002-page.jpg
+|- chapter-02/003-page.jpg
+|- extras/004-bonus.jpg
 </pre>
         <p>Recommendations:</p>
         <ul>
-          <li>Use zero-padded page filenames.</li>
+          <li>Use zero-padded page filenames for stable natural sorting.</li>
+          <li>Use per-chapter directories if you want FANIC to auto-create chapters on import.</li>
           <li>Keep ComicInfo.xml at archive root.</li>
         </ul>
       </section>
 
       <section class="card info-card">
-        <h3>9. Compliance Notes</h3>
+        <h3>10. Compliance Notes</h3>
         <ul>
           <li>CBZ without metadata is valid if it has at least one supported image.</li>
           <li>ComicInfo.xml is optional but strongly recommended.</li>
+          <li>Chapter import is optional; no directory structure means no auto-created chapters.</li>
           <li>Unknown ComicInfo.xml elements are ignored.</li>
           <li>This document defines FANIC behavior and may be versioned in future revisions.</li>
         </ul>
