@@ -10,11 +10,13 @@ from typing import Literal
 from typing import NotRequired
 from typing import TypedDict
 from typing import cast
+from urllib.parse import quote
 
 import tomli_w
 
 from fanic.db import get_connection
 from fanic.settings import CBZ_DIR
+from fanic.settings import FANART_DIR
 from fanic.settings import WORKS_DIR
 from fanic.utils import slugify
 
@@ -48,6 +50,8 @@ class WorkListItem(TypedDict):
     warnings: str
     page_count: int
     cover_page_index: int
+    cover_image_filename: NotRequired[str]
+    cover_thumb_filename: NotRequired[str]
     updated_at: str
     uploader_username: NotRequired[str]
 
@@ -103,6 +107,29 @@ class NotificationRow(TypedDict):
     href: str
     is_read: bool
     created_at: str
+
+
+class FanartItemRow(TypedDict):
+    id: str
+    uploader_username: str
+    title: str
+    summary: str
+    fandom: str
+    rating: str
+    image_filename: str
+    thumb_filename: str | None
+    width: int | None
+    height: int | None
+    created_at: str
+    updated_at: str
+
+
+class FanartUserSummaryRow(TypedDict):
+    uploader_username: str
+    item_count: int
+    latest_created_at: str
+    latest_item_id: str | None
+    latest_thumb_filename: str | None
 
 
 def _normalize_user_role(role: object) -> UserRole:
@@ -695,6 +722,7 @@ def list_content_reports(
     status: str,
     start_date: str,
     end_date: str,
+    source_path: str,
     limit: int = 250,
 ) -> list[ContentReportRow]:
     where: list[str] = []
@@ -724,6 +752,11 @@ def list_content_reports(
     if normalized_end_date:
         where.append("substr(created_at, 1, 10) <= ?")
         params.append(normalized_end_date)
+
+    normalized_source_path = source_path.strip()
+    if normalized_source_path:
+        where.append("source_path = ?")
+        params.append(normalized_source_path)
 
     sql = """
         SELECT
@@ -993,6 +1026,573 @@ def mark_all_notifications_read(username: str) -> int:
             (normalized_username,),
         )
     return int(cursor.rowcount)
+
+
+def create_fanart_item(
+    *,
+    item_id: str,
+    uploader_username: str,
+    title: str,
+    summary: str,
+    fandom: str = "",
+    rating: str = "Not Rated",
+    image_filename: str,
+    thumb_filename: str | None,
+    width: int | None,
+    height: int | None,
+) -> str:
+    normalized_item_id = item_id.strip()
+    normalized_uploader = uploader_username.strip()
+    if not normalized_item_id:
+        raise ValueError("item_id must not be empty")
+    if not normalized_uploader:
+        raise ValueError("uploader_username must not be empty")
+    stripped_rating = rating.strip()
+    normalized_rating = stripped_rating if stripped_rating else "Not Rated"
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO fanart_items (
+                id,
+                uploader_username,
+                title,
+                summary,
+                fandom,
+                rating,
+                image_filename,
+                thumb_filename,
+                width,
+                height
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_item_id,
+                normalized_uploader,
+                title,
+                summary,
+                fandom,
+                normalized_rating,
+                image_filename,
+                thumb_filename,
+                width,
+                height,
+            ),
+        )
+    return normalized_item_id
+
+
+def list_fanart_users(
+    filters: dict[str, str] | None = None,
+    *,
+    limit: int = 200,
+) -> list[FanartUserSummaryRow]:
+    resolved_filters = filters if filters is not None else {}
+    where: list[str] = []
+    params: list[object] = []
+
+    search = resolved_filters.get("q", "").strip()
+    if search:
+        where.append(
+            "(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ?)"
+        )
+        like_search = f"%{search}%"
+        params.extend([like_search, like_search, like_search, like_search])
+
+    uploader = resolved_filters.get("user", "").strip()
+    if uploader:
+        where.append("fi.uploader_username LIKE ?")
+        like_uploader = f"%{uploader}%"
+        params.append(like_uploader)
+
+    fandom = resolved_filters.get("fandom", "").strip()
+    if fandom:
+        where.append("fi.fandom LIKE ?")
+        like_fandom = f"%{fandom}%"
+        params.append(like_fandom)
+
+    tag = resolved_filters.get("tag", "").strip()
+    if tag:
+        where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
+        like_tag = f"%{tag}%"
+        params.extend([like_tag, like_tag])
+
+    status = resolved_filters.get("status", "").strip()
+    if status == "complete":
+        where.append("fi.summary <> ''")
+    elif status == "in_progress":
+        where.append("fi.summary = ''")
+
+    sort = resolved_filters.get("sort", "newest").strip()
+    order_by = "latest_created_at DESC, ranked.uploader_username COLLATE NOCASE ASC"
+    if sort == "oldest":
+        order_by = "latest_created_at ASC, ranked.uploader_username COLLATE NOCASE ASC"
+    elif sort == "title_asc":
+        order_by = "ranked.uploader_username COLLATE NOCASE ASC"
+    elif sort == "title_desc":
+        order_by = "ranked.uploader_username COLLATE NOCASE DESC"
+
+    sql = """
+            WITH filtered AS (
+                SELECT
+                    fi.id,
+                    fi.uploader_username,
+                    fi.created_at,
+                    fi.thumb_filename
+                FROM fanart_items fi
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += """
+            ),
+            ranked AS (
+                SELECT
+                    filtered.id,
+                    filtered.uploader_username,
+                    filtered.created_at,
+                    filtered.thumb_filename,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY filtered.uploader_username
+                        ORDER BY filtered.created_at DESC, filtered.id DESC
+                    ) AS rn
+                FROM filtered
+            ),
+            counts AS (
+                SELECT
+                    filtered.uploader_username,
+                    COUNT(*) AS item_count
+                FROM filtered
+                GROUP BY filtered.uploader_username
+            )
+            SELECT
+                ranked.uploader_username AS uploader_username,
+                counts.item_count AS item_count,
+                ranked.created_at AS latest_created_at,
+                ranked.id AS latest_item_id,
+                ranked.thumb_filename AS latest_thumb_filename
+            FROM ranked
+            INNER JOIN counts
+                ON counts.uploader_username = ranked.uploader_username
+            WHERE ranked.rn = 1
+    """
+    sql += f" ORDER BY {order_by}"
+    sql += " LIMIT ?"
+    params.append(int(limit))
+
+    with get_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+
+    users: list[FanartUserSummaryRow] = []
+    for row in rows:
+        latest_item_id_obj = row["latest_item_id"]
+        thumb_obj = row["latest_thumb_filename"]
+        users.append(
+            {
+                "uploader_username": str(row["uploader_username"]),
+                "item_count": _to_int(row["item_count"], 0),
+                "latest_created_at": str(row["latest_created_at"]),
+                "latest_item_id": (
+                    str(latest_item_id_obj) if latest_item_id_obj is not None else None
+                ),
+                "latest_thumb_filename": (
+                    str(thumb_obj) if thumb_obj is not None else None
+                ),
+            }
+        )
+    return users
+
+
+def list_fanart_items(
+    filters: dict[str, str] | None = None,
+    *,
+    limit: int = 200,
+) -> list[FanartItemRow]:
+    resolved_filters = filters if filters is not None else {}
+    where: list[str] = []
+    params: list[object] = []
+
+    search = resolved_filters.get("q", "").strip()
+    if search:
+        where.append(
+            "(uploader_username LIKE ? OR title LIKE ? OR summary LIKE ? OR fandom LIKE ?)"
+        )
+        like_search = f"%{search}%"
+        params.extend([like_search, like_search, like_search, like_search])
+
+    uploader = resolved_filters.get("user", "").strip()
+    if uploader:
+        where.append("uploader_username LIKE ?")
+        like_uploader = f"%{uploader}%"
+        params.append(like_uploader)
+
+    fandom = resolved_filters.get("fandom", "").strip()
+    if fandom:
+        where.append("fandom LIKE ?")
+        like_fandom = f"%{fandom}%"
+        params.append(like_fandom)
+
+    tag = resolved_filters.get("tag", "").strip()
+    if tag:
+        where.append("(title LIKE ? OR summary LIKE ?)")
+        like_tag = f"%{tag}%"
+        params.extend([like_tag, like_tag])
+
+    status = resolved_filters.get("status", "").strip()
+    if status == "complete":
+        where.append("summary <> ''")
+    elif status == "in_progress":
+        where.append("summary = ''")
+
+    sort = resolved_filters.get("sort", "newest").strip()
+    order_by = "created_at DESC, id DESC"
+    if sort == "oldest":
+        order_by = "created_at ASC, id ASC"
+    elif sort == "title_asc":
+        order_by = "title COLLATE NOCASE ASC, id ASC"
+    elif sort == "title_desc":
+        order_by = "title COLLATE NOCASE DESC, id DESC"
+
+    sql = """
+            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += f" ORDER BY {order_by}"
+    sql += " LIMIT ?"
+    params.append(int(limit))
+
+    with get_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+
+    items: list[FanartItemRow] = []
+    for row in rows:
+        thumb_obj = row["thumb_filename"]
+        width_obj = row["width"]
+        height_obj = row["height"]
+        items.append(
+            {
+                "id": str(row["id"]),
+                "uploader_username": str(row["uploader_username"]),
+                "title": str(row["title"]),
+                "summary": str(row["summary"]),
+                "fandom": str(row["fandom"]),
+                "rating": str(row["rating"]),
+                "image_filename": str(row["image_filename"]),
+                "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+                "width": _to_int(width_obj, 0) if width_obj is not None else None,
+                "height": _to_int(height_obj, 0) if height_obj is not None else None,
+                "created_at": str(row["created_at"]),
+                "updated_at": str(row["updated_at"]),
+            }
+        )
+    return items
+
+
+def list_fanart_items_by_uploader(
+    uploader_username: str,
+    *,
+    limit: int = 200,
+) -> list[FanartItemRow]:
+    normalized_uploader = uploader_username.strip()
+    if not normalized_uploader:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE uploader_username = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (normalized_uploader, int(limit)),
+        ).fetchall()
+
+    items: list[FanartItemRow] = []
+    for row in rows:
+        thumb_obj = row["thumb_filename"]
+        width_obj = row["width"]
+        height_obj = row["height"]
+        items.append(
+            {
+                "id": str(row["id"]),
+                "uploader_username": str(row["uploader_username"]),
+                "title": str(row["title"]),
+                "summary": str(row["summary"]),
+                "fandom": str(row["fandom"]),
+                "rating": str(row["rating"]),
+                "image_filename": str(row["image_filename"]),
+                "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+                "width": _to_int(width_obj, 0) if width_obj is not None else None,
+                "height": _to_int(height_obj, 0) if height_obj is not None else None,
+                "created_at": str(row["created_at"]),
+                "updated_at": str(row["updated_at"]),
+            }
+        )
+    return items
+
+
+def get_fanart_item(item_id: str) -> FanartItemRow | None:
+    normalized_item_id = item_id.strip()
+    if not normalized_item_id:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE id = ?
+            """,
+            (normalized_item_id,),
+        ).fetchone()
+    if not row:
+        return None
+
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": _to_int(width_obj, 0) if width_obj is not None else None,
+        "height": _to_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def get_fanart_item_by_image(
+    uploader_username: str,
+    image_filename: str,
+) -> FanartItemRow | None:
+    normalized_uploader = uploader_username.strip()
+    normalized_image = image_filename.strip()
+    if not normalized_uploader or not normalized_image:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+                                                SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE uploader_username = ?
+              AND image_filename = ?
+            """,
+            (normalized_uploader, normalized_image),
+        ).fetchone()
+    if not row:
+        return None
+
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": _to_int(width_obj, 0) if width_obj is not None else None,
+        "height": _to_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def get_fanart_item_by_thumb(
+    uploader_username: str,
+    thumb_filename: str,
+) -> FanartItemRow | None:
+    normalized_uploader = uploader_username.strip()
+    normalized_thumb = thumb_filename.strip()
+    if not normalized_uploader or not normalized_thumb:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+                                                SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE uploader_username = ?
+              AND thumb_filename = ?
+            """,
+            (normalized_uploader, normalized_thumb),
+        ).fetchone()
+    if not row:
+        return None
+
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": _to_int(width_obj, 0) if width_obj is not None else None,
+        "height": _to_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | None:
+    normalized_image = image_filename.strip()
+    if not normalized_image:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE image_filename = ?
+            """,
+            (normalized_image,),
+        ).fetchone()
+    if not row:
+        return None
+
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": _to_int(width_obj, 0) if width_obj is not None else None,
+        "height": _to_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | None:
+    normalized_thumb = thumb_filename.strip()
+    if not normalized_thumb:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
+                   width, height, created_at, updated_at
+            FROM fanart_items
+            WHERE thumb_filename = ?
+            """,
+            (normalized_thumb,),
+        ).fetchone()
+    if not row:
+        return None
+
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": _to_int(width_obj, 0) if width_obj is not None else None,
+        "height": _to_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def fanart_file_for(image_name: str) -> Path:
+    return FANART_DIR / "images" / image_name
+
+
+def fanart_thumb_for(thumb_name: str) -> Path:
+    return FANART_DIR / "thumbs" / thumb_name
+
+
+def delete_fanart_item(item_id: str) -> bool:
+    normalized_item_id = item_id.strip()
+    if not normalized_item_id:
+        return False
+
+    item = get_fanart_item(normalized_item_id)
+    if item is None:
+        return False
+
+    image_name = str(item.get("image_filename", "")).strip()
+    thumb_name_obj = item.get("thumb_filename")
+    thumb_name = str(thumb_name_obj).strip() if thumb_name_obj is not None else ""
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM fanart_items WHERE id = ?",
+            (normalized_item_id,),
+        )
+        if cursor.rowcount < 1:
+            return False
+
+        image_in_use = False
+        if image_name:
+            image_in_use = (
+                connection.execute(
+                    "SELECT 1 FROM fanart_items WHERE image_filename = ? LIMIT 1",
+                    (image_name,),
+                ).fetchone()
+                is not None
+            )
+
+        thumb_in_use = False
+        if thumb_name:
+            thumb_in_use = (
+                connection.execute(
+                    "SELECT 1 FROM fanart_items WHERE thumb_filename = ? LIMIT 1",
+                    (thumb_name,),
+                ).fetchone()
+                is not None
+            )
+
+    if image_name and not image_in_use:
+        try:
+            fanart_file_for(image_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    if thumb_name and not thumb_in_use:
+        try:
+            fanart_thumb_for(thumb_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    return True
 
 
 def delete_notification(username: str, notification_id: int) -> bool:
@@ -1336,8 +1936,12 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
 
     sql = """
         SELECT w.id, w.slug, w.title, w.summary, w.status, w.rating, w.warnings,
-               w.page_count, w.cover_page_index, w.updated_at
+               w.page_count, w.cover_page_index, w.updated_at,
+               p.image_filename AS cover_image_filename,
+               p.thumb_filename AS cover_thumb_filename
         FROM works w
+        LEFT JOIN pages p
+            ON p.work_id = w.id AND p.page_index = w.cover_page_index
     """
 
     if where:
@@ -1349,42 +1953,7 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
         rows = connection.execute(sql, params).fetchall()
         works: list[WorkListItem] = []
         for row in rows:
-            works.append(
-                {
-                    "id": str(row["id"]),
-                    "slug": str(row["slug"]),
-                    "title": str(row["title"]),
-                    "summary": str(row["summary"]),
-                    "status": str(row["status"]),
-                    "rating": str(row["rating"]),
-                    "warnings": str(row["warnings"]),
-                    "page_count": int(row["page_count"]),
-                    "cover_page_index": int(row["cover_page_index"]),
-                    "updated_at": str(row["updated_at"]),
-                }
-            )
-        return works
-
-
-def list_works_by_uploader(username: str) -> list[WorkListItem]:
-    if not username.strip():
-        return []
-
-    with get_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, slug, title, summary, status, rating, warnings,
-                   page_count, cover_page_index, updated_at, uploader_username
-            FROM works
-            WHERE uploader_username = ?
-            ORDER BY updated_at DESC
-            """,
-            (username.strip(),),
-        ).fetchall()
-    works: list[WorkListItem] = []
-    for row in rows:
-        works.append(
-            {
+            item: WorkListItem = {
                 "id": str(row["id"]),
                 "slug": str(row["slug"]),
                 "title": str(row["title"]),
@@ -1395,9 +1964,58 @@ def list_works_by_uploader(username: str) -> list[WorkListItem]:
                 "page_count": int(row["page_count"]),
                 "cover_page_index": int(row["cover_page_index"]),
                 "updated_at": str(row["updated_at"]),
-                "uploader_username": str(row["uploader_username"]),
             }
-        )
+            cover_image = row["cover_image_filename"]
+            cover_thumb = row["cover_thumb_filename"]
+            if cover_image is not None:
+                item["cover_image_filename"] = str(cover_image)
+            if cover_thumb is not None:
+                item["cover_thumb_filename"] = str(cover_thumb)
+            works.append(item)
+        return works
+
+
+def list_works_by_uploader(username: str) -> list[WorkListItem]:
+    if not username.strip():
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+             SELECT w.id, w.slug, w.title, w.summary, w.status, w.rating, w.warnings,
+                 w.page_count, w.cover_page_index, w.updated_at, w.uploader_username,
+                   p.image_filename AS cover_image_filename,
+                   p.thumb_filename AS cover_thumb_filename
+            FROM works w
+            LEFT JOIN pages p
+                ON p.work_id = w.id AND p.page_index = w.cover_page_index
+            WHERE w.uploader_username = ?
+            ORDER BY w.updated_at DESC
+            """,
+            (username.strip(),),
+        ).fetchall()
+    works: list[WorkListItem] = []
+    for row in rows:
+        item: WorkListItem = {
+            "id": str(row["id"]),
+            "slug": str(row["slug"]),
+            "title": str(row["title"]),
+            "summary": str(row["summary"]),
+            "status": str(row["status"]),
+            "rating": str(row["rating"]),
+            "warnings": str(row["warnings"]),
+            "page_count": int(row["page_count"]),
+            "cover_page_index": int(row["cover_page_index"]),
+            "updated_at": str(row["updated_at"]),
+            "uploader_username": str(row["uploader_username"]),
+        }
+        cover_image = row["cover_image_filename"]
+        cover_thumb = row["cover_thumb_filename"]
+        if cover_image is not None:
+            item["cover_image_filename"] = str(cover_image)
+        if cover_thumb is not None:
+            item["cover_thumb_filename"] = str(cover_thumb)
+        works.append(item)
     return works
 
 
@@ -1442,16 +2060,22 @@ def get_manifest(work_id: str) -> dict[str, object] | None:
             (work_id,),
         ).fetchall()
 
-    work["pages"] = [
-        {
-            "index": int(page["page_index"]),
-            "image_url": f"/api/works/{work_id}/pages/{int(page['page_index'])}/image",
-            "thumb_url": f"/api/works/{work_id}/pages/{int(page['page_index'])}/thumb",
-            "width": page["width"],
-            "height": page["height"],
-        }
-        for page in pages
-    ]
+    manifest_pages: list[dict[str, object]] = []
+    for page in pages:
+        image_filename = str(page["image_filename"])
+        thumb_value = page["thumb_filename"]
+        thumb_filename = str(thumb_value) if thumb_value is not None else image_filename
+        manifest_pages.append(
+            {
+                "index": int(page["page_index"]),
+                "image_url": f"/works/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}",
+                "thumb_url": f"/works/{quote(work_id, safe='')}/thumbs/{quote(thumb_filename, safe='/')}",
+                "width": page["width"],
+                "height": page["height"],
+            }
+        )
+
+    work["pages"] = manifest_pages
     work["chapters"] = list_work_chapters(work_id)
     versions = list_work_versions(work_id, limit=1)
     work["current_version_id"] = versions[0]["version_id"] if versions else ""

@@ -27,6 +27,7 @@ def _reports_redirect_with_filters(
     response: ResponseLike,
     *,
     msg: str,
+    tab: str,
     work_id: str,
     issue_type: str,
     status: str,
@@ -34,6 +35,9 @@ def _reports_redirect_with_filters(
     end_date: str,
 ) -> ResponseLike:
     query: dict[str, str] = {"msg": msg}
+    normalized_tab = tab.strip()
+    if normalized_tab:
+        query["tab"] = normalized_tab
     if work_id:
         query["work_id"] = work_id
     if issue_type:
@@ -65,6 +69,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     report_id_raw = request.form.get("report_id", "").strip()
     report_action = request.form.get("report_action", "").strip()
     report_work_id = request.form.get("report_work_id", "").strip()
+    tab = request.form.get("tab", "").strip()
     work_id = request.form.get("work_id", "").strip()
     issue_type = request.form.get("issue_type", "").strip()
     status = request.form.get("status", "").strip()
@@ -75,6 +80,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="invalid-id",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -89,6 +95,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="removed" if deleted else "not-found",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -104,6 +111,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="marked-false" if updated else "not-found",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -119,6 +127,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="marked-research" if updated else "not-found",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -134,6 +143,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="marked-resolved" if updated else "not-found",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -149,6 +159,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="marked-reopen" if updated else "not-found",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -161,6 +172,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _reports_redirect_with_filters(
                 response,
                 msg="promote-missing-work",
+                tab=tab,
                 work_id=work_id,
                 issue_type=issue_type,
                 status=status,
@@ -178,6 +190,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _reports_redirect_with_filters(
                 response,
                 msg="promote-work-not-found",
+                tab=tab,
                 work_id=work_id,
                 issue_type=issue_type,
                 status=status,
@@ -192,6 +205,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _reports_redirect_with_filters(
             response,
             msg="promoted-explicit",
+            tab=tab,
             work_id=work_id,
             issue_type=issue_type,
             status=status,
@@ -202,6 +216,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     return _reports_redirect_with_filters(
         response,
         msg="invalid-action",
+        tab=tab,
         work_id=work_id,
         issue_type=issue_type,
         status=status,

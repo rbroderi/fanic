@@ -119,6 +119,14 @@ def test_profile_get_marks_custom_theme_checked(
         _ = username
         return []
 
+    def fake_list_fanart_items_by_uploader(
+        username: str,
+        *,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        _ = (username, limit)
+        return []
+
     def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
         _ = (username, work)
         return True
@@ -133,6 +141,11 @@ def test_profile_get_marks_custom_theme_checked(
         fake_list_recent_reading_history,
     )
     monkeypatch.setattr(module, "list_user_bookmarks", fake_list_user_bookmarks)
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        fake_list_fanart_items_by_uploader,
+    )
     monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
     monkeypatch.setattr(
         module,
@@ -199,6 +212,14 @@ def test_users_public_profile_uses_public_template(
         _ = username
         return []
 
+    def fake_list_fanart_items_by_uploader(
+        username: str,
+        *,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        _ = (username, limit)
+        return []
+
     def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
         _ = (username, work)
         return True
@@ -208,6 +229,11 @@ def test_users_public_profile_uses_public_template(
         handler_module, "list_works_by_uploader", fake_list_works_by_uploader
     )
     monkeypatch.setattr(handler_module, "list_user_bookmarks", fake_list_user_bookmarks)
+    monkeypatch.setattr(
+        handler_module,
+        "list_fanart_items_by_uploader",
+        fake_list_fanart_items_by_uploader,
+    )
     monkeypatch.setattr(handler_module, "can_view_work", fake_can_view_work)
 
     captured: dict[str, str] = {}

@@ -43,6 +43,34 @@ uv run fanic serve --host 127.0.0.1 --port 8000
 
 Open http://127.0.0.1:8000.
 
+## Windows Nginx Setup (Scripted)
+
+Use the included script to install nginx on Windows, serve `/static/*`, `/works/*`, and `/fanart/*` from local files, and proxy all other routes to the WSGI app.
+
+Run:
+
+```powershell
+just setup-nginx-windows
+```
+
+The script will prompt for:
+
+- nginx version
+- install directory
+- listen port
+- upstream WSGI host/port
+- repository root
+
+It then:
+
+1. downloads and installs nginx,
+2. writes `nginx.conf`,
+3. serves static files from `src/fanic/storage/static` on `/static/`,
+4. serves work media from `src/fanic/storage/works` on `/works/`,
+5. serves fanart media from `src/fanic/storage/fanart` on `/fanart/`,
+6. proxies everything else to your WSGI server (default `127.0.0.1:8000`),
+5. validates config and starts or reloads nginx.
+
 ## Production Security Settings
 
 Set these environment variables in production:

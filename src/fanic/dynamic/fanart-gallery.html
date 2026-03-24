@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Login</title>
+    <title>Fanart Gallery</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,13 +15,11 @@
     <header class="site-header">
       <div class="site-header-row">
         <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
-        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <p class="profile-meta">Fanart Gallery</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>
-            __ADMIN_REPORTS_LINK__
-            <a href="/ingest">Upload comic</a>
-            <a href="/account/login" aria-current="page">Login</a>
+            <a href="/?view=fanart" aria-current="page">Browse fanart</a>
+            <a href="/">Browse comics</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -40,36 +38,14 @@
         </div>
       </div>
     </header>
-
     <main class="layout">
-      <section class="card info-card">
-        <h2 id="loginHeadline">Login</h2>
-        <p id="loginLead">Sign in to enable comic uploads and admin actions.</p>
+      <section class="card">
+        <h2>__GALLERY_TITLE__</h2>
+        <p class="profile-meta">__GALLERY_SUBTITLE__</p>
+        <p><a href="__GALLERY_READER_HREF__">View this gallery</a></p>
       </section>
-
-      <section class="card info-card">
-        <form id="loginForm" class="auth-form" method="post" action="/account/login">
-          <div id="loginCredentials" __LOGIN_CREDENTIALS_HIDDEN_ATTR__>
-            <label for="username">Username</label>
-            <input id="username" name="username" type="text" autocomplete="username" required />
-
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
-          </div>
-
-          <div class="auth-row">
-            <button id="loginBtn" type="submit" __LOGIN_BUTTON_HIDDEN_ATTR__>Login</button>
-          </div>
-        </form>
-        <form id="logoutForm" class="auth-inline" method="post" action="/account/logout" __LOGOUT_HIDDEN_ATTR__>
-          <button id="logoutBtn" type="submit" class="button-muted">Logout</button>
-        </form>
-        <p id="loginMessage" class="auth-message __LOGIN_MESSAGE_CLASS__" __LOGIN_MESSAGE_HIDDEN_ATTR__>__LOGIN_MESSAGE__</p>
-      </section>
+      <section class="work-grid">__FANART_GRID_HTML__</section>
     </main>
-
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
-
-

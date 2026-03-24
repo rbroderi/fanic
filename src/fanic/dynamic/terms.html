@@ -1,27 +1,52 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Archive</title>
+    <title>FANIC Terms and Conditions</title>
+    <meta name="description" content="Terms and Conditions for FANIC." />
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .terms-shell {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+
+      .terms-shell h1,
+      .terms-shell h2 {
+        margin: 0 0 0.75rem;
+      }
+
+      .terms-shell section + section {
+        margin-top: 1.25rem;
+      }
+
+      .terms-shell p,
+      .terms-shell li {
+        margin: 0.5rem 0 0;
+      }
+
+      .terms-shell ul {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+    </style>
   </head>
-  <body class="home-page">
+  <body>
     <header class="site-header">
       <div class="site-header-row">
         <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
         <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/" __BROWSE_ARIA_CURRENT__>Browse</a>
             __ADMIN_REPORTS_LINK__
-            <a href="/ingest">Upload comic</a>
             <a href="/cbz-format">CBZ SPEC INFO</a>
+            <a href="/terms" aria-current="page">Terms</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -40,33 +65,40 @@
         </div>
       </div>
     </header>
-    <main class="layout">
+
+    <main class="layout terms-shell">
       <section class="card">
-        <form id="filters" class="filter-row" method="get" action="__FILTER_ACTION__">
-          <input name="q" placeholder="Search title or summary" value="__FILTER_Q__" />
-          <input name="fandom" placeholder="Fandom" value="__FILTER_FANDOM__" />
-          <input name="tag" placeholder="Tag include" value="__FILTER_TAG__" />
-          <select name="status">
-            <option value="" __STATUS_ANY_SELECTED__>Any status</option>
-            <option value="complete" __STATUS_COMPLETE_SELECTED__>Complete</option>
-            <option value="in_progress" __STATUS_IN_PROGRESS_SELECTED__>In progress</option>
-          </select>
-          <div class="filter-sort-group">
-            <label for="filterSort">Sort by</label>
-            <select id="filterSort" name="sort">
-              <option value="newest" __SORT_NEWEST_SELECTED__>Newest to oldest</option>
-              <option value="oldest" __SORT_OLDEST_SELECTED__>Oldest to newest</option>
-              <option value="title_asc" __SORT_TITLE_ASC_SELECTED__>Ascending alphabetical</option>
-              <option value="title_desc" __SORT_TITLE_DESC_SELECTED__>Descending alphabetical</option>
-            </select>
-          </div>
-          <button type="submit">Search</button>
-        </form>
+        <h1>Terms and Conditions</h1>
+        <p>
+          These Terms and Conditions govern uploads and publication of works on FANIC.
+        </p>
+
+        <section>
+          <h2>License Granted to FANIC</h2>
+          <p>
+            By uploading a work, you grant FANIC a limited license to host, display, copy, and back up that work solely as required to operate, secure, and provide the website service.
+          </p>
+        </section>
+
+        <section>
+          <h2>Rights and Ownership Requirement</h2>
+          <p>
+            You represent and warrant that you have the rights, permissions, or lawful authority necessary to upload all content you submit.
+          </p>
+        </section>
+
+        <section>
+          <h2>Publication History and Record</h2>
+          <p>
+            Posted works are treated as an immutable publication record. Any updates, edits, or replacements are retained as part of work history, and all versions and changes are available for anyone to view.
+          </p>
+        </section>
       </section>
-      <section class="work-grid" id="workGrid">__WORK_GRID_HTML__</section>
     </main>
+
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+
 
 

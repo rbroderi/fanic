@@ -83,9 +83,9 @@ def test_send_file_and_safe_static_path(
     assert sent.data == b"hello"
     assert sent.headers["Content-Disposition"] == 'attachment; filename="download.txt"'
 
-    safe_path = module.safe_static_path("index.html")
+    safe_path = module.safe_static_path("styles.css")
     assert safe_path is not None
-    assert safe_path.name == "index.html"
+    assert safe_path.name == "styles.css"
     assert module.safe_static_path("../../escape.txt") is None
 
 

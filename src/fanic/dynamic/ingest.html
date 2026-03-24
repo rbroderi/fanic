@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -18,9 +18,7 @@
         <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
-            <a href="/ingest" aria-current="page">Upload comic</a>
             <a href="/cbz-format">CBZ SPEC INFO</a>
           </nav>
           <div class="user-menu">
@@ -61,7 +59,7 @@
           <label for="cbzFile">Comic Archive (.cbz)</label>
           <input id="cbzFile" name="cbz" type="file" accept=".cbz" />
 
-          <label for="agreeTerms" class="checkbox-label">
+          <label class="toggle-row">
             <input id="agreeTerms" name="agree_terms" type="checkbox" required />
             I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
           </label>
@@ -163,7 +161,7 @@
           <label for="editorInitialPageImage">Upload first page image</label>
           <input id="editorInitialPageImage" name="page_image" type="file" accept="image/*" required />
 
-          <label for="agreeTermsEditor" class="checkbox-label">
+          <label class="toggle-row">
             <input id="agreeTermsEditor" name="agree_terms" type="checkbox" __EDITOR_TERMS_REQUIRED_ATTR__ />
             I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
           </label>
@@ -283,5 +281,6 @@
     <script src="/static/work-edit.js"></script>
   </body>
 </html>
+
 
 

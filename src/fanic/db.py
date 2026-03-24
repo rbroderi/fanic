@@ -12,6 +12,7 @@ from typing import override
 from fanic.settings import CBZ_DIR
 from fanic.settings import DATA_ROOT
 from fanic.settings import DB_PATH
+from fanic.settings import FANART_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
@@ -212,6 +213,24 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS fanart_items (
+            id TEXT PRIMARY KEY,
+            uploader_username TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            summary TEXT NOT NULL DEFAULT '',
+            fandom TEXT NOT NULL DEFAULT '',
+            rating TEXT NOT NULL DEFAULT 'Not Rated',
+            image_filename TEXT NOT NULL,
+            thumb_filename TEXT,
+            width INTEGER,
+            height INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS user_bookmarks (
             username TEXT NOT NULL,
             work_id TEXT NOT NULL,
@@ -252,11 +271,26 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE dmca_reports ADD COLUMN status TEXT NOT NULL DEFAULT 'open'"
         )
+    fanart_columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(fanart_items)").fetchall()
+    }
+    if "rating" not in fanart_columns:
+        connection.execute(
+            "ALTER TABLE fanart_items ADD COLUMN rating TEXT NOT NULL DEFAULT 'Not Rated'"
+        )
+    if "fandom" not in fanart_columns:
+        connection.execute(
+            "ALTER TABLE fanart_items ADD COLUMN fandom TEXT NOT NULL DEFAULT ''"
+        )
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_dmca_reports_status ON dmca_reports(status)"
     )
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fanart_items_uploader_created_at ON fanart_items(uploader_username, created_at DESC)"
     )
     connection.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
     connection.execute(
@@ -326,7 +360,7 @@ def create_runtime_backup(backup_path: Path) -> Path:
     ) as archive:
         if DB_PATH.exists():
             archive.write(DB_PATH, arcname=DB_PATH.name)
-        for runtime_dir in (CBZ_DIR, WORKS_DIR):
+        for runtime_dir in (CBZ_DIR, WORKS_DIR, FANART_DIR):
             if not runtime_dir.exists():
                 continue
             for file_path in sorted(runtime_dir.rglob("*")):
@@ -379,7 +413,11 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
         if restored_db.exists():
             shutil.copy2(restored_db, DB_PATH)
 
-        for source_name, destination_dir in (("cbz", CBZ_DIR), ("works", WORKS_DIR)):
+        for source_name, destination_dir in (
+            ("cbz", CBZ_DIR),
+            ("works", WORKS_DIR),
+            ("fanart", FANART_DIR),
+        ):
             source_dir = extract_root / source_name
             if destination_dir.exists():
                 shutil.rmtree(destination_dir)

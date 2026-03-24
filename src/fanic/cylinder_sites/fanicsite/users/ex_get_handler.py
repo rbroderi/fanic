@@ -10,9 +10,11 @@ from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
+from fanic.repository import FanartItemRow
 from fanic.repository import UserBookmarkRow
 from fanic.repository import WorkListItem
 from fanic.repository import can_view_work
+from fanic.repository import list_fanart_items_by_uploader
 from fanic.repository import list_user_bookmarks
 from fanic.repository import list_works_by_uploader
 
@@ -56,6 +58,19 @@ def _bookmarks_html(bookmarks: list[UserBookmarkRow]) -> str:
     return '<ul class="work-links">' + "".join(items) + "</ul>"
 
 
+def _fanart_html(uploader_username: str, items: list[FanartItemRow]) -> str:
+    if not items:
+        return '<p class="profile-meta">No fanart uploaded yet.</p>'
+
+    _ = uploader_username
+    rows: list[str] = []
+    for item in items:
+        title = escape(str(item.get("title", "Untitled")))
+        image_name = escape(str(item.get("image_filename", "")))
+        rows.append(f'<li><a href="/fanart/images/{image_name}">{title}</a></li>')
+    return '<ul class="work-links">' + "".join(rows) + "</ul>"
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tail = route_tail(request, ["users"])
     if tail is None or len(tail) != 1:
@@ -72,6 +87,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if can_view_work(viewer, work)
     ]
     raw_bookmarks = list_user_bookmarks(profile_username)
+    fanart_items = list_fanart_items_by_uploader(profile_username, limit=30)
     visible_bookmarks = [
         row
         for row in raw_bookmarks
@@ -81,6 +97,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         {
             "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "",
             "__PROFILE_UPLOADED_WORKS_HTML__": _uploaded_works_html(uploaded),
+            "__PROFILE_FANART_HIDDEN_ATTR__": "",
+            "__PROFILE_FANART_HTML__": _fanart_html(profile_username, fanart_items),
             "__PROFILE_BOOKMARKS_HIDDEN_ATTR__": "",
             "__PROFILE_BOOKMARKS_HTML__": _bookmarks_html(visible_bookmarks),
         }
@@ -95,4 +113,3 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     }
 
     return render_html_template(request, response, "profile-public.html", replacements)
-

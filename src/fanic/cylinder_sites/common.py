@@ -28,13 +28,15 @@ from fanic.ingest import ingest_cbz
 from fanic.repository import UserRole
 from fanic.repository import get_user_role
 from fanic.repository import get_user_theme_preference
+from fanic.settings import STATIC_ASSETS_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
 
 mimetypes.add_type("image/avif", ".avif")
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-STATIC_ROOT = (PACKAGE_ROOT / "static").resolve()
+STATIC_ROOT = (PACKAGE_ROOT / "dynamic").resolve()
+ASSET_ROOT = STATIC_ASSETS_DIR.resolve()
 _SETTINGS = get_settings()
 
 SESSION_COOKIE_NAME = "fanic_session"
@@ -151,7 +153,9 @@ SITE_FOOTER_HTML = (
     '<span class="site-footer-sep" aria-hidden="true"> | </span>'
     '<a class="site-footer-link" href="/faq">FAQ</a>'
     '<span class="site-footer-sep" aria-hidden="true"> | </span>'
-    '<a class="site-footer-link" href="/dmca">DMCA Policy</a>'
+    '<a class="site-footer-link" href="/dmca">Report Copyright/Content</a>'
+    '<span class="site-footer-sep" aria-hidden="true"> | </span>'
+    '<a class="site-footer-link" href="/cbz-format">CBZ SPEC INFO</a>'
     "</div>"
     "</footer>"
 )
@@ -499,9 +503,9 @@ def send_file(
 
 
 def safe_static_path(rel_path: str) -> Path | None:
-    candidate = (STATIC_ROOT / rel_path).resolve()
+    candidate = (ASSET_ROOT / rel_path).resolve()
     try:
-        _ = candidate.relative_to(STATIC_ROOT)
+        _ = candidate.relative_to(ASSET_ROOT)
     except ValueError:
         return None
     return candidate
@@ -982,6 +986,18 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     logged_in = username is not None
     role = current_user_role(request)
     is_admin = role in {"superadmin", "admin"}
+    reports_current_attr = (
+        ' aria-current="page"' if request.path == "/admin/reports" else ""
+    )
+    users_current_attr = (
+        ' aria-current="page"' if request.path == "/admin/users" else ""
+    )
+    admin_reports_link = (
+        f'<a href="/admin/reports"{reports_current_attr}>Reports</a>'
+        f'<a href="/admin/users"{users_current_attr}>Users</a>'
+        if is_admin
+        else ""
+    )
     return {
         "__USER_MENU_STATUS__": f"Logged in as {escape(username)}."
         if logged_in and username
@@ -989,11 +1005,7 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         "__USER_MENU_LOGIN_HIDDEN_ATTR__": "hidden" if logged_in else "",
         "__USER_MENU_PROFILE_HIDDEN_ATTR__": "" if logged_in else "hidden",
         "__USER_MENU_LOGOUT_HIDDEN_ATTR__": "" if logged_in else "hidden",
-        "__ADMIN_REPORTS_LINK__": (
-            '<a href="/admin/reports">Reports</a><a href="/admin/users">Users</a>'
-            if is_admin
-            else ""
-        ),
+        "__ADMIN_REPORTS_LINK__": admin_reports_link,
     }
 
 
@@ -1160,3 +1172,17 @@ def page_file_for(work_id: str, image_name: str) -> Path:
 
 def thumb_file_for(work_id: str, thumb_name: str) -> Path:
     return WORKS_DIR / work_id / "thumbs" / thumb_name
+
+
+def media_url(path: str) -> str:
+    trimmed = path.strip()
+    if not trimmed:
+        return ""
+    if trimmed.startswith("http://") or trimmed.startswith("https://"):
+        return trimmed
+    if not trimmed.startswith("/"):
+        trimmed = f"/{trimmed}"
+    media_base = _SETTINGS.media_base_url.strip()
+    if not media_base:
+        return trimmed
+    return f"{media_base.rstrip('/')}{trimmed}"

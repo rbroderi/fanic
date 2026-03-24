@@ -4,12 +4,14 @@ import re
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 if TYPE_CHECKING:
     from _typeshed import ConvertibleToInt
 else:
     type ConvertibleToInt = int | str | bytes
 
+from fanic.cylinder_sites.common import media_url
 from fanic.repository import list_work_chapter_members
 
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
@@ -53,13 +55,20 @@ def _page_thumb_button_html(
 
     page_index_raw = page.get("page_index", 0)
     page_index = int(page_index_raw if page_index_raw else 0)
+    thumb_obj = page.get("thumb_filename")
+    image_obj = page.get("image_filename", "")
+    thumb_name = str(thumb_obj).strip() if thumb_obj else ""
+    if not thumb_name:
+        thumb_name = str(image_obj).strip()
+    work_id_url = quote(work_id, safe="")
+    thumb_url = media_url(f"/works/{work_id_url}/thumbs/{quote(thumb_name, safe='/')}")
     safe_name = escape(image_filename)
-    safe_work_id = escape(work_id)
+    safe_thumb_url = escape(thumb_url)
     return (
         '<button type="button" class="page-thumb-card" '
         f'draggable="true" data-image-filename="{safe_name}" '
         f'data-page-index="{page_index}">'
-        f'<img src="/api/works/{safe_work_id}/pages/{page_index}/thumb" alt="Page {page_index}" loading="lazy" />'
+        f'<img src="{safe_thumb_url}" alt="Page {page_index}" loading="lazy" />'
         f"<span>Page {page_index}</span>"
         "</button>"
     )

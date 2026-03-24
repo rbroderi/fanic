@@ -99,6 +99,11 @@ class FanicSettings(BaseSettings):
         alias="FANIC_DATA_DIR",
     )
 
+    media_base_url: str = Field(
+        default="http://127.0.0.1:8080",
+        alias="FANIC_MEDIA_BASE_URL",
+    )
+
     enable_beartype: bool = Field(
         default=True,
         alias="FANIC_ENABLE_BEARTYPE",
@@ -393,9 +398,13 @@ DATA_ROOT = _SETTINGS.data_root
 DB_PATH = DATA_ROOT / "fanic.db"
 CBZ_DIR = DATA_ROOT / "cbz"
 WORKS_DIR = DATA_ROOT / "works"
+STATIC_ASSETS_DIR = DATA_ROOT / "static"
+FANART_DIR = DATA_ROOT / "fanart"
 
 
 def ensure_storage_dirs() -> None:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     CBZ_DIR.mkdir(parents=True, exist_ok=True)
     WORKS_DIR.mkdir(parents=True, exist_ok=True)
+    STATIC_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    FANART_DIR.mkdir(parents=True, exist_ok=True)

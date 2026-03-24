@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 from typing import Protocol
@@ -80,6 +82,215 @@ def test_home_route_renders_work_links(
 
     assert result.status_code == 200
     assert b"/works/work-1" in result.data
+
+
+def test_home_route_renders_fanart_tab(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite.ex.get.py",
+        "fanicsite_ex_get_fanart_test",
+    )
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    seen_filters: dict[str, Any] = {}
+
+    def fake_list_fanart_items(
+        filters: dict[str, str] | None = None,
+        *,
+        limit: int = 120,
+    ) -> list[dict[str, Any]]:
+        seen_filters.clear()
+        seen_filters.update(filters if filters else {})
+        _ = limit
+        return [
+            {
+                "id": "fanart-1",
+                "uploader_username": "alice",
+                "title": "Sky",
+                "summary": "Color test",
+                "fandom": "Skyverse",
+                "rating": "General Audiences",
+                "image_filename": "_objects/ab/image.avif",
+                "thumb_filename": "_objects/ab/thumb.avif",
+                "width": 1000,
+                "height": 800,
+                "created_at": "2026-03-22T00:00:00Z",
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ]
+
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "list_fanart_items", fake_list_fanart_items)
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data(replacements["__WORK_GRID_HTML__"])
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(
+        path="/",
+        args={
+            "view": "fanart",
+            "q": "ali",
+            "user": "alice",
+            "sort": "title_asc",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert b"/fanart/alice/reader?item_id=fanart-1" in result.data
+    assert b'<h3><a href="/fanart/alice">@alice</a></h3>' in result.data
+    assert b"/fanart/thumbs/_objects/ab/thumb.avif" in result.data
+    assert (
+        b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
+        in result.data
+    )
+    assert seen_filters["q"] == "ali"
+    assert seen_filters["user"] == "alice"
+    assert seen_filters["sort"] == "title_asc"
+
+
+def test_fanart_route_gallery_and_media(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
+        "fanicsite_fanart_ex_get_test",
+    )
+
+    def fake_list_fanart_items_by_uploader(
+        uploader_username: str,
+        *,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        _ = (uploader_username, limit)
+        return [
+            {
+                "id": "art-1",
+                "uploader_username": "alice",
+                "title": "Sky",
+                "summary": "Color test",
+                "fandom": "Skyverse",
+                "rating": "General Audiences",
+                "image_filename": "_objects/aa/image.avif",
+                "thumb_filename": "_objects/aa/thumb.avif",
+                "width": 1000,
+                "height": 800,
+                "created_at": "2026-03-22T00:00:00Z",
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ]
+
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        fake_list_fanart_items_by_uploader,
+    )
+    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+
+    rendered: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        rendered["template"] = template_name
+        rendered["grid"] = replacements.get("__FANART_GRID_HTML__", "")
+        rendered.update(replacements)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    gallery_request = dummy_request(path="/fanart/alice", args={})
+    gallery_response = dummy_response()
+    gallery_result = module.main(gallery_request, gallery_response)
+
+    assert gallery_result.status_code == 200
+    assert rendered["template"] == "fanart-gallery.html"
+    assert "/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
+    assert "/static/citrus.svg" in rendered["grid"]
+    assert "fandom: Skyverse" in rendered["grid"]
+    assert 'class="admin-delete-form"' in rendered["grid"]
+    assert "/fanart/alice/art-1/delete" in rendered["grid"]
+    assert "/fanart/alice/reader?item_id=art-1" in rendered["grid"]
+    assert (
+        "/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Ffanart%2Fimages%2F_objects%2Faa%2Fimage.avif"
+        in rendered["grid"]
+    )
+
+    reader_request = dummy_request(
+        path="/fanart/alice/reader", args={"item_id": "art-1"}
+    )
+    reader_response = dummy_response()
+    reader_result = module.main(reader_request, reader_response)
+
+    assert reader_result.status_code == 200
+    assert rendered["template"] == "reader.html"
+    reader_bootstrap = json.loads(rendered["__READER_BOOTSTRAP_JSON__"])
+    assert reader_bootstrap["mode"] == "fanart"
+    assert len(reader_bootstrap["pages"]) == 1
+    assert reader_bootstrap["pages"][0]["id"] == "art-1"
+    assert reader_bootstrap["page_index"] == 1
+    assert rendered["__READER_REPORT_HIDDEN_ATTR__"] == ""
+    assert rendered["__READER_REPORT_TITLE__"] == "Report this image"
+    assert rendered["__READER_REPORT_CLAIMED_URL__"].endswith(
+        "/fanart/images/_objects/aa/image.avif"
+    )
+    assert "Copyright infringement (DMCA)" in rendered["__REPORT_ISSUE_OPTIONS_HTML__"]
+
+    media_file = tmp_path / "thumb.avif"
+    media_file.write_bytes(b"avif")
+
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item_by_thumb_filename",
+        lambda *_: {"id": "x"},
+    )
+    monkeypatch.setattr(module, "fanart_thumb_for", lambda *_: media_file)
+
+    def fake_send_file(response: ResponseLike, file_path: Path) -> ResponseLike:
+        response.status_code = 200
+        response.content_type = "image/avif"
+        response.set_data(file_path.read_bytes())
+        return response
+
+    monkeypatch.setattr(module, "send_file", fake_send_file)
+
+    media_request = dummy_request(path="/fanart/thumbs/_objects/aa/thumb.avif")
+    media_response = dummy_response()
+    media_result = module.main(media_request, media_response)
+
+    assert media_result.status_code == 200
+    assert media_result.data == b"avif"
 
 
 def test_work_detail_route_renders_work_page(
@@ -742,4 +953,3 @@ def test_work_detail_status_messages(
     assert result.status_code == 200
     assert captured["status_class"] == expected_class
     assert captured["status_text"] != ""
-

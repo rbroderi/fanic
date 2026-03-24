@@ -339,6 +339,123 @@ def test_chapters_progress_and_delete_work_cleanup(
     assert work_dir.exists() is False
 
 
+def test_fanart_crud_and_lookup_helpers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    item_id = repository.create_fanart_item(
+        item_id="fanart-1",
+        uploader_username="alice",
+        title="Clouds",
+        summary="Paint study",
+        fandom="Skyverse",
+        rating="Mature",
+        image_filename="_objects/ab/image.avif",
+        thumb_filename="_objects/ab/thumb.avif",
+        width=1280,
+        height=720,
+    )
+    assert item_id == "fanart-1"
+
+    repository.create_fanart_item(
+        item_id="fanart-2",
+        uploader_username="bob",
+        title="Robots",
+        summary="",
+        fandom="MechaVerse",
+        image_filename="_objects/cd/image.avif",
+        thumb_filename="_objects/cd/thumb.avif",
+        width=640,
+        height=480,
+    )
+
+    users = repository.list_fanart_users(limit=20)
+    assert len(users) == 2
+    assert users[0]["uploader_username"] == "alice"
+    assert users[0]["latest_item_id"] == "fanart-1"
+    assert users[0]["latest_thumb_filename"] == "_objects/ab/thumb.avif"
+
+    filtered_users = repository.list_fanart_users({"q": "robot"}, limit=20)
+    assert len(filtered_users) == 1
+    assert filtered_users[0]["uploader_username"] == "bob"
+
+    fandom_users = repository.list_fanart_users({"fandom": "skyverse"}, limit=20)
+    assert len(fandom_users) == 1
+    assert fandom_users[0]["uploader_username"] == "alice"
+
+    complete_users = repository.list_fanart_users({"status": "complete"}, limit=20)
+    assert len(complete_users) == 1
+    assert complete_users[0]["uploader_username"] == "alice"
+
+    in_progress_users = repository.list_fanart_users(
+        {"status": "in_progress"},
+        limit=20,
+    )
+    assert len(in_progress_users) == 1
+    assert in_progress_users[0]["uploader_username"] == "bob"
+
+    sorted_users = repository.list_fanart_users({"sort": "title_asc"}, limit=20)
+    assert [row["uploader_username"] for row in sorted_users] == ["alice", "bob"]
+
+    filtered_items = repository.list_fanart_items({"q": "robot"}, limit=20)
+    assert len(filtered_items) == 1
+    assert filtered_items[0]["id"] == "fanart-2"
+
+    user_items = repository.list_fanart_items({"user": "ali"}, limit=20)
+    assert len(user_items) == 1
+    assert user_items[0]["id"] == "fanart-1"
+
+    fandom_items = repository.list_fanart_items({"fandom": "skyverse"}, limit=20)
+    assert len(fandom_items) == 1
+    assert fandom_items[0]["id"] == "fanart-1"
+
+    complete_items = repository.list_fanart_items({"status": "complete"}, limit=20)
+    assert len(complete_items) == 1
+    assert complete_items[0]["id"] == "fanart-1"
+
+    in_progress_items = repository.list_fanart_items(
+        {"status": "in_progress"},
+        limit=20,
+    )
+    assert len(in_progress_items) == 1
+    assert in_progress_items[0]["id"] == "fanart-2"
+
+    items = repository.list_fanart_items_by_uploader("alice", limit=20)
+    assert len(items) == 1
+    assert items[0]["id"] == "fanart-1"
+
+    item_by_id = repository.get_fanart_item("fanart-1")
+    assert item_by_id is not None
+    assert item_by_id["image_filename"] == "_objects/ab/image.avif"
+    assert item_by_id["fandom"] == "Skyverse"
+    assert item_by_id["rating"] == "Mature"
+
+    item_by_image = repository.get_fanart_item_by_image(
+        "alice", "_objects/ab/image.avif"
+    )
+    assert item_by_image is not None
+    assert item_by_image["id"] == "fanart-1"
+
+    item_by_thumb = repository.get_fanart_item_by_thumb(
+        "alice", "_objects/ab/thumb.avif"
+    )
+    assert item_by_thumb is not None
+    assert item_by_thumb["id"] == "fanart-1"
+
+    assert repository.delete_fanart_item("fanart-1") is True
+    assert repository.get_fanart_item("fanart-1") is None
+    assert repository.delete_fanart_item("fanart-1") is False
+
+    assert repository.fanart_file_for("_objects/ab/image.avif") == (
+        repository.FANART_DIR / "images" / "_objects/ab/image.avif"
+    )
+    assert repository.fanart_thumb_for("_objects/ab/thumb.avif") == (
+        repository.FANART_DIR / "thumbs" / "_objects/ab/thumb.avif"
+    )
+
+
 def test_user_role_management_operations(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

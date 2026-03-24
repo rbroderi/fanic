@@ -67,6 +67,21 @@ CREATE TABLE IF NOT EXISTS pages (
     FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS fanart_items (
+    id TEXT PRIMARY KEY,
+    uploader_username TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    fandom TEXT NOT NULL DEFAULT '',
+    rating TEXT NOT NULL DEFAULT 'Not Rated',
+    image_filename TEXT NOT NULL,
+    thumb_filename TEXT,
+    width INTEGER,
+    height INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS reading_progress (
     work_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -176,6 +191,7 @@ CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type);
 CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_tags_tag ON work_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
+CREATE INDEX IF NOT EXISTS idx_fanart_items_uploader_created_at ON fanart_items(uploader_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_work_comments_work ON work_comments(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);

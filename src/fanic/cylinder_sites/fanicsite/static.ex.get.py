@@ -20,3 +20,4 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Not found", 404)
 
     return send_file(response, file_path)
+

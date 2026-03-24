@@ -1,15 +1,46 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Users | FANIC Admin</title>
+    <title>FANIC FAQ</title>
+    <meta name="description" content="Frequently asked questions about FANIC." />
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .faq-shell {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+
+      .faq-shell h1,
+      .faq-shell h2 {
+        margin: 0 0 0.75rem;
+      }
+
+      .faq-intro {
+        margin: 0 0 1.25rem;
+      }
+
+      .faq-item + .faq-item {
+        margin-top: 1.25rem;
+      }
+
+      .faq-item p {
+        margin: 0.5rem 0 0;
+      }
+
+      .faq-note {
+        margin-top: 1.25rem;
+        padding: 0.875rem 1rem;
+        border-left: 4px solid var(--accent-color);
+        background: color-mix(in srgb, var(--card-bg) 88%, white 12%);
+      }
+    </style>
   </head>
   <body>
     <header class="site-header">
@@ -18,8 +49,9 @@
         <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
+            <a href="/cbz-format">CBZ SPEC INFO</a>
+            <a href="/faq" aria-current="page">FAQ</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -39,47 +71,50 @@
       </div>
     </header>
 
-    <main class="layout">
+    <main class="layout faq-shell">
       <section class="card">
-        <h2>User Management</h2>
-        <p class="profile-meta">Create, role-manage, activate/deactivate, and remove local accounts.</p>
-        <p class="status-text __USERS_STATUS_CLASS__" __USERS_STATUS_HIDDEN_ATTR__>__USERS_STATUS_TEXT__</p>
+        <h1>FAQ</h1>
+        <p class="faq-intro">
+          FANIC is a site for fan-created comics. Creators can upload comics and readers can browse and read them in the browser.
+        </p>
 
-        <form method="post" action="/admin/users" class="upload-form">
-          <input type="hidden" name="user_action" value="create" />
+        <article class="faq-item">
+          <h2>What is this website for?</h2>
+          <p>
+            This site is for fan created comics, including uploading, organizing, and reading fan works.
+          </p>
+        </article>
 
-          <label for="newUsername">Username</label>
-          <input id="newUsername" name="username" type="text" required />
+        <article class="faq-item">
+          <h2>What content is restricted?</h2>
+          <p>
+            Photorealistic content is not allowed to be uploaded. Any explicit content must be marked as explicit when submitted.
+          </p>
+        </article>
 
-          <label for="newDisplayName">Display name</label>
-          <input id="newDisplayName" name="display_name" type="text" />
+        <article class="faq-item">
+          <h2>Do I need an account to upload?</h2>
+          <p>
+            Yes. You must login to an account before uploading any comic.
+          </p>
+        </article>
 
-          <label for="newEmail">Email</label>
-          <input id="newEmail" name="email" type="email" />
+        <article class="faq-item">
+          <h2>How do explicit-view permissions work?</h2>
+          <p>
+            To view explicit content, you must opt in on the profile page.
+          </p>
+        </article>
 
-          <label for="newRole">Role</label>
-          <select id="newRole" name="role">
-            __USERS_ROLE_OPTIONS__
-          </select>
-
-          <label class="checkbox-row" for="newUserActive">
-            <input id="newUserActive" name="active" type="checkbox" value="1" checked />
-            <span>Active account</span>
-          </label>
-
-          <button type="submit">Create user</button>
-        </form>
+        <p class="faq-note">
+          Please make sure your uploads follow these rules so content can be safely moderated and correctly surfaced to readers.
+        </p>
       </section>
-
-      <section class="comments-list">
-        __USERS_ROWS_HTML__
-      </section>
-
-      __USERS_PAGINATION_HTML__
     </main>
 
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+
 
 

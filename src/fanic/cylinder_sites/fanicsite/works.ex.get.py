@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import cast
 from urllib.parse import quote
+from urllib.parse import urlencode
 
 if TYPE_CHECKING:
     from _typeshed import ConvertibleToInt
@@ -15,6 +16,7 @@ else:
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import media_url
 from fanic.cylinder_sites.common import rating_badge_html
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import role_for_user
@@ -28,6 +30,7 @@ from fanic.cylinder_sites.editor_metadata import render_options_html
 from fanic.cylinder_sites.editor_metadata import selected_attr
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.repository import can_view_work
+from fanic.repository import get_page_files
 from fanic.repository import get_work
 from fanic.repository import get_work_version_manifest
 from fanic.repository import has_user_kudoed_work
@@ -88,7 +91,12 @@ def _comment_cards_html(comments: Sequence[Mapping[str, object]]) -> str:
     return "".join(parts)
 
 
-def _work_versions_list_html(work_id: str, selected_version_id: str) -> str:
+def _work_versions_list_html(
+    work_id: str,
+    selected_version_id: str,
+    *,
+    back_href: str,
+) -> str:
     versions = list_work_versions(work_id, limit=30)
     if not versions:
         return '<p class="profile-meta">No versions recorded yet.</p>'
@@ -104,6 +112,8 @@ def _work_versions_list_html(work_id: str, selected_version_id: str) -> str:
             ' aria-current="page"' if version_id == selected_version_id else ""
         )
         version_href = f"/works/{escape(work_id)}/versions/{quote(version_id)}"
+        if back_href:
+            version_href += f"?back={quote(back_href, safe='')}"
         items.append(
             "<li>"
             + f'<a href="{version_href}"{selected_attr}>{created_at}</a>'
@@ -436,6 +446,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             },
         )
 
+    back_href = request.args.get("back", "").strip()
+
     if len(tail) in {2, 3} and tail[1] == "versions":
         work_id = tail[0]
         work = get_work(work_id)
@@ -446,20 +458,30 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not can_view_work(username, work):
             return text_error(response, "Work not found", 404)
 
+        reader_query = {"back": back_href} if back_href else {}
+        reader_query_string = urlencode(reader_query)
+        reader_href = (
+            f"/tools/reader/{escape(work_id)}?{reader_query_string}"
+            if reader_query_string
+            else f"/tools/reader/{escape(work_id)}"
+        )
         versions = list_work_versions(work_id, limit=50)
         if not versions:
+            work_href = f"/works/{escape(work_id)}"
+            if back_href:
+                work_href += f"?back={quote(back_href, safe='')}"
             return render_html_template(
                 request,
                 response,
                 "work-versions.html",
                 {
                     "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
-                    "__WORK_HREF__": f"/works/{escape(work_id)}",
-                    "__WORK_READER_HREF__": f"/tools/reader/{escape(work_id)}",
+                    "__WORK_HREF__": work_href,
+                    "__WORK_READER_HREF__": reader_href,
                     "__WORK_VERSIONS_LIST_HTML__": '<p class="profile-meta">No versions recorded yet.</p>',
                     "__VERSION_STATUS__": "No versions recorded yet.",
                     "__VERSION_STATUS_CLASS__": "",
-                    "__VERSION_READER_HREF__": f"/tools/reader/{escape(work_id)}",
+                    "__VERSION_READER_HREF__": reader_href,
                     "__VERSION_METADATA_HTML__": '<p class="profile-meta">No snapshot metadata available.</p>',
                 },
             )
@@ -475,21 +497,32 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Version not found", 404)
 
         quoted_version = quote(selected_version_id)
+        version_reader_query = {"version_id": selected_version_id}
+        if back_href:
+            version_reader_query["back"] = back_href
+        version_reader_query_string = urlencode(version_reader_query)
+        version_reader_href = (
+            f"/tools/reader/{escape(work_id)}?{version_reader_query_string}"
+        )
+        work_href = f"/works/{escape(work_id)}"
+        if back_href:
+            work_href += f"?back={quote(back_href, safe='')}"
         return render_html_template(
             request,
             response,
             "work-versions.html",
             {
                 "__WORK_TITLE__": escape(str(work.get("title", "Untitled"))),
-                "__WORK_HREF__": f"/works/{escape(work_id)}",
-                "__WORK_READER_HREF__": f"/tools/reader/{escape(work_id)}",
+                "__WORK_HREF__": work_href,
+                "__WORK_READER_HREF__": reader_href,
                 "__WORK_VERSIONS_LIST_HTML__": _work_versions_list_html(
                     work_id,
                     selected_version_id,
+                    back_href=back_href,
                 ),
                 "__VERSION_STATUS__": escape(f"Viewing version {selected_version_id}"),
                 "__VERSION_STATUS_CLASS__": "success",
-                "__VERSION_READER_HREF__": f"/tools/reader/{escape(work_id)}?version_id={quoted_version}",
+                "__VERSION_READER_HREF__": version_reader_href,
                 "__VERSION_METADATA_HTML__": _version_metadata_html(version_manifest),
             },
         )
@@ -512,7 +545,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     rating_html = rating_badge_html(work.get("rating", "Not Rated"))
     status = escape(str(work.get("status", "in_progress")))
     page_count = escape(str(work.get("page_count", 0)))
-    cover_index = escape(str(work.get("cover_page_index", 1)))
+    cover_page_index_raw = work.get("cover_page_index", 1)
+    cover_page_index = int(cover_page_index_raw) if cover_page_index_raw else 1
+    cover_files = get_page_files(work_id, cover_page_index)
+    cover_image_name = str(cover_files["image"]).strip() if cover_files else ""
+    work_id_quoted = quote(work_id, safe="")
+    if cover_image_name:
+        cover_src = media_url(
+            f"/works/{work_id_quoted}/pages/{quote(cover_image_name, safe='/')}"
+        )
+    else:
+        cover_src = media_url("/static/logo.png")
 
     tags_obj = work.get("tags", [])
     tag_html = ""
@@ -542,6 +585,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     msg = request.args.get("msg", "").strip()
     work_status = _status_for_work_message(msg)
 
+    reader_query = {"back": back_href} if back_href else {}
+    reader_query_string = urlencode(reader_query)
+    reader_href = (
+        f"/tools/reader/{escape(work_id)}?{reader_query_string}"
+        if reader_query_string
+        else f"/tools/reader/{escape(work_id)}"
+    )
+    versions_href = f"/works/{escape(work_id)}/versions"
+    if back_href:
+        versions_href += f"?back={quote(back_href, safe='')}"
+
     return render_html_template(
         request,
         response,
@@ -550,10 +604,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_TITLE__": title,
             "__WORK_SUMMARY__": summary,
             "__WORK_META__": f"{rating_html} | {status} | {page_count} pages",
-            "__WORK_COVER_SRC__": f"/api/works/{escape(work_id)}/pages/{cover_index}/image",
-            "__WORK_READ_HREF__": f"/tools/reader/{escape(work_id)}",
+            "__WORK_COVER_SRC__": cover_src,
+            "__WORK_READ_HREF__": reader_href,
             "__WORK_DOWNLOAD_HREF__": f"/api/works/{escape(work_id)}/download",
-            "__WORK_VERSIONS_HREF__": f"/works/{escape(work_id)}/versions",
+            "__WORK_VERSIONS_HREF__": versions_href,
             "__WORK_TAGS_HTML__": tag_html,
             "__EDIT_METADATA_HREF__": f"/works/{escape(work_id)}/edit",
             "__EDIT_METADATA_HIDDEN_ATTR__": "" if can_edit else "hidden",
@@ -578,4 +632,3 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_BOOKMARK_PAGE_INDEX__": escape(str(bookmark_page_index)),
         },
     )
-

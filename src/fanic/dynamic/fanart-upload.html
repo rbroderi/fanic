@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Notifications - FANIC</title>
+    <title>Upload Fanart</title>
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,14 +15,11 @@
     <header class="site-header">
       <div class="site-header-row">
         <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
-        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <p class="profile-meta">Fanart Upload</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>
-            __ADMIN_REPORTS_LINK__
-            <a href="/ingest">Upload comic</a>
-            <a href="/user/profile">Profile</a>
-            <a href="/user/notifications" aria-current="page">Notification</a>
+            <a href="/?view=fanart">Browse fanart</a>
+            <a href="/">Browse comics</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -41,25 +38,37 @@
         </div>
       </div>
     </header>
-
     <main class="layout">
-      <section class="card info-card">
-        <h2>Notifications</h2>
-        <p class="profile-meta">Unread: __NOTIFICATION_UNREAD_COUNT__</p>
-        <p class="status-text __NOTIFICATION_STATUS_CLASS__" __NOTIFICATION_STATUS_HIDDEN_ATTR__>__NOTIFICATION_STATUS__</p>
-        <form method="post" action="/user/notifications" __NOTIFICATION_MARK_ALL_HIDDEN_ATTR__>
-          <input type="hidden" name="notification_action" value="mark-all-read" />
-          <button type="submit">Mark all read</button>
+      <section class="card">
+        <h2>Upload fanart</h2>
+        <p class="profile-meta">Images are converted to AVIF and stored with hashed filenames.</p>
+        <p class="profile-status __UPLOAD_STATUS_CLASS__" __UPLOAD_STATUS_HIDDEN_ATTR__>__UPLOAD_STATUS_TEXT__</p>
+        <form method="post" action="/fanart/upload" enctype="multipart/form-data" class="profile-preferences">
+          <label for="fanartTitle">Title</label>
+          <input id="fanartTitle" type="text" name="title" maxlength="220" value="__TITLE__" required />
+
+          <label for="fanartSummary">Summary</label>
+          <textarea id="fanartSummary" name="summary" rows="5" maxlength="8000" required>__SUMMARY__</textarea>
+
+          <label for="fanartFandom">Fandom</label>
+          <input id="fanartFandom" type="text" name="fandom" maxlength="220" value="__FANDOM__" />
+
+          <label for="fanartRating">Rating</label>
+          <select id="fanartRating" name="rating">
+            __RATING_OPTIONS_HTML__
+          </select>
+
+          <label for="fanartImage">Image</label>
+          <input id="fanartImage" type="file" name="fanart_image" accept="image/*" required />
+
+          <label class="toggle-row">
+            <input type="checkbox" name="agree_terms" required />
+            I agree to the Terms and Conditions.
+          </label>
+          <button type="submit">Upload fanart</button>
         </form>
       </section>
-
-      <section class="comments-list">
-        __NOTIFICATION_ITEMS_HTML__
-      </section>
     </main>
-
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
-
-

@@ -1,9 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reports | FANIC Admin</title>
+    <title>Content Report | FANIC</title>
+    <meta name="description" content="Submit copyright or content-policy reports for content hosted on FANIC." />
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,9 +19,8 @@
         <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="/">Browse</a>
             __ADMIN_REPORTS_LINK__
-            <a href="/admin/reports" aria-current="page">Reports</a>
+            <a href="/dmca" aria-current="page">DMCA</a>
           </nav>
           <div class="user-menu">
             <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
@@ -42,43 +42,56 @@
 
     <main class="layout">
       <section class="card">
-        <h2>Submitted Reports</h2>
-        <p class="profile-meta">Showing __REPORT_COUNT__ report(s).</p>
-        <p class="status-text __REPORT_STATUS_CLASS__" __REPORT_STATUS_HIDDEN_ATTR__>__REPORT_STATUS_TEXT__</p>
+        <h2>Copyright & Content Report</h2>
+        <p class="profile-meta">Use this form to report copyright infringement or other harmful/illegal content concerns.</p>
+        <p class="status-text __DMCA_STATUS_CLASS__" __DMCA_STATUS_HIDDEN_ATTR__>__DMCA_STATUS_TEXT__</p>
 
-        <form method="get" action="/admin/reports" class="upload-form">
-          <label for="workIdFilter">Work ID</label>
-          <input id="workIdFilter" name="work_id" type="text" value="__REPORT_WORK_ID__" />
+        <form method="post" action="/dmca" class="upload-form">
+          <label for="reporterName">Your full name</label>
+          <input id="reporterName" name="reporter_name" type="text" required />
 
-          <label for="issueTypeFilter">Issue type</label>
-          <select id="issueTypeFilter" name="issue_type">
-            <option value="">All issue types</option>
+          <label for="reporterEmail">Your email</label>
+          <input id="reporterEmail" name="reporter_email" type="email" required />
+
+          <label for="workId">Work ID (optional)</label>
+          <input id="workId" name="work_id" type="text" value="__DMCA_WORK_ID__" />
+
+          <label for="workTitle">Work title (optional)</label>
+          <input id="workTitle" name="work_title" type="text" value="__DMCA_WORK_TITLE__" />
+
+          <label for="claimedUrl">URL to infringing content</label>
+          <input id="claimedUrl" name="claimed_url" type="url" value="__DMCA_CLAIMED_URL__" required />
+
+          <label for="issueType">Issue type</label>
+          <select id="issueType" name="issue_type" required>
             __REPORT_ISSUE_OPTIONS_HTML__
           </select>
 
-          <label for="statusFilter">Status</label>
-          <select id="statusFilter" name="status">
-            <option value="">All statuses</option>
-            __REPORT_STATUS_OPTIONS_HTML__
-          </select>
+          <label for="evidenceUrl">Reference URL (optional)</label>
+          <input id="evidenceUrl" name="evidence_url" type="url" placeholder="Original source, portfolio, rights statement, etc." />
 
-          <label for="startDateFilter">Start date</label>
-          <input id="startDateFilter" name="start_date" type="date" value="__REPORT_START_DATE__" />
+          <label for="details">Description</label>
+          <textarea id="details" name="details" rows="6" required></textarea>
 
-          <label for="endDateFilter">End date</label>
-          <input id="endDateFilter" name="end_date" type="date" value="__REPORT_END_DATE__" />
+          <label for="attest" style="display:flex; gap:0.5rem; align-items:flex-start;">
+            <input id="attest" name="attest" type="checkbox" required style="margin-top:0.2rem;" />
+            <span>I certify that I have a good-faith belief this use is unauthorized and that this report is accurate.</span>
+          </label>
 
-          <button type="submit">Apply filters</button>
+          <button type="submit">Submit report</button>
         </form>
       </section>
 
-      <section class="comments-list">
-        __REPORT_ROWS_HTML__
+      <section class="card info-card">
+        <h3>Before You Submit</h3>
+        <p>For immediate danger or criminal emergencies, contact local authorities first.</p>
+        <p>Knowingly filing false claims can carry legal consequences.</p>
       </section>
     </main>
 
     <script src="/static/user-menu.js"></script>
   </body>
 </html>
+
 
 
