@@ -4,6 +4,7 @@ param(
     [string]$ListenPort = "8080",
     [string]$WsgiHost = "127.0.0.1",
     [string]$WsgiPort = "8000",
+    [string]$StorageRoot,
     [string]$RepoRoot,
     [switch]$SkipDownload,
     [switch]$NoPrompt
@@ -43,6 +44,10 @@ if (-not $RepoRoot) {
 
 $RepoRoot = (Resolve-Path $RepoRoot).Path
 
+if (-not $StorageRoot) {
+    $StorageRoot = Join-Path $RepoRoot "src\storage"
+}
+
 if (-not $NoPrompt) {
     Write-Host ""
     Write-Host "FANIC nginx setup for Windows"
@@ -55,15 +60,16 @@ if (-not $NoPrompt) {
     $WsgiHost = Prompt-Default -Message "WSGI host" -Default $WsgiHost
     $WsgiPort = Prompt-Default -Message "WSGI port" -Default $WsgiPort
     $RepoRoot = Prompt-Default -Message "repo root" -Default $RepoRoot
+    $StorageRoot = Prompt-Default -Message "storage root" -Default $StorageRoot
 
     $downloadAnswer = Prompt-Default -Message "download or refresh nginx binaries? (yes/no)" -Default "yes"
     $SkipDownload = $downloadAnswer.ToLowerInvariant() -ne "yes"
 }
 
 $RepoRoot = (Resolve-Path $RepoRoot).Path
-$StorageRoot = Join-Path $RepoRoot "src\fanic\storage"
+$StorageRoot = (Resolve-Path $StorageRoot).Path
 $CbzDir = Join-Path $StorageRoot "cbz"
-$DynamicStaticDir = Join-Path $RepoRoot "src\fanic\storage\static"
+$DynamicStaticDir = Join-Path $StorageRoot "static"
 $WorksDir = Join-Path $StorageRoot "works"
 $FanartDir = Join-Path $StorageRoot "fanart"
 if (-not (Test-Path $CbzDir)) {

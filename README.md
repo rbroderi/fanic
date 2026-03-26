@@ -65,11 +65,17 @@ It then:
 
 1. downloads and installs nginx,
 2. writes `nginx.conf`,
-3. serves static files from `src/fanic/storage/static` on `/static/`,
-4. serves work media from `src/fanic/storage/works` on `/works/`,
-5. serves fanart media from `src/fanic/storage/fanart` on `/fanart/`,
+3. serves static files from your storage root (for example `src/storage/static`) on `/static/`,
+4. serves work media from your storage root (for example `src/storage/works`) on `/works/`,
+5. serves fanart media from your storage root (for example `src/storage/fanart`) on `/fanart/`,
 6. proxies everything else to your WSGI server (default `127.0.0.1:8000`),
 5. validates config and starts or reloads nginx.
+
+To relocate storage and automatically update both WSGI (`FANIC_DATA_DIR`) and nginx aliases, run:
+
+```powershell
+just relocate-storage "C:/path/to/new/storage"
+```
 
 ## Production Security Settings
 
@@ -155,7 +161,7 @@ Example metadata:
 
 ## Storage Layout
 
-By default, data is stored under `src/fanic/storage`:
+By default, data is stored under `src/fanic/storage` unless `FANIC_DATA_DIR` is set.
 
 ```text
 storage/

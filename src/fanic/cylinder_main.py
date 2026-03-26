@@ -14,8 +14,11 @@ from datetime import datetime
 from html import escape
 from http.cookies import SimpleCookie
 from pathlib import Path
+from types import TracebackType
 from typing import Final
+from typing import Protocol
 from typing import cast
+from typing import runtime_checkable
 from urllib.parse import parse_qs
 from wsgiref.types import WSGIApplication
 
@@ -37,6 +40,21 @@ ADMIN_ROLES: Final[set[str]] = {"superadmin", "admin"}
 ALPHA_INVITE_COOKIE_NAME: Final[str] = "fanic_alpha_access"
 ALPHA_INVITE_PATH: Final[str] = "/__alpha_invite"
 OK = 0
+
+OptExcInfo = (
+    tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
+)
+
+
+@runtime_checkable
+class StartResponseProtocol(Protocol):
+    def __call__(
+        self,
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: OptExcInfo | None = None,
+        /,
+    ) -> Callable[[bytes], object]: ...
 
 
 def _resolve_log_path(template: str) -> Path:
@@ -73,7 +91,7 @@ def _cookie_value(environ: dict[str, object], cookie_name: str) -> str:
     if not cookie_header:
         return ""
 
-    parsed_cookie: SimpleCookie[str] = SimpleCookie()
+    parsed_cookie = SimpleCookie()
     parsed_cookie.load(cookie_header)
     morsel = parsed_cookie.get(cookie_name)
     if morsel is None:
@@ -98,7 +116,7 @@ def _is_authorized_admin_request(environ: dict[str, object]) -> bool:
 def _admin_path_guard(app: WSGIApplication) -> WSGIApplication:
     def guarded_app(
         environ: dict[str, object],
-        start_response: Callable[..., object],
+        start_response: StartResponseProtocol,
     ) -> Iterable[bytes]:
         if _is_authorized_admin_request(environ):
             return app(environ, start_response)
@@ -120,13 +138,17 @@ def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
 
     def secured_app(
         environ: dict[str, object],
-        start_response: Callable[..., object],
+        start_response: StartResponseProtocol,
     ) -> Iterable[bytes]:
         def injecting_start_response(
             status: str,
             headers: list[tuple[str, str]],
-            exc_info: object = None,
-        ) -> object:
+            exc_info: (
+                tuple[type[BaseException], BaseException, TracebackType]
+                | tuple[None, None, None]
+                | None
+            ) = None,
+        ) -> Callable[[bytes], object]:
             headers.extend(
                 [
                     ("X-Content-Type-Options", "nosniff"),
@@ -204,7 +226,7 @@ def _read_form_body(environ: dict[str, object]) -> dict[str, str]:
 
 
 def _invite_page_response(
-    start_response: Callable[..., object],
+    start_response: StartResponseProtocol,
     *,
     next_url: str,
     error_message: str,
@@ -257,7 +279,7 @@ def _alpha_invite_gate_middleware(app: WSGIApplication) -> WSGIApplication:
 
     def gated_app(
         environ: dict[str, object],
-        start_response: Callable[..., object],
+        start_response: StartResponseProtocol,
     ) -> Iterable[bytes]:
         token = _cookie_value(environ, ALPHA_INVITE_COOKIE_NAME)
         has_access = _decode_alpha_access_cookie(token, secret)

@@ -109,3 +109,19 @@ Route modules are dynamically loaded in tests. If a route module defines datacla
 
 - Keep dataclass route modules compatible with the test loader behavior.
 - If needed, avoid postponed-annotation patterns that break dataclass processing in this environment.
+
+## Protocol Runtime Checkability Standard
+
+When defining `Protocol` types, always append the `@runtime_checkable` decorator.
+
+- Preferred:
+	- `from typing import Protocol, runtime_checkable`
+	- `@runtime_checkable`
+	- `class StartResponseProtocol(Protocol): ...`
+- Avoid:
+	- Protocol classes without `@runtime_checkable`
+
+Rationale:
+
+- Runtime validators in this project may perform `isinstance(...)` checks on protocol-typed annotations.
+- Non-runtime-checkable protocols can trigger runtime type-checking errors.

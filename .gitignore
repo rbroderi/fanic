@@ -3,7 +3,7 @@
 !.env.example
 
 # App-generated storage
-src/fanic/storage/
+src/storage/
 
 # Local debug and runtime outputs
 .tmp_debug/

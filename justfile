@@ -23,6 +23,10 @@ test-cov *args:
 setup-nginx-windows:
     powershell -NoLogo -ExecutionPolicy Bypass -File scripts\setup-nginx-windows.ps1
 
+# Relocate storage root, update .env FANIC_DATA_DIR, and refresh nginx aliases.
+relocate-storage target:
+    powershell -NoLogo -ExecutionPolicy Bypass -File scripts\relocate-storage-windows.ps1 -TargetStorageRoot "{{ target }}"
+
 # Start nginx (or reload if already running) and then run the WSGI server.
 start:
     $nginxExe = "C:\nginx\nginx.exe"; if (-not (Test-Path $nginxExe)) { throw "nginx.exe not found at C:\nginx\nginx.exe. Run 'just setup-nginx-windows' first." }; $nginxPrefix = "C:/nginx/"; & $nginxExe -t -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx config validation failed. Run 'just setup-nginx-windows' to regenerate config." }; $running = Get-Process nginx -ErrorAction SilentlyContinue; if ($running) { & $nginxExe -s reload -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx reload failed" } } else { $null = Start-Process -FilePath $nginxExe -ArgumentList @("-p", $nginxPrefix, "-c", "conf/nginx.conf") -WindowStyle Hidden -PassThru; Start-Sleep -Milliseconds 800; $started = Get-Process nginx -ErrorAction SilentlyContinue; if (-not $started) { throw "nginx did not start" } }; just serve
