@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from html import escape
+from pathlib import Path
 from typing import cast
 from urllib.parse import quote
 
@@ -25,6 +26,7 @@ from fanic.repository import fanart_thumb_for
 from fanic.repository import get_fanart_item_by_image_filename
 from fanic.repository import get_fanart_item_by_thumb_filename
 from fanic.repository import list_fanart_items_by_uploader
+from fanic.utils import slugify
 
 
 def _redirect(response: ResponseLike, location: str) -> ResponseLike:
@@ -69,6 +71,18 @@ def _upload_status(msg: str) -> tuple[str, str, str]:
             return ("", "", "hidden")
 
 
+def _standardized_download_filename(
+    uploader_username: str,
+    title: str,
+    image_filename: str,
+) -> str:
+    uploader_slug = slugify(uploader_username).replace("-", "_")
+    title_slug = slugify(title).replace("-", "_")
+    suffix = Path(image_filename).suffix.lower()
+    safe_suffix = suffix if suffix else ".avif"
+    return f"{uploader_slug}_{title_slug}{safe_suffix}"
+
+
 def _fanart_grid_html(
     uploader_username: str,
     items: Sequence[FanartItemRow],
@@ -98,6 +112,11 @@ def _fanart_grid_html(
         created_at = escape(str(item.get("created_at", "")))
         size_text = f"{item.get('width', 0)}x{item.get('height', 0)}"
         reader_href = f"/fanart/{safe_uploader}/reader?item_id={safe_item_id}"
+        download_href = (
+            f"/fanart/download/{quote(image_name, safe='/')}"
+            if image_name
+            else reader_href
+        )
         claimed_url = (
             f"/fanart/images/{quote(image_name, safe='/')}"
             if image_name
@@ -135,7 +154,7 @@ def _fanart_grid_html(
                 <h3><a href="{reader_href}">{title}</a></h3>
                 <p class="work-meta">{rating_html} | {escape(size_text)}{fandom_html} | {created_at}</p>
         <p>{summary}</p>
-            <p><a href="{report_href}">Report</a></p>
+            <p><a href="{download_href}">Download</a> | <a href="{report_href}">Report</a></p>
       </article>
     '''
         )
@@ -238,6 +257,26 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         return send_file(response, path)
+
+    if len(tail) >= 2 and tail[0] == "download":
+        file_name = "/".join(part for part in tail[1:] if part)
+        if not file_name:
+            return text_error(response, "Not found", 404)
+
+        item = get_fanart_item_by_image_filename(file_name)
+        if item is None:
+            return text_error(response, "Not found", 404)
+
+        path = fanart_file_for(file_name)
+        if not path.exists():
+            return text_error(response, "Not found", 404)
+
+        download_filename = _standardized_download_filename(
+            str(item.get("uploader_username", "")),
+            str(item.get("title", "untitled")),
+            file_name,
+        )
+        return send_file(response, path, filename=download_filename)
 
     if len(tail) == 1:
         uploader_username = tail[0].strip()

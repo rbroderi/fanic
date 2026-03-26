@@ -1,5 +1,7 @@
 # FANIC: Fan Archive Nexus for Illustrated Comics
 
+[![Ruff](https://github.com/rbroderi/fanic/actions/workflows/ruff.yml/badge.svg)](https://github.com/rbroderi/fanic/actions/workflows/ruff.yml)
+
 This project is a starter implementation of FANIC (Fan Archive Nexus for Illustrated Comics):
 
 - CBZ is the source artifact.

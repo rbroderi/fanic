@@ -237,6 +237,7 @@ def test_fanart_route_gallery_and_media(
     assert gallery_result.status_code == 200
     assert rendered["template"] == "fanart-gallery.html"
     assert "/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
+    assert "/fanart/download/_objects/aa/image.avif" in rendered["grid"]
     assert "/static/citrus.svg" in rendered["grid"]
     assert "fandom: Skyverse" in rendered["grid"]
     assert 'class="admin-delete-form"' in rendered["grid"]
@@ -291,6 +292,43 @@ def test_fanart_route_gallery_and_media(
 
     assert media_result.status_code == 200
     assert media_result.data == b"avif"
+
+    image_file = tmp_path / "image.avif"
+    image_file.write_bytes(b"image")
+
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item_by_image_filename",
+        lambda *_: {
+            "id": "art-1",
+            "uploader_username": "alice",
+            "title": "Sky",
+        },
+    )
+    monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
+
+    captured: dict[str, str] = {}
+
+    def fake_send_file_download(
+        response: ResponseLike,
+        file_path: Path,
+        filename: str | None = None,
+    ) -> ResponseLike:
+        captured["filename"] = filename if filename else ""
+        response.status_code = 200
+        response.content_type = "image/avif"
+        response.set_data(file_path.read_bytes())
+        return response
+
+    monkeypatch.setattr(module, "send_file", fake_send_file_download)
+
+    download_request = dummy_request(path="/fanart/download/_objects/aa/image.avif")
+    download_response = dummy_response()
+    download_result = module.main(download_request, download_response)
+
+    assert download_result.status_code == 200
+    assert download_result.data == b"image"
+    assert captured["filename"] == "alice_sky.avif"
 
 
 def test_work_detail_route_renders_work_page(
