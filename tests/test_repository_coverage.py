@@ -32,6 +32,7 @@ def _ensure_test_runtime_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS user_preferences (
             username TEXT PRIMARY KEY,
+            view_mature_rated INTEGER NOT NULL DEFAULT 0,
             view_explicit_rated INTEGER NOT NULL DEFAULT 0,
             custom_theme_enabled INTEGER NOT NULL DEFAULT 0,
             custom_theme_toml TEXT,
@@ -122,7 +123,11 @@ def test_user_preferences_and_theme_preference_round_trip(
 
     assert repository.user_prefers_explicit(None) is False
     assert repository.user_prefers_explicit("alice") is False
+    assert repository.user_prefers_mature(None) is False
+    assert repository.user_prefers_mature("alice") is False
 
+    repository.set_user_prefers_mature("alice", True)
+    assert repository.user_prefers_mature("alice") is True
     repository.set_user_prefers_explicit("alice", True)
     assert repository.user_prefers_explicit("alice") is True
 
@@ -145,7 +150,11 @@ def test_user_preferences_and_theme_preference_round_trip(
     assert "accent" in retained_theme["toml_text"]
 
     explicit_work = {"rating": "Explicit"}
+    mature_work = {"rating": "Mature"}
     assert repository.can_view_work("alice", explicit_work) is True
+    assert repository.can_view_work("alice", mature_work) is True
+    repository.set_user_prefers_mature("alice", False)
+    assert repository.can_view_work("alice", mature_work) is False
     repository.set_user_prefers_explicit("alice", False)
     assert repository.can_view_work("alice", explicit_work) is False
 

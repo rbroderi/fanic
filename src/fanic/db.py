@@ -106,6 +106,7 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS user_preferences (
             username TEXT PRIMARY KEY,
+            view_mature_rated INTEGER NOT NULL DEFAULT 0,
             view_explicit_rated INTEGER NOT NULL DEFAULT 0,
             custom_theme_enabled INTEGER NOT NULL DEFAULT 0,
             custom_theme_toml TEXT,
@@ -117,6 +118,10 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         str(row[1])
         for row in connection.execute("PRAGMA table_info(user_preferences)").fetchall()
     }
+    if "view_mature_rated" not in preference_columns:
+        connection.execute(
+            "ALTER TABLE user_preferences ADD COLUMN view_mature_rated INTEGER NOT NULL DEFAULT 0"
+        )
     if "custom_theme_enabled" not in preference_columns:
         connection.execute(
             "ALTER TABLE user_preferences ADD COLUMN custom_theme_enabled INTEGER NOT NULL DEFAULT 0"
@@ -365,7 +370,8 @@ def create_runtime_backup(backup_path: Path) -> Path:
                 continue
             for file_path in sorted(runtime_dir.rglob("*")):
                 if file_path.is_file():
-                    arcname = str(file_path.relative_to(DATA_ROOT)).replace("\\", "/")
+                    relative_path = file_path.relative_to(runtime_dir)
+                    arcname = f"{runtime_dir.name}/{relative_path.as_posix()}"
                     archive.write(file_path, arcname=arcname)
     return resolved_backup_path
 

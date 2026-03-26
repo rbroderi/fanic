@@ -566,6 +566,24 @@ def work_is_explicit(work: Mapping[str, object]) -> bool:
     return str(work.get("rating", "")).strip().lower() == "explicit"
 
 
+def work_is_mature(work: Mapping[str, object]) -> bool:
+    return str(work.get("rating", "")).strip().lower() == "mature"
+
+
+def user_prefers_mature(username: str | None) -> bool:
+    if not username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT view_mature_rated FROM user_preferences WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if not row:
+            return False
+        return bool(int(row["view_mature_rated"]))
+
+
 def user_prefers_explicit(username: str | None) -> bool:
     if not username:
         return False
@@ -584,10 +602,24 @@ def set_user_prefers_explicit(username: str, enabled: bool) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO user_preferences (username, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
-            VALUES (?, ?, 0, NULL)
+            INSERT INTO user_preferences (username, view_mature_rated, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
+            VALUES (?, 0, ?, 0, NULL)
             ON CONFLICT(username) DO UPDATE SET
                 view_explicit_rated = excluded.view_explicit_rated,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (username, 1 if enabled else 0),
+        )
+
+
+def set_user_prefers_mature(username: str, enabled: bool) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO user_preferences (username, view_mature_rated, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
+            VALUES (?, ?, 0, 0, NULL)
+            ON CONFLICT(username) DO UPDATE SET
+                view_mature_rated = excluded.view_mature_rated,
                 updated_at = CURRENT_TIMESTAMP
             """,
             (username, 1 if enabled else 0),
@@ -625,8 +657,8 @@ def set_user_theme_preference(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO user_preferences (username, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
-            VALUES (?, 0, ?, ?)
+            INSERT INTO user_preferences (username, view_mature_rated, view_explicit_rated, custom_theme_enabled, custom_theme_toml)
+            VALUES (?, 0, 0, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 custom_theme_enabled = excluded.custom_theme_enabled,
                 custom_theme_toml = excluded.custom_theme_toml,
@@ -643,6 +675,8 @@ def set_user_theme_preference(
 def can_view_work(username: str | None, work: Mapping[str, object]) -> bool:
     if work_is_explicit(work):
         return user_prefers_explicit(username)
+    if work_is_mature(work):
+        return user_prefers_mature(username)
     return True
 
 

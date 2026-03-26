@@ -196,6 +196,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__HOME_VIEW_CLASS__": f"home-view-{view}",
             "__COMICS_TAB_CURRENT__": _aria_current(view == "comics"),
             "__FANART_TAB_CURRENT__": _aria_current(view == "fanart"),
+            "__VIEW_TAGLINE_HIDDEN_ATTR__": "" if view == "fanart" else "hidden",
             "__USER_MENU_UPLOAD_LINK__": (
                 (
                     '<a class="user-menu-link" href="/fanart/upload">Upload fanart</a>'

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS user_preferences (
     username TEXT PRIMARY KEY,
+    view_mature_rated INTEGER NOT NULL DEFAULT 0,
     view_explicit_rated INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

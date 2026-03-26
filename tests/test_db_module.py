@@ -57,6 +57,7 @@ def test_ensure_runtime_schema_adds_missing_user_preference_columns() -> None:
             """
             CREATE TABLE user_preferences (
                 username TEXT PRIMARY KEY,
+                view_mature_rated INTEGER NOT NULL DEFAULT 0,
                 view_explicit_rated INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -72,6 +73,7 @@ def test_ensure_runtime_schema_adds_missing_user_preference_columns() -> None:
         }
         assert "custom_theme_enabled" in columns
         assert "custom_theme_toml" in columns
+        assert "view_mature_rated" in columns
     finally:
         connection.close()
 

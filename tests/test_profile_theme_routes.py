@@ -100,6 +100,10 @@ def test_profile_get_marks_custom_theme_checked(
         _ = username
         return False
 
+    def fake_user_prefers_mature(username: str) -> bool:
+        _ = username
+        return True
+
     def fake_get_user_theme_preference(username: str) -> dict[str, Any]:
         _ = username
         return {"enabled": True, "toml_text": '[dark]\naccent="#b58900"'}
@@ -133,6 +137,7 @@ def test_profile_get_marks_custom_theme_checked(
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
     monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
+    monkeypatch.setattr(module, "user_prefers_mature", fake_user_prefers_mature)
     monkeypatch.setattr(module, "user_prefers_explicit", fake_user_prefers_explicit)
     monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
     monkeypatch.setattr(
@@ -165,6 +170,9 @@ def test_profile_get_marks_custom_theme_checked(
         captured["checked"] = replacements[
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__"
         ]
+        captured["mature_checked"] = replacements[
+            "__PROFILE_VIEW_MATURE_CHECKED_ATTR__"
+        ]
         captured["settings_hidden"] = replacements["__PROFILE_SETTINGS_HIDDEN_ATTR__"]
         captured["public_link_hidden"] = replacements[
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"
@@ -183,6 +191,7 @@ def test_profile_get_marks_custom_theme_checked(
 
     assert result.status_code == 200
     assert captured["checked"] == "checked"
+    assert captured["mature_checked"] == "checked"
     assert captured["settings_hidden"] == ""
     assert captured["public_link_hidden"] == ""
     assert captured["history_hidden"] == ""

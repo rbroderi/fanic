@@ -196,6 +196,18 @@ class FanicSettings(BaseSettings):
         default="Lax",
         alias="FANIC_SESSION_COOKIE_SAMESITE",
     )
+    alpha_invite_gate_enabled: bool = Field(
+        default=False,
+        alias="FANIC_ALPHA_INVITE_GATE_ENABLED",
+    )
+    alpha_invite_codes_csv: str = Field(
+        default="",
+        alias="FANIC_ALPHA_INVITE_CODES",
+    )
+    alpha_invite_cookie_max_age: int = Field(
+        default=2592000,
+        alias="FANIC_ALPHA_INVITE_COOKIE_MAX_AGE",
+    )
     admin_username: str = Field(
         default="admin",
         alias="FANIC_ADMIN_USERNAME",
@@ -384,6 +396,14 @@ class FanicSettings(BaseSettings):
         return {
             value.strip().lower()
             for value in self.allowed_page_content_types_csv.split(",")
+            if value.strip()
+        }
+
+    @property
+    def alpha_invite_codes(self) -> set[str]:
+        return {
+            value.strip()
+            for value in self.alpha_invite_codes_csv.split(",")
             if value.strip()
         }
 

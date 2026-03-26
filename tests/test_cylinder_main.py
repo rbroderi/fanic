@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from io import BytesIO
 from types import TracebackType
 from typing import cast
 from wsgiref.types import StartResponse
@@ -139,6 +140,18 @@ def test_create_app_blocks_non_admin_under_admin_paths(
     monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_alice)
     monkeypatch.setattr(cylinder_main, "get_user_role", _role_user)
 
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = False
+        log_path_template: str = "logs/test.log"
+
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
+
     app = cylinder_main.create_app()
 
     def fake_start_response(
@@ -198,6 +211,18 @@ def test_create_app_allows_admin_under_admin_paths(
     monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
     monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_admin)
     monkeypatch.setattr(cylinder_main, "get_user_role", _role_admin)
+
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = False
+        log_path_template: str = "logs/test.log"
+
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
 
     app = cylinder_main.create_app()
 
@@ -266,3 +291,173 @@ def test_serve_handles_keyboard_interrupt(
     captured = capsys.readouterr()
     assert result == 0
     assert "Shutting down gracefully..." in captured.out
+
+
+def test_create_app_alpha_invite_gate_blocks_without_cookie(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_status: dict[str, str] = {}
+
+    def fake_startup() -> None:
+        return None
+
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = True
+        alpha_invite_codes: set[str] = {"alpha-code"}
+        alpha_invite_cookie_max_age: int = 3600
+        session_secret: str = "test-secret"
+        session_cookie_samesite: str = "Lax"
+        session_secure_effective: bool = False
+
+    def fake_get_app(
+        app_map_fn: Callable[[], tuple[str, str, dict[str, object]]],
+        log_level: int,
+        log_handler: logging.Handler,
+    ) -> WSGIApplication:
+        _ = (app_map_fn, log_level, log_handler)
+
+        def fake_wsgi_app(
+            environ: dict[str, object],
+            start_response: Callable[..., object],
+        ) -> list[bytes]:
+            _ = environ
+            start_response("200 OK", [("Content-Type", "text/plain")])
+            return [b"ok"]
+
+        return fake_wsgi_app
+
+    monkeypatch.setattr(cylinder_main, "startup", fake_startup)
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
+
+    app = cylinder_main.create_app()
+
+    def fake_start_response(
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None]
+        | None = None,
+    ) -> Callable[[bytes], object]:
+        _ = exc_info
+        _ = headers
+        captured_status["value"] = status
+        return _write_response_chunk
+
+    response_chunks = list(
+        app(
+            {
+                "PATH_INFO": "/",
+                "REQUEST_METHOD": "GET",
+                "QUERY_STRING": "",
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    assert captured_status["value"] == "200 OK"
+    assert b"Private Alpha" in response_chunks[0]
+
+
+def test_create_app_alpha_invite_gate_accepts_code_and_allows_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_status: dict[str, str] = {}
+    captured_headers: dict[str, str] = {}
+    called: dict[str, bool] = {"base_app": False}
+
+    def fake_startup() -> None:
+        return None
+
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = True
+        alpha_invite_codes: set[str] = {"alpha-code"}
+        alpha_invite_cookie_max_age: int = 3600
+        session_secret: str = "test-secret"
+        session_cookie_samesite: str = "Lax"
+        session_secure_effective: bool = False
+
+    def fake_get_app(
+        app_map_fn: Callable[[], tuple[str, str, dict[str, object]]],
+        log_level: int,
+        log_handler: logging.Handler,
+    ) -> WSGIApplication:
+        _ = (app_map_fn, log_level, log_handler)
+
+        def fake_wsgi_app(
+            environ: dict[str, object],
+            start_response: Callable[..., object],
+        ) -> list[bytes]:
+            _ = environ
+            called["base_app"] = True
+            start_response("200 OK", [("Content-Type", "text/plain")])
+            return [b"ok"]
+
+        return fake_wsgi_app
+
+    monkeypatch.setattr(cylinder_main, "startup", fake_startup)
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
+
+    app = cylinder_main.create_app()
+
+    def fake_start_response(
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None]
+        | None = None,
+    ) -> Callable[[bytes], object]:
+        _ = exc_info
+        captured_status["value"] = status
+        captured_headers.clear()
+        captured_headers.update({key: value for key, value in headers})
+        return _write_response_chunk
+
+    post_body = b"invite_code=alpha-code&next=%2F"
+    response_chunks = list(
+        app(
+            {
+                "PATH_INFO": "/__alpha_invite",
+                "REQUEST_METHOD": "POST",
+                "QUERY_STRING": "",
+                "CONTENT_LENGTH": str(len(post_body)),
+                "wsgi.input": BytesIO(post_body),
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    assert captured_status["value"] == "303 See Other"
+    assert captured_headers.get("Location") == "/"
+    set_cookie = captured_headers.get("Set-Cookie", "")
+    assert set_cookie.startswith("fanic_alpha_access=")
+    assert response_chunks == [b"See Other"]
+
+    cookie_value = set_cookie.split(";", maxsplit=1)[0].split("=", maxsplit=1)[1]
+    captured_headers.clear()
+    response_chunks = list(
+        app(
+            {
+                "PATH_INFO": "/",
+                "REQUEST_METHOD": "GET",
+                "QUERY_STRING": "",
+                "HTTP_COOKIE": f"fanic_alpha_access={cookie_value}",
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    assert captured_status["value"] == "200 OK"
+    assert called["base_app"] is True
+    assert response_chunks == [b"ok"]

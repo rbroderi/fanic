@@ -18,6 +18,7 @@ from fanic.repository import list_user_bookmarks
 from fanic.repository import list_work_comments
 from fanic.repository import list_works_by_uploader
 from fanic.repository import user_prefers_explicit
+from fanic.repository import user_prefers_mature
 from fanic.repository import work_kudos_count
 from fanic.settings import get_settings
 
@@ -146,6 +147,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_PUBLIC_HREF__": "",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "hidden",
             "__PROFILE_PREFS_HIDDEN_ATTR__": "hidden",
+            "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": "",
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": "",
             "__PROFILE_PREF_STATUS__": pref_status_text,
             "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,
@@ -191,6 +193,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__PROFILE_BOOKMARKS_HTML__": _bookmarks_html(visible_bookmarks),
             }
         )
+        view_mature_checked = "checked" if user_prefers_mature(username) else ""
         view_explicit_checked = "checked" if user_prefers_explicit(username) else ""
         theme_preference = get_user_theme_preference(username)
         custom_theme_checked = "checked" if theme_preference["enabled"] else ""
@@ -207,6 +210,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_PUBLIC_HREF__": f"/users/{escape(username)}",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "",
             "__PROFILE_PREFS_HIDDEN_ATTR__": "",
+            "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": view_mature_checked,
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": view_explicit_checked,
             "__PROFILE_PREF_STATUS__": pref_status_text,
             "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,

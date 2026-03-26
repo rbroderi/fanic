@@ -12,6 +12,7 @@ from fanic.cylinder_sites.common import enforce_https_termination
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
 from fanic.repository import set_user_prefers_explicit
+from fanic.repository import set_user_prefers_mature
 from fanic.repository import set_user_theme_preference
 
 
@@ -67,6 +68,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
         return _redirect(response, "/user/profile?msg=theme_saved")
 
+    view_mature = request.form.get("view_mature_rated", "") == "on"
     view_explicit = request.form.get("view_explicit_rated", "") == "on"
+    set_user_prefers_mature(username, view_mature)
     set_user_prefers_explicit(username, view_explicit)
     return _redirect(response, "/user/profile?msg=saved")
