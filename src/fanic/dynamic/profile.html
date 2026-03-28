@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__PROFILE_PAGE_TITLE__</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+            <a href="/user/profile" aria-current="page">Profile</a>
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card profile-card">
+        <h2>__PROFILE_CARD_TITLE__</h2>
+        <p class="profile-meta" __PROFILE_SUBTITLE_HIDDEN_ATTR__>__PROFILE_CARD_SUBTITLE__</p>
+        <p id="profileStatus" class="profile-status __PROFILE_STATUS_CLASS__" __PROFILE_STATUS_HIDDEN_ATTR__>__PROFILE_STATUS__</p>
+        <p id="profileDetails">__PROFILE_DETAILS__</p>
+        <p __PROFILE_PUBLIC_LINK_HIDDEN_ATTR__>
+          <a href="__PROFILE_PUBLIC_HREF__">View your public profile page</a>
+        </p>
+
+        <section class="theme-preferences" aria-labelledby="themePreferencesHeading" __PROFILE_SETTINGS_HIDDEN_ATTR__>
+          <h3 id="themePreferencesHeading">Appearance</h3>
+          <p class="profile-meta">Choose your preferred website theme.</p>
+          <label class="toggle-row" for="themeToggle">
+            <input id="themeToggle" data-theme-toggle type="checkbox" role="switch" aria-label="Enable dark mode" />
+            <span id="themeToggleText" data-theme-toggle-text>Dark mode</span>
+          </label>
+        </section>
+
+        <form class="profile-preferences" method="post" action="/user/profile" enctype="multipart/form-data" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_PREFS_HIDDEN_ATTR__>
+          <input type="hidden" name="profile_action" value="theme" />
+          <h3>Custom Theme</h3>
+          <p class="profile-meta">Upload a theme.toml file to override light and dark theme variables.</p>
+          <label class="checkbox-row" for="customThemeEnabled">
+            <input id="customThemeEnabled" name="custom_theme_enabled" type="checkbox" __PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__ />
+            <span>Enable custom theming</span>
+          </label>
+          <label for="themeToml">theme.toml</label>
+          <input id="themeToml" name="theme_toml" type="file" accept=".toml,text/plain" />
+          <p class="profile-meta">Format: [light] and/or [dark] sections, each containing CSS variable names like bg, paper, accent, line.</p>
+          <p class="profile-meta">Example:</p>
+          <pre class="code-block">[light]
+bg = "#fdf6e3"
+paper = "#eee8d5"
+ink = "#073642"
+accent = "#cb4b16"
+accent-soft = "#f9d7c5"
+line = "#93a1a1"
+muted = "#657b83"
+tag-bg = "#e4ddc9"
+panel-bg = "#f6f0de"
+header-bg = "rgba(253, 246, 227, 0.9)"
+surface-strong = "#e7dfcb"
+danger-bg = "#fce8df"
+danger-line = "#dc9276"
+danger-ink = "#b13f1c"
+reader-overlay-border = "#586e75"
+reader-overlay-bg = "rgba(88, 110, 117, 0.62)"
+reader-overlay-ink = "#fdf6e3"
+reader-page-bg = "#073642"
+bg-glow-1 = "#eee8d5"
+bg-glow-2 = "#fceadf"
+
+[dark]
+bg = "#002b36"
+paper = "#073642"
+ink = "#eee8d5"
+accent = "#b58900"
+accent-soft = "#3f3a13"
+line = "#586e75"
+muted = "#93a1a1"
+tag-bg = "#0a3a46"
+panel-bg = "#0b3540"
+header-bg = "rgba(0, 43, 54, 0.9)"
+surface-strong = "#13404b"
+danger-bg = "#3f1f1f"
+danger-line = "#8f4b4b"
+danger-ink = "#f3b5b5"
+reader-overlay-border = "#6c878f"
+reader-overlay-bg = "rgba(7, 54, 66, 0.78)"
+reader-overlay-ink = "#eee8d5"
+reader-page-bg = "#001f27"
+bg-glow-1 = "#0b3a45"
+bg-glow-2 = "#18374f"
+</pre>
+          <button type="submit">Save custom theme</button>
+          <p class="status-text __PROFILE_THEME_STATUS_CLASS__" __PROFILE_THEME_STATUS_HIDDEN_ATTR__>__PROFILE_THEME_STATUS__</p>
+        </form>
+
+        <form class="profile-preferences" method="post" action="/user/profile" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_PREFS_HIDDEN_ATTR__>
+          <input type="hidden" name="profile_action" value="preferences" />
+          <h3>Reading Preferences</h3>
+          <p class="profile-meta">Choose what content appears while browsing and reading.</p>
+          <label class="checkbox-row" for="viewMatureRated">
+            <input id="viewMatureRated" name="view_mature_rated" type="checkbox" __PROFILE_VIEW_MATURE_CHECKED_ATTR__ />
+            <span>View mature content</span>
+          </label>
+          <label class="checkbox-row" for="viewExplicitRated">
+            <input id="viewExplicitRated" name="view_explicit_rated" type="checkbox" __PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__ />
+            <span>View explicit content</span>
+          </label>
+          <button type="submit">Save preferences</button>
+          <p class="status-text __PROFILE_PREF_STATUS_CLASS__" __PROFILE_PREF_STATUS_HIDDEN_ATTR__>__PROFILE_PREF_STATUS__</p>
+        </form>
+      </section>
+
+      __PROFILE_SHARED_SECTIONS__
+
+      <section class="card info-card" __PROFILE_HISTORY_HIDDEN_ATTR__>
+        <h3>Recent Reading History</h3>
+        <p class="profile-meta">Last __PROFILE_HISTORY_LIMIT__ works you viewed, linked to resume in the reader.</p>
+        <div>__PROFILE_HISTORY_HTML__</div>
+      </section>
+    </main>
+
+    <script src="/static/user-menu.js"></script>
+  </body>
+</html>
+
+
+

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FANIC Work</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .report-modal {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 50;
+      }
+
+      .report-modal[hidden] {
+        display: none;
+      }
+
+      .report-modal-card {
+        width: min(520px, 94vw);
+        max-height: 88vh;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="layout card work-shell">
+      <section>
+        <img id="cover" class="work-cover" alt="Cover" src="__WORK_COVER_SRC__" />
+        <p>
+          <a id="readLink" href="__WORK_READ_HREF__">Read in browser</a>
+          |
+          <a id="downloadLink" href="__WORK_DOWNLOAD_HREF__">Download CBZ</a>
+          |
+          <a id="versionsLink" href="__WORK_VERSIONS_HREF__">Previous versions</a>
+          |
+          <button
+            id="workBookmarkButton"
+            type="button"
+            title="Bookmark this work"
+            data-work-id="__WORK_BOOKMARK_WORK_ID__"
+            data-user-id="__WORK_BOOKMARK_USER_ID__"
+            data-page-index="__WORK_BOOKMARK_PAGE_INDEX__"
+          >
+            <i class="fa-regular fa-bookmark" aria-hidden="true"></i>
+            <span class="sr-only">Bookmark this work</span>
+          </button>
+          |
+          <button id="reportWorkButton" type="button">Report</button>
+        </p>
+        <p __EDIT_METADATA_HIDDEN_ATTR__>
+          <a id="editMetadataLink" href="__EDIT_METADATA_HREF__">Edit metadata</a>
+        </p>
+        <form method="post" action="/works/__WORK_ID__/delete" class="admin-delete-form" __ADMIN_DELETE_HIDDEN_ATTR__ onsubmit="return confirm('Delete this comic? This cannot be undone.');">
+          <button type="submit" class="icon-delete-button" title="Delete comic" aria-label="Delete comic">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+          </button>
+        </form>
+        <form method="post" action="/works/__WORK_ID__/kudos" class="kudos-form">
+          <button type="submit" class="kudos-button" __KUDOS_DISABLED_ATTR__ aria-label="Leave kudos">
+            <i class="fa-solid fa-heart" aria-hidden="true"></i>
+            <span>Kudos</span>
+          </button>
+        </form>
+      </section>
+      <section>
+        <h2 id="title">__WORK_TITLE__</h2>
+        <p class="work-meta" id="meta">__WORK_META__</p>
+        <p class="work-meta" id="kudosCount">__WORK_KUDOS_COUNT__ kudos</p>
+        <p id="summary">__WORK_SUMMARY__</p>
+        <div id="tags">__WORK_TAGS_HTML__</div>
+
+        <p class="status-text __WORK_STATUS_CLASS__" __WORK_STATUS_HIDDEN_ATTR__>__WORK_STATUS_TEXT__</p>
+
+        <section class="card info-card comments-shell">
+          <h3>Leave a comment</h3>
+          <form method="post" action="/works/__WORK_ID__/comments" class="upload-form">
+            <label for="chapterNumber">Chapter number (optional)</label>
+            <input id="chapterNumber" name="chapter_number" type="number" min="1" step="1" />
+            <label for="commentBody">Comment</label>
+            <textarea id="commentBody" name="comment_body" rows="4" required></textarea>
+            <button type="submit">Post comment</button>
+          </form>
+        </section>
+
+        <section class="comments-list">
+          <h3>Comments</h3>
+          __COMMENTS_HTML__
+        </section>
+      </section>
+    </main>
+
+    <div id="reportModal" class="report-modal" hidden>
+      <section class="card report-modal-card" aria-labelledby="reportModalTitle">
+        <h3 id="reportModalTitle">Report this work</h3>
+        <p class="profile-meta">Choose the issue type, then continue to the report form.</p>
+        <form method="get" action="/dmca" class="upload-form">
+          <input type="hidden" name="work_id" value="__DMCA_WORK_ID__" />
+          <input type="hidden" name="work_title" value="__DMCA_WORK_TITLE__" />
+          <input type="hidden" name="claimed_url" value="__DMCA_CLAIMED_URL__" />
+
+          <label for="reportIssueType">Issue type</label>
+          <select id="reportIssueType" name="issue_type" required>
+            __REPORT_ISSUE_OPTIONS_HTML__
+          </select>
+
+          <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-top: 0.75rem;">
+            <button type="submit">Continue to report form</button>
+            <button id="reportModalCancel" type="button">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="workBookmarkDialog" class="bookmark-dialog" hidden>
+      <div class="bookmark-dialog-card" role="dialog" aria-modal="true" aria-labelledby="workBookmarkDialogTitle">
+        <h3 id="workBookmarkDialogTitle">Add Bookmark</h3>
+        <p class="profile-meta">Save this work to your profile bookmarks with an optional note.</p>
+        <label for="workBookmarkMessage">Message (optional)</label>
+        <textarea id="workBookmarkMessage" rows="3" maxlength="1024" placeholder="Optional note"></textarea>
+        <p id="workBookmarkStatus" class="status-text" hidden></p>
+        <div class="bookmark-dialog-actions">
+          <button id="workBookmarkCancel" type="button" class="button-muted">Cancel</button>
+          <button id="workBookmarkSave" type="button">Save bookmark</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/user-menu.js"></script>
+    <script>
+      (function () {
+        var openButton = document.getElementById("reportWorkButton");
+        var modal = document.getElementById("reportModal");
+        var cancelButton = document.getElementById("reportModalCancel");
+        if (!openButton || !modal) {
+          return;
+        }
+
+        function closeModal() {
+          modal.hidden = true;
+        }
+
+        openButton.addEventListener("click", function () {
+          modal.hidden = false;
+        });
+
+        if (cancelButton) {
+          cancelButton.addEventListener("click", closeModal);
+        }
+
+        modal.addEventListener("click", function (event) {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+      })();
+
+      (function () {
+        var openButton = document.getElementById("workBookmarkButton");
+        var dialog = document.getElementById("workBookmarkDialog");
+        var messageInput = document.getElementById("workBookmarkMessage");
+        var statusNode = document.getElementById("workBookmarkStatus");
+        var cancelButton = document.getElementById("workBookmarkCancel");
+        var saveButton = document.getElementById("workBookmarkSave");
+        if (!openButton || !dialog || !messageInput || !saveButton) {
+          return;
+        }
+
+        function setStatus(text, cssClass) {
+          if (!statusNode) {
+            return;
+          }
+          statusNode.hidden = false;
+          statusNode.className = "status-text " + cssClass;
+          statusNode.textContent = text;
+        }
+
+        function closeDialog() {
+          dialog.hidden = true;
+        }
+
+        function openDialog() {
+          dialog.hidden = false;
+          messageInput.value = "";
+          if (statusNode) {
+            statusNode.hidden = true;
+            statusNode.textContent = "";
+            statusNode.className = "status-text";
+          }
+          messageInput.focus();
+        }
+
+        openButton.addEventListener("click", openDialog);
+        if (cancelButton) {
+          cancelButton.addEventListener("click", closeDialog);
+        }
+
+        dialog.addEventListener("click", function (event) {
+          if (event.target === dialog) {
+            closeDialog();
+          }
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (dialog.hidden) {
+            return;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeDialog();
+          }
+        });
+
+        saveButton.addEventListener("click", async function () {
+          var workId = openButton.dataset.workId || "";
+          var userId = openButton.dataset.userId || "";
+          var pageIndex = openButton.dataset.pageIndex || "1";
+          if (!workId) {
+            setStatus("Missing work id.", "error");
+            return;
+          }
+          if (!userId || userId === "anon") {
+            setStatus("Login required to add bookmarks.", "error");
+            return;
+          }
+
+          var payload = new URLSearchParams();
+          payload.set("user_id", userId);
+          payload.set("page_index", pageIndex);
+          payload.set("message", messageInput.value.trim());
+
+          var result = await fetch("/api/works/" + encodeURIComponent(workId) + "/bookmark", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: payload.toString(),
+          });
+
+          if (!result.ok) {
+            var payloadObject = {};
+            try {
+              payloadObject = await result.json();
+            } catch (_error) {
+              payloadObject = {};
+            }
+            var detail = typeof payloadObject.detail === "string" ? payloadObject.detail : "Unable to save bookmark.";
+            setStatus(detail, "error");
+            return;
+          }
+
+          setStatus("Bookmark saved.", "success");
+          window.setTimeout(function () {
+            closeDialog();
+          }, 500);
+        });
+      })();
+    </script>
+  </body>
+</html>
+
+
+

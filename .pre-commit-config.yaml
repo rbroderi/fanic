@@ -1,0 +1,31 @@
+repos:
+  - repo: local
+    hooks:
+      - id: autopep695-format
+        name: autopep695-format
+        entry: uvx autopep695 format
+        language: system
+        files: ^(src|tests)/.*\.py$
+        stages: [pre-commit]
+
+      - id: pyupgrade
+        name: pyupgrade-py314
+        entry: uvx pyupgrade --py314-plus --keep-runtime-typing
+        language: system
+        files: ^(src|tests)/.*\.py$
+        stages: [pre-commit]
+
+      - id: ruff-ci
+        name: ruff-precommit
+        entry: just ruff-precommit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: comicinfo-xsd
+        name: comicinfo-xsd-v2-check
+        entry: uvx --with xmlschema python scripts/validate_comicinfo_xsd.py
+        language: system
+        files: (^|.*[\\/])([Cc]omic[Ii]nfo|[Cc]omic[Bb]ook[Ii]nfo)\.xml$
+        stages: [pre-commit]

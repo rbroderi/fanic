@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Users | FANIC Admin</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <h2>User Management</h2>
+        <p class="profile-meta">Create, role-manage, activate/deactivate, and remove local accounts.</p>
+        <p class="status-text __USERS_STATUS_CLASS__" __USERS_STATUS_HIDDEN_ATTR__>__USERS_STATUS_TEXT__</p>
+
+        <form method="post" action="/admin/users" class="upload-form">
+          <input type="hidden" name="user_action" value="create" />
+
+          <label for="newUsername">Username</label>
+          <input id="newUsername" name="username" type="text" required />
+
+          <label for="newDisplayName">Display name</label>
+          <input id="newDisplayName" name="display_name" type="text" />
+
+          <label for="newEmail">Email</label>
+          <input id="newEmail" name="email" type="email" />
+
+          <label for="newRole">Role</label>
+          <select id="newRole" name="role">
+            __USERS_ROLE_OPTIONS__
+          </select>
+
+          <label class="checkbox-row" for="newUserActive">
+            <input id="newUserActive" name="active" type="checkbox" value="1" checked />
+            <span>Active account</span>
+          </label>
+
+          <button type="submit">Create user</button>
+        </form>
+      </section>
+
+      <section class="comments-list">
+        __USERS_ROWS_HTML__
+      </section>
+
+      __USERS_PAGINATION_HTML__
+    </main>
+
+    <script src="/static/user-menu.js"></script>
+  </body>
+</html>
+
+
+
