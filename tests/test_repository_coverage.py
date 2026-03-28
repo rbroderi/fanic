@@ -38,28 +38,17 @@ def _ensure_test_runtime_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
-    columns = {
-        str(row[1])
-        for row in connection.execute("PRAGMA table_info(user_preferences)").fetchall()
-    }
+    columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(user_preferences)").fetchall()}
     if "custom_theme_enabled" not in columns:
-        connection.execute(
-            "ALTER TABLE user_preferences ADD COLUMN custom_theme_enabled INTEGER NOT NULL DEFAULT 0"
-        )
+        connection.execute("ALTER TABLE user_preferences ADD COLUMN custom_theme_enabled INTEGER NOT NULL DEFAULT 0")
     if "custom_theme_toml" not in columns:
-        connection.execute(
-            "ALTER TABLE user_preferences ADD COLUMN custom_theme_toml TEXT"
-        )
+        connection.execute("ALTER TABLE user_preferences ADD COLUMN custom_theme_toml TEXT")
 
 
-def _init_repository_module(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> ModuleType:
+def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
     import fanic.repository as repository
 
-    schema_path = (
-        Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
-    )
+    schema_path = Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
     db_path = tmp_path / "repo.sqlite3"
     with sqlite3.connect(db_path, factory=_ManagedTestConnection) as connection:
         connection.executescript(schema_path.read_text(encoding="utf-8"))
@@ -313,9 +302,7 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     assert str(page_files["image"]) == "p1.jpg"
     assert repository.list_work_page_image_names("work-1") == ["p1.jpg", "p2.jpg"]
 
-    works = repository.list_works(
-        {"q": "Updated", "status": "complete", "sort": "title_asc"}
-    )
+    works = repository.list_works({"q": "Updated", "status": "complete", "sort": "title_asc"})
     assert len(works) == 1
     assert works[0]["id"] == "work-1"
 
@@ -502,15 +489,11 @@ def test_fanart_crud_and_lookup_helpers(
     assert item_by_id["fandom"] == "Skyverse"
     assert item_by_id["rating"] == "Mature"
 
-    item_by_image = repository.get_fanart_item_by_image(
-        "alice", "_objects/ab/image.avif"
-    )
+    item_by_image = repository.get_fanart_item_by_image("alice", "_objects/ab/image.avif")
     assert item_by_image is not None
     assert item_by_image["id"] == "fanart-1"
 
-    item_by_thumb = repository.get_fanart_item_by_thumb(
-        "alice", "_objects/ab/thumb.avif"
-    )
+    item_by_thumb = repository.get_fanart_item_by_thumb("alice", "_objects/ab/thumb.avif")
     assert item_by_thumb is not None
     assert item_by_thumb["id"] == "fanart-1"
 
