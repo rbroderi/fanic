@@ -1,0 +1,65 @@
+#include <tunables/global>
+
+profile fanic flags=(attach_disconnected,mediate_deleted) {
+  # Base runtime behavior for ELF/Python processes.
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+
+  # Allow local service networking and outbound calls.
+  network unix,
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+
+  # Execute the app entrypoint and interpreter.
+  /usr/bin/aa-exec ixr,
+  /opt/fanic/.venv/bin/python rix,
+  /home/fanic/.local/share/uv/python/** rix,
+
+  # Read application code and dependencies.
+  /opt/fanic/ r,
+  /opt/fanic/** mr,
+  /home/fanic/ r,
+  /home/fanic/.local/ r,
+  /home/fanic/.local/share/ r,
+  /home/fanic/.local/share/uv/ r,
+  /home/fanic/.local/share/uv/** mr,
+  /home/fanic/.cache/ rw,
+  /home/fanic/.cache/** rwk,
+  /home/fanic/.cache/clip/ rw,
+  /home/fanic/.cache/clip/** rwkl,
+  /usr/** mr,
+  /etc/ssl/** r,
+  /etc/hosts r,
+  /etc/hostname r,
+  /etc/mime.types r,
+  /etc/resolv.conf r,
+  /etc/nsswitch.conf r,
+  /etc/passwd r,
+  /etc/group r,
+  /proc/** r,
+  /sys/fs/cgroup/** r,
+  /sys/devices/system/cpu/kernel_max r,
+  /sys/devices/system/cpu/present r,
+
+  # Runtime write locations.
+  /opt/fanic/runtime/ rw,
+  /opt/fanic/runtime/** rwk,
+  /var/log/fanic/ rw,
+  /var/log/fanic/** rwk,
+  /dev/shm/ rw,
+  /dev/shm/** rwkl,
+  /tmp/ rw,
+  /tmp/** rwk,
+  /var/tmp/ rw,
+  /var/tmp/** rwk,
+  /mnt/storage/ rw,
+  /mnt/storage/** rwk,
+
+  # Deny shell execution from inside the service domain.
+  deny /bin/** x,
+  deny /usr/bin/** x,
+}
