@@ -1,0 +1,25 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Lime body -->
+  <path d="M20 32
+           C20 22 28 16 36 16
+           C44 16 52 22 52 32
+           C52 42 44 48 36 48
+           C28 48 20 42 20 32 Z"
+        fill="#7ED957"
+        stroke="#3A8A2A"
+        stroke-width="3"
+        stroke-linejoin="round"/>
+
+  <!-- Highlight curve -->
+  <path d="M28 24
+           C32 22 38 22 42 26"
+        stroke="#C8FFB0"
+        stroke-width="3"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Texture dots -->
+  <circle cx="34" cy="34" r="1.5" fill="#6CC94A"/>
+  <circle cx="40" cy="32" r="1.5" fill="#6CC94A"/>
+  <circle cx="30" cy="38" r="1.5" fill="#6CC94A"/>
+</svg>
