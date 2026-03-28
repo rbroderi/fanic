@@ -37,7 +37,5 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(response, "/account/login?msg=logged_out")
 
     config = auth0_config_from_settings(settings)
-    params = urlencode(
-        {"client_id": config.client_id, "returnTo": config.logout_return_url}
-    )
+    params = urlencode({"client_id": config.client_id, "returnTo": config.logout_return_url})
     return _redirect(response, f"{config.logout_endpoint}?{params}")

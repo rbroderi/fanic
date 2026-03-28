@@ -453,18 +453,10 @@ def get_or_create_user_for_auth0_identity(
         existing_user = get_local_user(username)
         if existing_user is not None:
             desired_role: UserRole = (
-                "superadmin"
-                if normalized_email and normalized_email == superadmin_email
-                else existing_user["role"]
+                "superadmin" if normalized_email and normalized_email == superadmin_email else existing_user["role"]
             )
-            resolved_display_name = (
-                display_name.strip()
-                if display_name.strip()
-                else existing_user["display_name"]
-            )
-            resolved_email = (
-                normalized_email if normalized_email else existing_user["email"]
-            )
+            resolved_display_name = display_name.strip() if display_name.strip() else existing_user["display_name"]
+            resolved_email = normalized_email if normalized_email else existing_user["email"]
             upsert_user(
                 username,
                 username,
@@ -485,12 +477,8 @@ def get_or_create_user_for_auth0_identity(
     local_user = _local_user_by_email(normalized_email) if normalized_email else None
     if local_user is not None:
         username = local_user["username"]
-        desired_role = (
-            "superadmin" if normalized_email == superadmin_email else local_user["role"]
-        )
-        resolved_display_name = (
-            display_name.strip() if display_name.strip() else local_user["display_name"]
-        )
+        desired_role = "superadmin" if normalized_email == superadmin_email else local_user["role"]
+        resolved_display_name = display_name.strip() if display_name.strip() else local_user["display_name"]
         resolved_email = normalized_email if normalized_email else local_user["email"]
         upsert_user(
             username,
@@ -509,9 +497,7 @@ def get_or_create_user_for_auth0_identity(
         )
         return username
 
-    username_seed = (
-        normalized_email.split("@", 1)[0] if normalized_email else display_name
-    )
+    username_seed = normalized_email.split("@", 1)[0] if normalized_email else display_name
     resolved_seed = username_seed if username_seed else "user"
     username = _next_available_username(resolved_seed)
     desired_role = "superadmin" if normalized_email == superadmin_email else "user"
@@ -756,9 +742,7 @@ def sync_work_metadata_toml(work_id: str) -> None:
             "updated_at": work.get("updated_at"),
             "last_metadata_editor": work.get("last_metadata_editor"),
             "last_metadata_edited_at": work.get("last_metadata_edited_at"),
-            "last_metadata_edited_by_admin": bool(
-                _to_int(work.get("last_metadata_edited_by_admin", 0), 0)
-            ),
+            "last_metadata_edited_by_admin": bool(_to_int(work.get("last_metadata_edited_by_admin", 0), 0)),
         },
         "tags": tags,
         "chapters": chapters,
@@ -1061,11 +1045,7 @@ def list_content_reports(
                 "claimed_url": str(row["claimed_url"]),
                 "evidence_url": str(row["evidence_url"]),
                 "details": str(row["details"]),
-                "reporter_username": (
-                    str(reporter_username_obj)
-                    if reporter_username_obj is not None
-                    else ""
-                ),
+                "reporter_username": (str(reporter_username_obj) if reporter_username_obj is not None else ""),
                 "source_path": str(row["source_path"]),
                 "created_at": str(row["created_at"]),
             }
@@ -1109,9 +1089,7 @@ def list_work_comments(work_id: str) -> list[WorkComment]:
     comments: list[WorkComment] = []
     for row in rows:
         chapter_number_raw = row["chapter_number"]
-        chapter_number = (
-            int(chapter_number_raw) if chapter_number_raw is not None else None
-        )
+        chapter_number = int(chapter_number_raw) if chapter_number_raw is not None else None
         comments.append(
             {
                 "id": int(row["id"]),
@@ -1173,9 +1151,7 @@ def create_notification(
         raise ValueError("message must not be empty")
 
     normalized_href = href.strip()
-    stored_work_id = (
-        work_id.strip() if isinstance(work_id, str) and work_id.strip() else None
-    )
+    stored_work_id = work_id.strip() if isinstance(work_id, str) and work_id.strip() else None
 
     with get_connection() as connection:
         cursor = connection.execute(
@@ -1351,9 +1327,7 @@ def list_fanart_users(
 
     search = resolved_filters.get("q", "").strip()
     if search:
-        where.append(
-            "(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ?)"
-        )
+        where.append("(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ?)")
         like_search = f"%{search}%"
         params.extend([like_search, like_search, like_search, like_search])
 
@@ -1449,12 +1423,8 @@ def list_fanart_users(
                 "uploader_username": str(row["uploader_username"]),
                 "item_count": _to_int(row["item_count"], 0),
                 "latest_created_at": str(row["latest_created_at"]),
-                "latest_item_id": (
-                    str(latest_item_id_obj) if latest_item_id_obj is not None else None
-                ),
-                "latest_thumb_filename": (
-                    str(thumb_obj) if thumb_obj is not None else None
-                ),
+                "latest_item_id": (str(latest_item_id_obj) if latest_item_id_obj is not None else None),
+                "latest_thumb_filename": (str(thumb_obj) if thumb_obj is not None else None),
             }
         )
     return users
@@ -1471,9 +1441,7 @@ def list_fanart_items(
 
     search = resolved_filters.get("q", "").strip()
     if search:
-        where.append(
-            "(uploader_username LIKE ? OR title LIKE ? OR summary LIKE ? OR fandom LIKE ?)"
-        )
+        where.append("(uploader_username LIKE ? OR title LIKE ? OR summary LIKE ? OR fandom LIKE ?)")
         like_search = f"%{search}%"
         params.extend([like_search, like_search, like_search, like_search])
 
@@ -2022,9 +1990,7 @@ def update_work_metadata(
                 metadata.get("status", "in_progress"),
                 metadata.get("series", "") if metadata.get("series", "") else None,
                 metadata.get("series_index"),
-                metadata.get("published_at", "")
-                if metadata.get("published_at", "")
-                else None,
+                metadata.get("published_at", "") if metadata.get("published_at", "") else None,
                 editor_username,
                 1 if edited_by_admin else 0,
                 work_id,
@@ -2053,15 +2019,9 @@ def set_work_rating(
         "warnings": str(existing_work.get("warnings", "No Archive Warnings Apply")),
         "language": str(existing_work.get("language", "en")),
         "status": str(existing_work.get("status", "in_progress")),
-        "series": (
-            existing_work.get("series_name") if existing_work.get("series_name") else ""
-        ),
+        "series": (existing_work.get("series_name") if existing_work.get("series_name") else ""),
         "series_index": existing_work.get("series_index"),
-        "published_at": (
-            existing_work.get("published_at")
-            if existing_work.get("published_at")
-            else ""
-        ),
+        "published_at": (existing_work.get("published_at") if existing_work.get("published_at") else ""),
     }
     update_work_metadata(
         work_id,
@@ -2097,9 +2057,7 @@ def replace_work_pages(work_id: str, pages: list[WorkPageRow]) -> None:
 def _ensure_tag(name: str, tag_type: str) -> int:
     slug = slugify(name)
     with get_connection() as connection:
-        existing = connection.execute(
-            "SELECT id FROM tags WHERE slug = ?", (slug,)
-        ).fetchone()
+        existing = connection.execute("SELECT id FROM tags WHERE slug = ?", (slug,)).fetchone()
         if existing:
             return int(existing["id"])
 
@@ -2279,9 +2237,7 @@ def list_works_by_uploader(username: str) -> list[WorkListItem]:
 
 def get_work(work_id: str) -> dict[str, object] | None:
     with get_connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM works WHERE id = ?", (work_id,)
-        ).fetchone()
+        row = connection.execute("SELECT * FROM works WHERE id = ?", (work_id,)).fetchone()
         if not row:
             return None
 
@@ -2401,9 +2357,7 @@ def create_work_version_snapshot(
     return manifest
 
 
-def get_work_version_manifest(
-    work_id: str, version_id: str
-) -> dict[str, object] | None:
+def get_work_version_manifest(work_id: str, version_id: str) -> dict[str, object] | None:
     if not version_id or "/" in version_id or "\\" in version_id:
         return None
     manifest_path = _versions_dir_for_work(work_id) / version_id / "manifest.json"
@@ -2492,17 +2446,9 @@ def list_work_page_rows(work_id: str) -> list[WorkPageRow]:
             {
                 "page_index": _to_int(row["page_index"], 0),
                 "image_filename": str(row["image_filename"]),
-                "thumb_filename": (
-                    str(row["thumb_filename"])
-                    if row["thumb_filename"] is not None
-                    else None
-                ),
-                "width": (
-                    _to_int(row["width"], 0) if row["width"] is not None else None
-                ),
-                "height": (
-                    _to_int(row["height"], 0) if row["height"] is not None else None
-                ),
+                "thumb_filename": (str(row["thumb_filename"]) if row["thumb_filename"] is not None else None),
+                "width": (_to_int(row["width"], 0) if row["width"] is not None else None),
+                "height": (_to_int(row["height"], 0) if row["height"] is not None else None),
             }
         )
     return page_rows
@@ -2607,9 +2553,7 @@ def list_work_chapter_members(chapter_id: int) -> list[str]:
     return [str(row["page_image_filename"]) for row in rows]
 
 
-def replace_work_chapter_members(
-    chapter_id: int, page_image_filenames: list[str]
-) -> None:
+def replace_work_chapter_members(chapter_id: int, page_image_filenames: list[str]) -> None:
     with get_connection() as connection:
         connection.execute(
             "DELETE FROM work_chapter_pages WHERE chapter_id = ?",

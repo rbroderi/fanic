@@ -97,9 +97,7 @@ AUTH_WINDOW_SECONDS = _SETTINGS.auth_window_seconds
 AUTH_LOCKOUT_SECONDS = _SETTINGS.auth_lockout_seconds
 UPLOAD_RATE_WINDOW_SECONDS = int(getattr(_SETTINGS, "upload_rate_window_seconds", 60))
 UPLOAD_RATE_MAX_REQUESTS = int(getattr(_SETTINGS, "upload_rate_max_requests", 20))
-UPLOAD_MAX_CONCURRENT_PER_USER = int(
-    getattr(_SETTINGS, "upload_max_concurrent_per_user", 2)
-)
+UPLOAD_MAX_CONCURRENT_PER_USER = int(getattr(_SETTINGS, "upload_max_concurrent_per_user", 2))
 
 # Maximum length for user-supplied text form fields.
 MAX_SHORT_FIELD_LENGTH = 512
@@ -468,27 +466,21 @@ def route_tail(request: RequestLike, prefix_parts: list[str]) -> list[str] | Non
     return parts[len(prefix_parts) :]
 
 
-def json_response(
-    response: ResponseLike, payload: dict[str, object], status_code: int = 200
-) -> ResponseLike:
+def json_response(response: ResponseLike, payload: dict[str, object], status_code: int = 200) -> ResponseLike:
     response.status_code = status_code
     response.content_type = "application/json; charset=utf-8"
     response.set_data(json.dumps(payload, ensure_ascii=True))
     return response
 
 
-def text_error(
-    response: ResponseLike, message: str, status_code: int = 404
-) -> ResponseLike:
+def text_error(response: ResponseLike, message: str, status_code: int = 404) -> ResponseLike:
     response.status_code = status_code
     response.content_type = "text/plain; charset=utf-8"
     response.set_data(message)
     return response
 
 
-def send_file(
-    response: ResponseLike, path: Path, filename: str | None = None
-) -> ResponseLike:
+def send_file(response: ResponseLike, path: Path, filename: str | None = None) -> ResponseLike:
     if not path.exists() or not path.is_file():
         return text_error(response, "Not found", 404)
 
@@ -598,9 +590,7 @@ def request_is_secure(request: RequestLike) -> bool:
     if scheme == "https":
         return True
 
-    forwarded_proto = (
-        _header_value(request, "X-Forwarded-Proto").split(",")[0].strip().lower()
-    )
+    forwarded_proto = _header_value(request, "X-Forwarded-Proto").split(",")[0].strip().lower()
     if forwarded_proto == "https":
         return True
 
@@ -619,9 +609,7 @@ def request_is_secure(request: RequestLike) -> bool:
     return False
 
 
-def enforce_https_termination(
-    request: RequestLike, response: ResponseLike | None = None
-) -> bool:
+def enforce_https_termination(request: RequestLike, response: ResponseLike | None = None) -> bool:
     if not REQUIRE_HTTPS:
         return True
     if request_is_secure(request):
@@ -801,9 +789,7 @@ def _prune_stale_auth_entries(now: float) -> None:
     Must be called while holding ``_AUTH_LOCK``.
     """
     cutoff = now - AUTH_LOCKOUT_SECONDS * 2
-    stale_keys = [
-        key for key, locked_until in _AUTH_LOCKED_UNTIL.items() if locked_until < cutoff
-    ]
+    stale_keys = [key for key, locked_until in _AUTH_LOCKED_UNTIL.items() if locked_until < cutoff]
     for key in stale_keys:
         _AUTH_LOCKED_UNTIL.pop(key, None)
         _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
@@ -878,9 +864,7 @@ def set_auth0_oauth_cookie(
     code_verifier: str,
     next_url: str,
 ) -> None:
-    token = encode_auth0_oauth_state(
-        state=state, code_verifier=code_verifier, next_url=next_url
-    )
+    token = encode_auth0_oauth_state(state=state, code_verifier=code_verifier, next_url=next_url)
     response.set_cookie(
         AUTH0_OAUTH_COOKIE_NAME,
         token,
@@ -1058,12 +1042,8 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     logged_in = username is not None
     role = current_user_role(request)
     is_admin = role in {"superadmin", "admin"}
-    reports_current_attr = (
-        ' aria-current="page"' if request.path == "/admin/reports" else ""
-    )
-    users_current_attr = (
-        ' aria-current="page"' if request.path == "/admin/users" else ""
-    )
+    reports_current_attr = ' aria-current="page"' if request.path == "/admin/reports" else ""
+    users_current_attr = ' aria-current="page"' if request.path == "/admin/users" else ""
     admin_reports_link = (
         f'<a href="/admin/reports"{reports_current_attr}>Reports</a>'
         f'<a href="/admin/users"{users_current_attr}>Users</a>'
@@ -1071,9 +1051,7 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         else ""
     )
     return {
-        "__USER_MENU_STATUS__": f"Logged in as {escape(username)}."
-        if logged_in and username
-        else "Not logged in.",
+        "__USER_MENU_STATUS__": f"Logged in as {escape(username)}." if logged_in and username else "Not logged in.",
         "__USER_MENU_LOGIN_HIDDEN_ATTR__": "hidden" if logged_in else "",
         "__USER_MENU_PROFILE_HIDDEN_ATTR__": "" if logged_in else "hidden",
         "__USER_MENU_LOGOUT_HIDDEN_ATTR__": "" if logged_in else "hidden",
@@ -1210,9 +1188,7 @@ def save_uploaded_ingest(
     cbz_filename = cbz_upload.filename if cbz_upload.filename else "upload.cbz"
     cbz_name = Path(cbz_filename).name
     metadata_name = (
-        Path(
-            metadata_upload.filename if metadata_upload.filename else "metadata.json"
-        ).name
+        Path(metadata_upload.filename if metadata_upload.filename else "metadata.json").name
         if metadata_upload is not None
         else "metadata.json"
     )
