@@ -1,0 +1,74 @@
+# FANIC default runtime configuration.
+# Environment variables (FANIC_*) still override these values.
+
+environment = "development"
+require_https = true
+csrf_protect = true
+
+data_dir = ""
+db_path = ""
+
+media_base_url = "http://127.0.0.1:8080"
+enable_beartype = true
+log_path_template = "logs/%TIMESTAMP%.log"
+
+explicit_threshold = 0.7
+openclip_cache_dir = "~/.cache/clip"
+nsfw_logit_scale = 100.0
+thumbnail_avif_quality = 30
+image_avif_quality = 60
+
+style_min_confidence = 0.6
+photoreal_min_confidence = 0.6
+style_min_confidence_photorealistic = 0.9
+photo_block_min_margin = 0.01
+style_min_top_prob = 0.34
+style_min_top_margin = 0.05
+style_logit_scale = 100.0
+style_load_retry_seconds = 5.0
+model_load_logs = true
+preload_models = true
+
+session_secret = "fanic-dev-secret-change-me" # pragma: allowlist secret
+session_max_age = 43200
+session_secure = false
+session_cookie_samesite = "Lax"
+
+alpha_invite_gate_enabled = false
+alpha_invite_codes_csv = ""
+alpha_invite_cookie_max_age = 2592000
+
+admin_username = "admin"
+admin_password_hash = "sha256$8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918" # pragma: allowlist secret
+
+auth0_enabled = false
+auth0_domain = ""
+auth0_client_id = ""
+auth0_client_secret = "" # pragma: allowlist secret
+auth0_callback_url = "http://127.0.0.1:8080/account/callback"
+auth0_logout_return_url = "http://127.0.0.1:8080/"
+auth0_audience = ""
+auth0_connection = "Username-Password-Authentication"
+auth0_superadmin_email = "admin@fanic.media"
+
+auth_max_failures = 5
+auth_window_seconds = 300
+auth_lockout_seconds = 900
+upload_rate_window_seconds = 60
+upload_rate_max_requests = 20
+upload_max_concurrent_per_user = 1
+profile_history_limit = 100
+
+max_cbz_upload_bytes = "256 MiB"
+max_page_upload_bytes = "20 MiB"
+max_ingest_pages = 2000
+max_cbz_member_uncompressed_bytes = "128 MiB"
+max_cbz_total_uncompressed_bytes = "2 GiB"
+max_upload_image_pixels = 100000000
+user_page_soft_cap = 2000
+user_page_quality_ramp_multiplier = 1.5
+
+allowed_cbz_extensions_csv = ".cbz"
+allowed_cbz_content_types_csv = "application/zip,application/x-cbz,application/octet-stream"
+allowed_page_extensions_csv = ".avif,.bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp"
+allowed_page_content_types_csv = "application/octet-stream,image/avif,image/bmp,image/gif,image/jpeg,image/png,image/tiff,image/webp"

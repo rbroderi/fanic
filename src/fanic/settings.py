@@ -1,339 +1,195 @@
-import hashlib
-import math
-import mimetypes
+import os
+import re
 import warnings
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar
-from typing import Literal
+from typing import Any
+from typing import ClassVar, Self
 
-import pillow_avif  # noqa: F401  # pyright: ignore[reportUnusedImport]
-from dotenv import load_dotenv
-from PIL import Image
-from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
+from pydantic_settings import PydanticBaseSettingsSource
 from pydantic_settings import SettingsConfigDict
-
-load_dotenv()
-
-
-ByteUnit = Literal["B", "KiB", "MiB", "GiB", "TiB"]
+from pydantic_settings import TomlConfigSettingsSource
 
 
-def from_unit(unit: ByteUnit, value: float | int) -> int:
-    unit_multiplier_by_name: dict[ByteUnit, int] = {
-        "B": 1,
-        "KiB": 1024,
-        "MiB": 1024 * 1024,
-        "GiB": 1024 * 1024 * 1024,
-        "TiB": 1024 * 1024 * 1024 * 1024,
-    }
+class BytesUnit(Enum):
+    __match_pattern: ClassVar[re.Pattern[str]] = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([A-Za-z]+)?\s*$")
 
-    multiplier = unit_multiplier_by_name[unit]
-    if not math.isfinite(value):
-        raise ValueError("Unit value must be finite")
-    if value < 0:
-        raise ValueError("Unit value must be non-negative")
-    return int(round(value * multiplier))
+    B = ("B", 1)
+    KIB = ("KiB", 1024)
+    MIB = ("MiB", 1024 * 1024)
+    GIB = ("GiB", 1024 * 1024 * 1024)
+    TIB = ("TiB", 1024 * 1024 * 1024 * 1024)
+
+    @property
+    def label(self) -> str:
+        return self.value[0]
+
+    @property
+    def bytes(self) -> int:
+        return self.value[1]
+
+    @classmethod
+    def parse_match(cls, raw_value: str) -> re.Match[str] | None:
+        return cls.__match_pattern.fullmatch(raw_value)
+
+    @classmethod
+    def from_token(cls, token: str | None) -> Self:
+        normalized = token.upper() if token else cls.B.label.upper()
+        match normalized:
+            case "B" | "BYTE" | "BYTES":
+                return cls.B
+            case "KIB" | "KB":
+                return cls.KIB
+            case "MIB" | "MB":
+                return cls.MIB
+            case "GIB" | "GB":
+                return cls.GIB
+            case "TIB" | "TB":
+                return cls.TIB
+            case _:
+                raise ValueError("Unknown size unit. Use one of: B, KiB, MiB, GiB, TiB")
 
 
-def _default_allowed_page_extensions_csv() -> str:
-    Image.init()
-    values = {
-        extension.lower()
-        for extension, format_name in Image.registered_extensions().items()
-        if format_name in Image.OPEN
-    }
-    if not values:
-        values = {
-            ".avif",
-            ".bmp",
-            ".gif",
-            ".jpeg",
-            ".jpg",
-            ".png",
-            ".tif",
-            ".tiff",
-            ".webp",
-        }
-    return ",".join(sorted(values))
-
-
-def _default_allowed_page_content_types_csv() -> str:
-    Image.init()
-    content_types: set[str] = set()
-    for format_name in Image.OPEN:
-        mime = Image.MIME.get(format_name)
-        if mime:
-            content_types.add(str(mime).lower())
-    for extension in _default_allowed_page_extensions_csv().split(","):
-        guessed, _ = mimetypes.guess_type(f"placeholder{extension}")
-        if guessed:
-            content_types.add(guessed.lower())
-    content_types.add("application/octet-stream")
-    return ",".join(sorted(content_types))
+_SETTINGS_TOML_OVERRIDE = os.getenv("FANIC_SETTINGS_TOML")
+_SETTINGS_TOML_PATH = (
+    Path(_SETTINGS_TOML_OVERRIDE).expanduser()
+    if _SETTINGS_TOML_OVERRIDE
+    else Path(__file__).resolve().parents[2] / "settings.toml"
+)
 
 
 class FanicSettings(BaseSettings):
-    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(extra="ignore")
-
-    environment: str = Field(
-        default="development",
-        alias="FANIC_ENV",
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
+        extra="ignore",
+        env_prefix="FANIC_",
+        populate_by_name=True,
+        toml_file=_SETTINGS_TOML_PATH,
     )
 
-    require_https: bool = Field(
-        default=True,
-        alias="FANIC_REQUIRE_HTTPS",
-    )
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        toml_settings = TomlConfigSettingsSource(settings_cls)
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            toml_settings,
+            file_secret_settings,
+        )
 
-    csrf_protect: bool = Field(
-        default=True,
-        alias="FANIC_CSRF_PROTECT",
-    )
+    # Core runtime behavior
+    csrf_protect: bool
+    enable_beartype: bool
+    environment: str
+    preload_models: bool
+    require_https: bool
 
-    data_dir: str | None = Field(
-        default=None,
-        alias="FANIC_DATA_DIR",
-    )
-    db_path: str | None = Field(
-        default=None,
-        alias="FANIC_DB_PATH",
-    )
+    # Storage and paths
+    data_dir: str | None
+    db_path: str | None
+    log_path_template: str
+    media_base_url: str
+    openclip_cache_dir: str
 
-    media_base_url: str = Field(
-        default="http://127.0.0.1:8080",
-        alias="FANIC_MEDIA_BASE_URL",
-    )
+    # Session, invite gate, and local admin bootstrap
+    admin_password_hash: str
+    admin_username: str
+    alpha_invite_codes_csv: str
+    alpha_invite_cookie_max_age: int
+    alpha_invite_gate_enabled: bool
+    session_cookie_samesite: str
+    session_max_age: int
+    session_secure: bool
+    session_secret: str
 
-    enable_beartype: bool = Field(
-        default=True,
-        alias="FANIC_ENABLE_BEARTYPE",
-    )
+    # External auth provider settings
+    auth0_audience: str
+    auth0_callback_url: str
+    auth0_client_id: str
+    auth0_client_secret: str
+    auth0_connection: str
+    auth0_domain: str
+    auth0_enabled: bool
+    auth0_logout_return_url: str
+    auth0_superadmin_email: str
 
-    log_path_template: str = Field(
-        default="logs/%TIMESTAMP%.log",
-        alias="FANIC_LOG_PATH_TEMPLATE",
-    )
+    # Abuse and request controls
+    auth_lockout_seconds: int
+    auth_max_failures: int
+    auth_window_seconds: int
+    profile_history_limit: int
+    upload_max_concurrent_per_user: int
+    upload_rate_max_requests: int
+    upload_rate_window_seconds: int
 
-    explicit_threshold: float = Field(
-        default=0.7,
-        alias="FANIC_EXPLICIT_THRESHOLD",
-    )
+    # Upload and ingest hard limits
+    max_cbz_member_uncompressed_bytes: int
+    max_cbz_total_uncompressed_bytes: int
+    max_cbz_upload_bytes: int
+    max_ingest_pages: int
+    max_page_upload_bytes: int
+    max_upload_image_pixels: int
+    user_page_quality_ramp_multiplier: float
+    user_page_soft_cap: int
 
-    openclip_cache_dir: str = Field(
-        default_factory=lambda: str(Path.home() / ".cache" / "clip"),
-        alias="FANIC_OPENCLIP_CACHE_DIR",
-    )
+    # Classification and moderation tuning
+    explicit_threshold: float
+    model_load_logs: bool
+    nsfw_logit_scale: float
+    photo_block_min_margin: float
+    photoreal_min_confidence: float
+    style_load_retry_seconds: float
+    style_logit_scale: float
+    style_min_confidence: float
+    style_min_confidence_photorealistic: float
+    style_min_top_margin: float
+    style_min_top_prob: float
 
-    nsfw_logit_scale: float = Field(
-        default=100.0,
-        alias="FANIC_NSFW_LOGIT_SCALE",
-    )
+    # Media encoding and type allowlists
+    allowed_cbz_content_types_csv: str
+    allowed_cbz_extensions_csv: str
+    allowed_page_content_types_csv: str
+    allowed_page_extensions_csv: str
+    image_avif_quality: int
+    thumbnail_avif_quality: int
 
-    thumbnail_avif_quality: int = Field(
-        default=30,
-        alias="FANIC_THUMBNAIL_AVIF_QUALITY",
-    )
+    # Input normalization
+    @field_validator("data_dir", "db_path", mode="before")
+    @classmethod
+    def _empty_string_to_none(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
-    image_avif_quality: int = Field(
-        default=60,
-        alias="FANIC_IMAGE_AVIF_QUALITY",
-    )
+    @field_validator("openclip_cache_dir", mode="after")
+    @classmethod
+    def _expand_openclip_cache_dir(cls, value: str) -> str:
+        return str(Path(value).expanduser())
 
-    style_min_confidence: float = Field(
-        default=0.6,
-        alias="FANIC_STYLE_MIN_CONFIDENCE",
+    @field_validator(
+        "max_cbz_upload_bytes",
+        "max_page_upload_bytes",
+        "max_cbz_member_uncompressed_bytes",
+        "max_cbz_total_uncompressed_bytes",
+        mode="before",
     )
-    photoreal_min_confidence: float = Field(
-        default=0.6,
-        alias="FANIC_PHOTOREAL_MIN_CONFIDENCE",
-    )
-    style_min_confidence_photorealistic: float = Field(
-        default=0.90,
-        alias="FANIC_STYLE_MIN_CONFIDENCE_PHOTOREALISTIC",
-    )
-    photo_block_min_margin: float = Field(
-        default=0.01,
-        alias="FANIC_PHOTO_BLOCK_MIN_MARGIN",
-    )
-    style_min_top_prob: float = Field(
-        default=0.34,
-        alias="FANIC_STYLE_MIN_TOP_PROB",
-    )
-    style_min_top_margin: float = Field(
-        default=0.05,
-        alias="FANIC_STYLE_MIN_TOP_MARGIN",
-    )
-    style_logit_scale: float = Field(
-        default=100.0,
-        alias="FANIC_STYLE_LOGIT_SCALE",
-    )
-    style_load_retry_seconds: float = Field(
-        default=5.0,
-        alias="FANIC_STYLE_LOAD_RETRY_SECONDS",
-    )
-    model_load_logs: bool = Field(
-        default=True,
-        alias="FANIC_MODEL_LOAD_LOGS",
-    )
-    preload_models: bool = Field(
-        default=True,
-        alias="FANIC_PRELOAD_MODELS",
-    )
+    @classmethod
+    def _parse_byte_limit_values(cls, value: Any) -> int:
+        if isinstance(value, str | int):
+            return parse_byte_size(value)
+        raise ValueError("Byte-size setting must be a string like '256 MiB' or an integer")
 
-    session_secret: str = Field(
-        default="fanic-dev-secret-change-me",
-        alias="FANIC_SESSION_SECRET",
-    )
-    session_max_age: int = Field(
-        default=43200,
-        alias="FANIC_SESSION_MAX_AGE",
-    )
-    session_secure: bool = Field(
-        default=False,
-        alias="FANIC_SESSION_SECURE",
-    )
-    session_cookie_samesite: str = Field(
-        default="Lax",
-        alias="FANIC_SESSION_COOKIE_SAMESITE",
-    )
-    alpha_invite_gate_enabled: bool = Field(
-        default=False,
-        alias="FANIC_ALPHA_INVITE_GATE_ENABLED",
-    )
-    alpha_invite_codes_csv: str = Field(
-        default="",
-        alias="FANIC_ALPHA_INVITE_CODES",
-    )
-    alpha_invite_cookie_max_age: int = Field(
-        default=2592000,
-        alias="FANIC_ALPHA_INVITE_COOKIE_MAX_AGE",
-    )
-    admin_username: str = Field(
-        default="admin",
-        alias="FANIC_ADMIN_USERNAME",
-    )
-    admin_password_hash: str = Field(
-        default=f"sha256${hashlib.sha256(b'admin').hexdigest()}",
-        alias="FANIC_ADMIN_PASSWORD_HASH",
-    )
-
-    auth0_enabled: bool = Field(
-        default=False,
-        alias="FANIC_AUTH0_ENABLED",
-    )
-    auth0_domain: str = Field(
-        default="",
-        alias="FANIC_AUTH0_DOMAIN",
-    )
-    auth0_client_id: str = Field(
-        default="",
-        alias="FANIC_AUTH0_CLIENT_ID",
-    )
-    auth0_client_secret: str = Field(
-        default="",
-        alias="FANIC_AUTH0_CLIENT_SECRET",
-    )
-    auth0_callback_url: str = Field(
-        default="http://127.0.0.1:8080/account/callback",
-        alias="FANIC_AUTH0_CALLBACK_URL",
-    )
-    auth0_logout_return_url: str = Field(
-        default="http://127.0.0.1:8080/",
-        alias="FANIC_AUTH0_LOGOUT_RETURN_URL",
-    )
-    auth0_audience: str = Field(
-        default="",
-        alias="FANIC_AUTH0_AUDIENCE",
-    )
-    auth0_connection: str = Field(
-        default="Username-Password-Authentication",
-        alias="FANIC_AUTH0_CONNECTION",
-    )
-    auth0_superadmin_email: str = Field(
-        default="admin@fanic.media",
-        alias="FANIC_AUTH0_SUPERADMIN_EMAIL",
-    )
-
-    auth_max_failures: int = Field(
-        default=5,
-        alias="FANIC_AUTH_MAX_FAILURES",
-    )
-    auth_window_seconds: int = Field(
-        default=300,
-        alias="FANIC_AUTH_WINDOW_SECONDS",
-    )
-    auth_lockout_seconds: int = Field(
-        default=900,
-        alias="FANIC_AUTH_LOCKOUT_SECONDS",
-    )
-    upload_rate_window_seconds: int = Field(
-        default=60,
-        alias="FANIC_UPLOAD_RATE_WINDOW_SECONDS",
-    )
-    upload_rate_max_requests: int = Field(
-        default=20,
-        alias="FANIC_UPLOAD_RATE_MAX_REQUESTS",
-    )
-    upload_max_concurrent_per_user: int = Field(
-        default=1,
-        alias="FANIC_UPLOAD_MAX_CONCURRENT_PER_USER",
-    )
-    profile_history_limit: int = Field(
-        default=100,
-        alias="FANIC_PROFILE_HISTORY_LIMIT",
-    )
-
-    max_cbz_upload_bytes: int = Field(
-        default=from_unit("MiB", 256.0),
-        alias="FANIC_MAX_CBZ_UPLOAD_BYTES",
-    )
-    max_page_upload_bytes: int = Field(
-        default=from_unit("MiB", 20.0),
-        alias="FANIC_MAX_PAGE_UPLOAD_BYTES",
-    )
-    max_ingest_pages: int = Field(
-        default=2000,
-        alias="FANIC_MAX_INGEST_PAGES",
-    )
-    max_cbz_member_uncompressed_bytes: int = Field(
-        default=from_unit("MiB", 128.0),
-        alias="FANIC_MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES",
-    )
-    max_cbz_total_uncompressed_bytes: int = Field(
-        default=from_unit("GiB", 2.0),
-        alias="FANIC_MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES",
-    )
-    max_upload_image_pixels: int = Field(
-        default=100_000_000,
-        alias="FANIC_MAX_UPLOAD_IMAGE_PIXELS",
-    )
-    user_page_soft_cap: int = Field(
-        default=2000,
-        alias="FANIC_USER_PAGE_SOFT_CAP",
-    )
-    user_page_quality_ramp_multiplier: float = Field(
-        default=1.5,
-        alias="FANIC_USER_PAGE_QUALITY_RAMP_MULTIPLIER",
-    )
-    allowed_cbz_extensions_csv: str = Field(
-        default=".cbz",
-        alias="FANIC_ALLOWED_CBZ_EXTENSIONS",
-    )
-    allowed_cbz_content_types_csv: str = Field(
-        default="application/zip,application/x-cbz,application/octet-stream",
-        alias="FANIC_ALLOWED_CBZ_CONTENT_TYPES",
-    )
-    allowed_page_extensions_csv: str = Field(
-        default_factory=_default_allowed_page_extensions_csv,
-        alias="FANIC_ALLOWED_PAGE_EXTENSIONS",
-    )
-    allowed_page_content_types_csv: str = Field(
-        default_factory=_default_allowed_page_content_types_csv,
-        alias="FANIC_ALLOWED_PAGE_CONTENT_TYPES",
-    )
-
+    # Derived filesystem paths
     @property
     def package_root(self) -> Path:
         return Path(__file__).resolve().parent
@@ -350,6 +206,7 @@ class FanicSettings(BaseSettings):
             return Path(self.db_path)
         return self.data_root / "fanic.db"
 
+    # Effective runtime behavior
     @property
     def style_min_confidence_effective(self) -> float:
         if "style_min_confidence" in self.model_fields_set:
@@ -363,6 +220,23 @@ class FanicSettings(BaseSettings):
         normalized = self.environment.strip().lower()
         return normalized in {"prod", "production"}
 
+    @property
+    def session_secure_effective(self) -> bool:
+        return self.session_secure if self.session_secure else self.is_production
+
+    @property
+    def csrf_protect_effective(self) -> bool:
+        if not self.is_production:
+            return False
+        return self.csrf_protect if self.csrf_protect else False
+
+    @property
+    def require_https_effective(self) -> bool:
+        if not self.is_production:
+            return False
+        return self.require_https if self.require_https else False
+
+    # Production safety checks
     def validate_production_settings(self) -> None:
         """Emit warnings for insecure defaults that must be overridden in production."""
         if not self.is_production:
@@ -403,22 +277,7 @@ class FanicSettings(BaseSettings):
             if missing:
                 raise RuntimeError("Auth0 is enabled but these settings are missing: " + ", ".join(missing))
 
-    @property
-    def session_secure_effective(self) -> bool:
-        return self.session_secure if self.session_secure else self.is_production
-
-    @property
-    def csrf_protect_effective(self) -> bool:
-        if not self.is_production:
-            return False
-        return self.csrf_protect if self.csrf_protect else False
-
-    @property
-    def require_https_effective(self) -> bool:
-        if not self.is_production:
-            return False
-        return self.require_https if self.require_https else False
-
+    # Parsed collections
     @property
     def allowed_cbz_extensions(self) -> set[str]:
         values: set[str] = set()
@@ -455,6 +314,7 @@ class FanicSettings(BaseSettings):
     def alpha_invite_codes(self) -> set[str]:
         return {value.strip() for value in self.alpha_invite_codes_csv.split(",") if value.strip()}
 
+    # Auth feature state
     @property
     def auth0_enabled_effective(self) -> bool:
         return bool(self.auth0_enabled)
@@ -469,6 +329,43 @@ class FanicSettings(BaseSettings):
             and bool(self.auth0_callback_url.strip())
             and bool(self.auth0_logout_return_url.strip())
         )
+
+
+def from_unit(unit: BytesUnit, value: float | int) -> int:
+    if value < 0:
+        raise ValueError("Unit value must be non-negative")
+    return int(round(float(value) * unit.bytes))
+
+
+def parse_byte_size(value: str | int) -> int:
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError("Size must be non-negative")
+        return value
+
+    raw_value = value.strip()
+    if not raw_value:
+        raise ValueError("Size value cannot be empty")
+
+    if raw_value.isdigit():
+        parsed = int(raw_value)
+        if parsed < 0:
+            raise ValueError("Size must be non-negative")
+        return parsed
+
+    match = BytesUnit.parse_match(raw_value)
+    if not match:
+        raise ValueError(f"Invalid byte-size value: {value!r}")
+
+    number_raw = match.group(1)
+    unit_raw = match.group(2)
+    number = float(number_raw)
+    if number < 0:
+        raise ValueError("Size must be non-negative")
+
+    unit = BytesUnit.from_token(unit_raw)
+
+    return from_unit(unit=unit, value=number)
 
 
 @lru_cache(maxsize=1)
