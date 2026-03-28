@@ -324,7 +324,7 @@ def create_app() -> WSGIApplication:
     return _security_headers_middleware(_alpha_invite_gate_middleware(_admin_path_guard(raw_app)))
 
 
-def serve(host: str, port: int) -> int:
+def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perms: str = "660") -> int:
     settings = get_settings()
     app = create_app()
 
@@ -336,17 +336,29 @@ def serve(host: str, port: int) -> int:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _shutdown_handler)
 
+    waitress_kwargs: dict[str, object] = {
+        "threads": 4,
+        "connection_limit": 1000,
+        "recv_bytes": 65536,
+        "channel_timeout": 120,
+        "max_request_body_size": settings.max_cbz_upload_bytes + 1024 * 1024,
+    }
+    if unix_socket:
+        socket_path = Path(unix_socket).expanduser().resolve()
+        socket_path.parent.mkdir(parents=True, exist_ok=True)
+        if socket_path.exists():
+            if socket_path.is_socket():
+                socket_path.unlink()
+            else:
+                raise ValueError(f"Unix socket path exists and is not a socket: {socket_path}")
+        waitress_kwargs["unix_socket"] = str(socket_path)
+        waitress_kwargs["unix_socket_perms"] = unix_socket_perms
+    else:
+        waitress_kwargs["host"] = host
+        waitress_kwargs["port"] = port
+
     try:
-        waitress.serve(
-            app,
-            host=host,
-            port=port,
-            threads=4,
-            connection_limit=1000,
-            recv_bytes=65536,
-            channel_timeout=120,
-            max_request_body_size=settings.max_cbz_upload_bytes + 1024 * 1024,
-        )
+        waitress.serve(app, **waitress_kwargs)
     except KeyboardInterrupt:
         print("Shutting down gracefully...", flush=True)
     return OK
