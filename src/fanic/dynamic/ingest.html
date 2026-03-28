@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FANIC Ingest and Update</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+            <a href="/cbz-format">CBZ SPEC INFO</a>
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card info-card">
+        <h2>Upload a comic</h2>
+        <p>Upload a comic either as a CBZ or one image at a time</p>
+      </section>
+
+      <section id="loginRequiredCard" class="card info-card" __LOGIN_REQUIRED_HIDDEN_ATTR__>
+        <h3>Login Required For Uploads</h3>
+        <p>Use the dedicated login page before uploading comics.</p>
+        <p><a href="/account/login">Go to Login</a></p>
+        <p id="authStatus" class="status-text __AUTH_STATUS_CLASS__" aria-live="polite">__AUTH_STATUS__</p>
+      </section>
+
+      <section id="uploadCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
+        <h3>Import CBZ Into Editor</h3>
+        <form id="ingestForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
+          <input name="upload_token" type="hidden" value="__UPLOAD_TOKEN__" />
+          <label for="cbzFile">Comic Archive (.cbz)</label>
+          <input id="cbzFile" name="cbz" type="file" accept=".cbz" />
+
+          <label class="toggle-row">
+            <input id="agreeTerms" name="agree_terms" type="checkbox" required />
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
+          </label>
+
+          <button id="loadMetadataBtn" type="submit" name="action" value="load-metadata">Import CBZ into editor draft</button>
+
+          <div id="uploadProgressWrap" class="upload-progress" hidden>
+            <label for="uploadProgressBar">Upload progress</label>
+            <progress id="uploadProgressBar" max="100" value="0"></progress>
+            <p id="uploadProgressText" class="profile-meta">Starting upload...</p>
+          </div>
+
+          <section id="metadataFormCard" class="card info-card" __METADATA_FORM_HIDDEN_ATTR__>
+            <h4>Metadata Entry</h4>
+            <label for="metaTitle">Title</label>
+            <input id="metaTitle" name="title" type="text" value="__META_TITLE__" />
+
+            <label for="metaSummary">Summary</label>
+            <textarea id="metaSummary" name="summary" rows="4">__META_SUMMARY__</textarea>
+
+            <label for="metaRating">Rating</label>
+            <select id="metaRating" name="rating">
+              __META_RATING_OPTIONS_HTML__
+            </select>
+
+            <label for="metaWarnings">Warnings (comma-separated)</label>
+            <input id="metaWarnings" name="warnings" type="text" placeholder="No Archive Warnings Apply" value="__META_WARNINGS__" list="warningSuggestions" />
+
+            <label for="metaStatus">Status</label>
+            <select id="metaStatus" name="status">
+              <option value="in_progress" __STATUS_IN_PROGRESS_SELECTED__>In progress</option>
+              <option value="complete" __STATUS_COMPLETE_SELECTED__>Complete</option>
+            </select>
+
+            <label for="metaLanguage">Language (ISO)</label>
+            <input id="metaLanguage" name="language" type="text" placeholder="en" value="__META_LANGUAGE__" />
+
+            <label for="metaSeries">Series</label>
+            <input id="metaSeries" name="series" type="text" value="__META_SERIES__" />
+
+            <label for="metaSeriesIndex">Series Index</label>
+            <input id="metaSeriesIndex" name="series_index" type="text" value="__META_SERIES_INDEX__" />
+
+            <label for="metaPublishedAt">Published Date</label>
+            <input id="metaPublishedAt" name="published_at" type="date" value="__META_PUBLISHED_AT__" />
+
+            <label for="metaFandoms">Fandoms (comma-separated)</label>
+            <input id="metaFandoms" name="fandoms" type="text" value="__META_FANDOMS__" list="fandomSuggestions" />
+
+            <label for="metaRelationships">Relationships (comma-separated)</label>
+            <input id="metaRelationships" name="relationships" type="text" value="__META_RELATIONSHIPS__" list="relationshipSuggestions" />
+
+            <label for="metaCharacters">Characters (comma-separated)</label>
+            <input id="metaCharacters" name="characters" type="text" value="__META_CHARACTERS__" list="characterSuggestions" />
+
+            <label for="metaFreeformTags">Freeform Tags (comma-separated)</label>
+            <input id="metaFreeformTags" name="freeform_tags" type="text" value="__META_FREEFORM_TAGS__" list="freeformSuggestions" />
+
+            <datalist id="warningSuggestions">__WARNINGS_OPTIONS_HTML__</datalist>
+            <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
+            <datalist id="relationshipSuggestions">__RELATIONSHIP_OPTIONS_HTML__</datalist>
+            <datalist id="characterSuggestions">__CHARACTER_OPTIONS_HTML__</datalist>
+            <datalist id="freeformSuggestions">__FREEFORM_OPTIONS_HTML__</datalist>
+
+            <button type="submit" name="action" value="ingest">Ingest comic</button>
+          </section>
+        </form>
+        <p id="ingestStatus" class="status-text __INGEST_STATUS_CLASS__" aria-live="polite" __INGEST_STATUS_HIDDEN_ATTR__>__INGEST_STATUS__</p>
+        <pre id="ingestResult" class="code-block" __INGEST_RESULT_HIDDEN_ATTR__>__INGEST_RESULT__</pre>
+      </section>
+
+      <section id="editorCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
+        <h3>Build Comic In Editor Mode</h3>
+        <p>Upload pages, reorder by drag and drop, and organize chapter groups like the edit metadata workflow.</p>
+        <form id="editorForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
+          <input name="action" type="hidden" value="editor-add-page" />
+          <input name="editor_work_id" type="hidden" value="__EDITOR_WORK_ID__" />
+
+          <label for="editorTitle">Title</label>
+          <input id="editorTitle" name="editor_title" type="text" value="__EDITOR_TITLE__" required />
+
+          <label for="editorSummary">Summary</label>
+          <textarea id="editorSummary" name="editor_summary" rows="3">__EDITOR_SUMMARY__</textarea>
+
+          <label for="editorRating">Rating</label>
+          <select id="editorRating" name="editor_rating">
+            __EDITOR_RATING_OPTIONS_HTML__
+          </select>
+
+          <label for="editorStatus">Status</label>
+          <select id="editorStatus" name="editor_status">
+            <option value="in_progress" __EDITOR_STATUS_IN_PROGRESS_SELECTED__>In progress</option>
+            <option value="complete" __EDITOR_STATUS_COMPLETE_SELECTED__>Complete</option>
+          </select>
+
+          <label for="editorLanguage">Language (ISO)</label>
+          <input id="editorLanguage" name="editor_language" type="text" value="__EDITOR_LANGUAGE__" />
+
+          <label for="editorInitialPageImage">Upload first page image</label>
+          <input id="editorInitialPageImage" name="page_image" type="file" accept="image/*" required />
+
+          <label class="toggle-row">
+            <input id="agreeTermsEditor" name="agree_terms" type="checkbox" __EDITOR_TERMS_REQUIRED_ATTR__ />
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.
+          </label>
+
+          <button type="submit">Upload image to draft</button>
+
+          <p class="profile-meta">Create or update the draft metadata above, then use the gallery controls below to insert pages and manage order.</p>
+        </form>
+        <p __EDITOR_LINKS_HIDDEN_ATTR__>
+          Draft links:
+          <a href="__EDITOR_WORK_HREF__">Work page</a>
+          |
+          <a href="__EDITOR_READER_HREF__">Reader</a>
+        </p>
+
+        <section class="card info-card" __EDITOR_MANAGER_HIDDEN_ATTR__>
+          <h4>Page Gallery</h4>
+          <p class="profile-meta">Click a thumbnail to select a page. Drag and drop thumbnails to reorder pages and move pages between chapter galleries.</p>
+
+          <div id="editorPageGallery" class="editor-page-gallery">__EDITOR_PAGE_GALLERY_HTML__</div>
+
+          <div id="gallerySelectionPanel" class="card info-card gallery-selection-panel">
+            <p id="selectedPageLabel" class="profile-meta">No page selected.</p>
+            <p id="galleryDirtyBadge" class="status-text warning" hidden>Unsaved gallery order changes. Save gallery order before replacing or deleting pages.</p>
+
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+              <input type="hidden" name="action" value="editor-add-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="insertAfterPageIndex" type="hidden" name="insert_after_page_index" value="" />
+              <label for="editorPageImage">Insert page after selected page (or append if no page selected)</label>
+              <input id="editorPageImage" name="page_image" type="file" accept="image/*" required />
+              <button type="submit">Insert page</button>
+            </form>
+
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+              <input type="hidden" name="action" value="editor-replace-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="replacePageIndex" type="hidden" name="page_index" value="" />
+              <label for="replacePageImage">Replace selected page with image</label>
+              <input id="replacePageImage" name="page_image" type="file" accept="image/*" required />
+              <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
+            </form>
+
+            <form class="upload-form" method="post" action="/ingest" onsubmit="return confirm('Delete selected page?');">
+              <input type="hidden" name="action" value="editor-delete-page" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="deletePageIndex" type="hidden" name="page_index" value="" />
+              <button id="deleteSelectedButton" type="submit" class="button-muted" disabled>Delete selected page</button>
+            </form>
+
+            <form class="upload-form" method="post" action="/ingest">
+              <input type="hidden" name="action" value="editor-reorder-gallery" />
+              <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+              <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+              <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+              <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+              <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+              <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+              <input id="orderedFilenamesInput" type="hidden" name="ordered_filenames_json" value="" />
+              <input id="chapterMembersInput" type="hidden" name="chapter_members_json" value="{}" />
+              <button id="saveGalleryOrderButton" type="submit">Save gallery order</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="card info-card" __EDITOR_MANAGER_HIDDEN_ATTR__>
+          <h4>Chapters</h4>
+          <p class="profile-meta">Chapters follow page identity during reorder/delete.</p>
+          <form class="upload-form" method="post" action="/ingest">
+            <input type="hidden" name="action" value="editor-add-chapter" />
+            <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
+            <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
+            <input type="hidden" name="editor_summary" value="__EDITOR_SUMMARY__" />
+            <input type="hidden" name="editor_rating" value="__EDITOR_RATING_VALUE__" />
+            <input type="hidden" name="editor_status" value="__EDITOR_STATUS_VALUE__" />
+            <input type="hidden" name="editor_language" value="__EDITOR_LANGUAGE__" />
+            <label for="editorChapterTitle">Chapter title</label>
+            <input id="editorChapterTitle" name="chapter_title" type="text" required />
+            <label for="editorChapterStart">Start page</label>
+            <input id="editorChapterStart" name="chapter_start_page" type="number" min="1" required />
+            <label for="editorChapterEnd">End page</label>
+            <input id="editorChapterEnd" name="chapter_end_page" type="number" min="1" required />
+            <button type="submit">Add chapter</button>
+          </form>
+          <div>__EDITOR_CHAPTERS_HTML__</div>
+        </section>
+      </section>
+
+      <section id="adminNotes" class="card info-card" hidden>
+        <h3>Initialize Database</h3>
+        <pre class="code-block">uv run fanic init-db</pre>
+
+        <h3>Ingest New CBZ</h3>
+        <pre class="code-block">uv run fanic ingest C:\path\to\comic.cbz --metadata C:\path\to\metadata.json</pre>
+
+        <h3>Update Existing Work</h3>
+        <p>Re-run ingest with the same metadata <strong>id</strong> to upsert and refresh pages/tags for that work.</p>
+      </section>
+    </main>
+    <script src="/static/user-menu.js"></script>
+    <script src="/static/ingest-upload-progress.js"></script>
+    <script src="/static/work-edit.js"></script>
+  </body>
+</html>
+
+
+

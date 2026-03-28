@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__READER_TITLE__ - FANIC Reader</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .report-modal {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 50;
+      }
+
+      .report-modal[hidden] {
+        display: none;
+      }
+
+      .report-modal-card {
+        width: min(520px, 94vw);
+        max-height: 88vh;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="viewer-shell">
+      <aside class="sidebar" id="thumbs"></aside>
+      <section class="reader-stage">
+        <div class="reader-ui">
+          <div class="reader-nav-group">
+            <div class="reader-nav-buttons">
+              <button id="prevBtn" type="button">Prev</button>
+              <button id="nextBtn" type="button">Next</button>
+            </div>
+            <div id="counter" class="reader-page-count" aria-live="polite"></div>
+          </div>
+          <div class="reader-zoom-controls" aria-label="Zoom controls">
+            <button id="zoomOutBtn" type="button" aria-label="Zoom out">-</button>
+            <button id="zoomResetBtn" type="button" aria-label="Reset zoom">100%</button>
+            <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+          </div>
+          <div>
+            <label for="chapterSelect" class="sr-only">Select chapter</label>
+            <select id="chapterSelect" aria-label="Select chapter"></select>
+          </div>
+          <div>
+            <a id="backLink" href="__READER_BACK_HREF__">__READER_BACK_LABEL__</a>
+          </div>
+          <div>
+            <a id="workLink" href="__READER_WORK_HREF__">__READER_WORK_LABEL__</a>
+          </div>
+          <div __READER_REPORT_HIDDEN_ATTR__>
+            <button id="reportImageButton" type="button">Report</button>
+          </div>
+          <div __READER_BOOKMARK_HIDDEN_ATTR__>
+            <button id="bookmarkBtn" type="button" aria-haspopup="dialog" aria-controls="bookmarkDialog" title="Bookmark this work">
+              <i class="fa-regular fa-bookmark" aria-hidden="true"></i>
+              <span class="sr-only">Bookmark this work</span>
+            </button>
+          </div>
+        </div>
+        <img id="readerImage" class="reader-image" alt="Comic page" />
+        <div class="reader-hit left" id="hitLeft"></div>
+        <div class="reader-hit right" id="hitRight"></div>
+      </section>
+      <section class="mobile-list" id="mobileList"></section>
+    </main>
+
+    <div id="bookmarkDialog" class="bookmark-dialog" hidden>
+      <div class="bookmark-dialog-card" role="dialog" aria-modal="true" aria-labelledby="bookmarkDialogTitle">
+        <h3 id="bookmarkDialogTitle">Add Bookmark</h3>
+        <p class="profile-meta">Save this work to your profile bookmarks with an optional note.</p>
+        <label for="bookmarkMessage">Message (optional)</label>
+        <textarea id="bookmarkMessage" rows="3" maxlength="1024" placeholder="Optional note"></textarea>
+        <p id="bookmarkStatus" class="status-text" hidden></p>
+        <div class="bookmark-dialog-actions">
+          <button id="bookmarkCancelBtn" type="button" class="button-muted">Cancel</button>
+          <button id="bookmarkSaveBtn" type="button">Save bookmark</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="reportModal" class="report-modal" hidden>
+      <section class="card report-modal-card" aria-labelledby="reportModalTitle">
+        <h3 id="reportModalTitle">__READER_REPORT_TITLE__</h3>
+        <p class="profile-meta">Choose the issue type, then continue to the report form.</p>
+        <form method="get" action="/dmca" class="upload-form">
+          <input id="readerReportWorkId" type="hidden" name="work_id" value="__READER_REPORT_WORK_ID__" />
+          <input id="readerReportWorkTitle" type="hidden" name="work_title" value="__READER_REPORT_WORK_TITLE__" />
+          <input id="readerReportClaimedUrl" type="hidden" name="claimed_url" value="__READER_REPORT_CLAIMED_URL__" />
+
+          <label for="readerReportIssueType">Issue type</label>
+          <select id="readerReportIssueType" name="issue_type" required>
+            __REPORT_ISSUE_OPTIONS_HTML__
+          </select>
+
+          <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-top: 0.75rem;">
+            <button type="submit">Continue to report form</button>
+            <button id="reportModalCancel" type="button">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <script id="readerBootstrap" type="application/json">__READER_BOOTSTRAP_JSON__</script>
+    <script src="/static/user-menu.js"></script>
+    <script src="__READER_SCRIPT_SRC__"></script>
+  </body>
+</html>
+
+
+

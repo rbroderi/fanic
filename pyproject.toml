@@ -1,0 +1,62 @@
+[project]
+name = "fanic"
+version = "0.1.0"
+description = "FANIC: Fan Archive Nexus for Illustrated Comics"
+readme = "README.md"
+authors = [
+    { name = "rbroderi", email = "richard.broderick@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "authlib>=1.3.0",
+    "cylinder>=0.1.0",
+    "pillow-avif-plugin>=1.4.6",
+    "python-dotenv>=1.0.1",
+    "pillow>=11.3.0",
+    "rust-just>=1.47.1",
+    "waitress>=3.0.0",
+    "tomli-w>=1.2.0",
+    "open-clip-torch>=3.3.0",
+    "torch>=2.10.0",
+    "tqdm>=4.67.3",
+    "pathvalidate>=3.3.1",
+    "beartype>=0.22.9",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.11.0",
+    "lazi>=1.9.161",
+    "structlog>=25.5.0",
+    "xmlschema>=4.3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "autopep695>=1.1.4",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+pythonVersion = "3.13"
+reportUnusedCallResult = "none"
+reportAny = "none"
+reportExplicitAny = "none"
+reportImplicitStringConcatenation = "none"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.coverage.run]
+omit = [
+    "src/fanic/app.py",
+    "src/fanic/main.py"
+]

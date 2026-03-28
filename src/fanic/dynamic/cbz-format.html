@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FANIC CBZ Profile</title>
+    <link rel="icon" href="/static/logo.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-row">
+        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
+        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            __ADMIN_REPORTS_LINK__
+            <a href="/cbz-format" aria-current="page">CBZ SPEC INFO</a>
+          </nav>
+          <div class="user-menu">
+            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="sr-only">User menu</span>
+            </button>
+            <div id="userMenuPanel" class="user-menu-panel" hidden>
+              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
+              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
+              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
+              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
+                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card info-card">
+        <h2>FANIC CBZ Ingest Profile (Current Behavior)</h2>
+        <p>
+          This document describes how FANIC currently ingests and normalizes CBZ uploads.
+          It reflects actual runtime behavior in the site, including chapter import rules,
+          page ordering, metadata parsing, and editor-side chapter management.
+        </p>
+      </section>
+
+      <section class="card info-card">
+        <h3>1. Scope and Goals</h3>
+        <p>This profile standardizes:</p>
+        <ul>
+          <li>Archive structure and file naming conventions.</li>
+          <li>Metadata sources and precedence.</li>
+          <li>ComicInfo.xml field mapping into FANIC work metadata.</li>
+          <li>Page ordering and optional explicit page_order override behavior.</li>
+          <li>Chapter auto-import from archive directories and chapter lifecycle rules.</li>
+          <li>Ingest-time normalization behavior.</li>
+        </ul>
+        <p>It does not redefine ZIP itself and does not mandate reader UI behavior.</p>
+      </section>
+
+      <section class="card info-card">
+        <h3>2. Archive Container</h3>
+        <p>A FANIC CBZ is a ZIP archive with extension <strong>.cbz</strong>.</p>
+        <p>FANIC accepts most image formats that Pillow can decode, including:</p>
+        <ul>
+          <li>.jpg / .jpeg</li>
+          <li>.png</li>
+          <li>.bmp</li>
+          <li>.webp</li>
+          <li>.gif</li>
+          <li>.avif</li>
+          <li>.tiff / .tif</li>
+        </ul>
+        <p>Directory structure inside the ZIP is allowed; all matching image entries are considered.</p>
+      </section>
+
+      <section class="card info-card">
+        <h3>3. Metadata Sources and Precedence</h3>
+        <p>FANIC reads metadata from the following sources, in order:</p>
+        <ol>
+          <li>In-app metadata form submission (highest priority).</li>
+          <li>ComicInfo.xml in archive.</li>
+          <li>Built-in defaults (lowest priority).</li>
+        </ol>
+        <p>
+          Notes:
+          The load metadata action parses ComicInfo.xml for form prefill.
+        </p>
+      </section>
+
+      <section class="card info-card">
+        <h3>4. Page Ordering</h3>
+        <p>Ordering rules are:</p>
+        <ol>
+          <li>By default, pages are sorted by FANIC natural member sort (directory + filename with numeric awareness).</li>
+          <li>If metadata includes page_order, FANIC prioritizes that explicit filename order first, then falls back to natural sort.</li>
+          <li>Ordering can be adjusted after ingest using the editor page manager.</li>
+        </ol>
+      </section>
+
+      <section class="card info-card">
+        <h3>5. Chapters (Current FANIC Behavior)</h3>
+        <p>FANIC chapter behavior is directory-driven at ingest time:</p>
+        <ol>
+          <li>Auto chapters are created only from non-root image directories in the CBZ (for example, chapter-01/, chapter-02/).</li>
+          <li>Images stored at archive root are valid pages but do not create an automatic chapter.</li>
+          <li>Auto chapter title is the directory path text (trimmed).</li>
+          <li>Each chapter range (start_page/end_page) is derived from imported page positions after final ordering.</li>
+          <li>Chapter page membership is stored explicitly, then kept in sync when pages are reordered, replaced, or deleted in the editor.</li>
+          <li>If a chapter loses all members after edits, FANIC removes that chapter.</li>
+        </ol>
+        <p>
+          Re-importing pages from CBZ replaces previously imported auto chapters for that work,
+          then rebuilds chapters from the current archive directory structure.
+        </p>
+      </section>
+
+      <section class="card info-card">
+        <h3>6. Image Normalization</h3>
+        <p>During ingest, each page image is transcoded and stored as:</p>
+        <ul>
+          <li>Page image format: AVIF</li>
+          <li>Page image quality: adaptive quality selection based on account page count policy</li>
+          <li>Thumbnail format: AVIF</li>
+        </ul>
+        <p>Any unreadable or non-decodable discovered image causes ingest failure.</p>
+      </section>
+
+      <section class="card info-card">
+        <h3>7. ComicInfo.xml Ingest Mapping (Reader-Compatible)</h3>
+        <p>
+          FANIC treats ComicInfo.xml as the baseline metadata contract used by many comic readers including GonVisor.
+          The following fields are parsed during ingest when present.
+        </p>
+        <p>
+          Reference schema project:
+          <a href="https://github.com/anansi-project/comicinfo" target="_blank" rel="noopener noreferrer">https://github.com/anansi-project/comicinfo</a>
+        </p>
+        <table class="cbz-spec-table">
+          <thead>
+            <tr>
+              <th>ComicInfo.xml Element</th>
+              <th>FANIC Field</th>
+              <th>Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Title</td><td>title</td><td>Trimmed string.</td></tr>
+            <tr><td>Summary</td><td>summary</td><td>Trimmed string.</td></tr>
+            <tr><td>LanguageISO</td><td>language</td><td>ISO code, defaults to en.</td></tr>
+            <tr><td>Series</td><td>series, fandoms[0]</td><td>Series string and initial fandom seed.</td></tr>
+            <tr><td>Number</td><td>series_index</td><td>Stored as provided, parsed downstream when needed.</td></tr>
+            <tr><td>Writer</td><td>creators[]</td><td>Comma-split, trimmed list.</td></tr>
+            <tr><td>Genre</td><td>categories[]</td><td>Comma-split, trimmed list.</td></tr>
+            <tr><td>Characters</td><td>characters[]</td><td>Comma-split, trimmed list.</td></tr>
+            <tr><td>StoryArc</td><td>relationships[]</td><td>Comma-split, trimmed list.</td></tr>
+            <tr><td>SeriesGroup</td><td>fandoms[]</td><td>Comma-split, merged with Series-derived fandoms.</td></tr>
+            <tr><td>Review</td><td>warnings[]</td><td>Comma-split warning values.</td></tr>
+            <tr><td>Notes</td><td>freeform_tags[], warnings[]</td><td>Parses FANIC key/value payloads like freeform_tags=... and warnings=...</td></tr>
+            <tr><td>ScanInformation</td><td>id, slug, status, cover_page_index, creators[]</td><td>Parses FANIC metadata payload (fanic_meta JSON) when present.</td></tr>
+            <tr><td>Pages/Page Type=FrontCover</td><td>cover_page_index</td><td>FrontCover page Image index maps to FANIC cover_page_index (1-based).</td></tr>
+            <tr><td>AgeRating</td><td>rating</td><td>Mapped and normalized to FANIC rating enum.</td></tr>
+            <tr><td>Year + Month + Day</td><td>published_at</td><td>Rendered as YYYY-MM-DD with missing month/day defaulted to 01.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card info-card">
+        <h3>8. ComicInfo.xml Export Mapping (FANIC to CBZ)</h3>
+        <p>
+          FANIC export writes ComicInfo.xml in a v2.0-compatible field order and preserves additional FANIC metadata in safe string fields.
+        </p>
+        <table class="cbz-spec-table">
+          <thead>
+            <tr>
+              <th>FANIC Field</th>
+              <th>ComicInfo.xml Element</th>
+              <th>Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>title</td><td>Title</td><td>Written directly.</td></tr>
+            <tr><td>series_name</td><td>Series</td><td>Written when present.</td></tr>
+            <tr><td>series_index</td><td>Number</td><td>Written when present.</td></tr>
+            <tr><td>page_count</td><td>Count, PageCount</td><td>Both are populated.</td></tr>
+            <tr><td>summary</td><td>Summary</td><td>Written directly.</td></tr>
+            <tr><td>creators[]</td><td>Writer</td><td>Comma-joined list.</td></tr>
+            <tr><td>categories[]</td><td>Genre</td><td>Comma-joined list.</td></tr>
+            <tr><td>language</td><td>LanguageISO</td><td>Written directly.</td></tr>
+            <tr><td>characters[]</td><td>Characters</td><td>Comma-joined list.</td></tr>
+            <tr><td>relationships[]</td><td>StoryArc</td><td>Comma-joined list.</td></tr>
+            <tr><td>fandoms[]</td><td>SeriesGroup</td><td>Comma-joined list.</td></tr>
+            <tr><td>warnings[]</td><td>Review</td><td>Comma-joined list.</td></tr>
+            <tr><td>freeform_tags[]</td><td>Notes</td><td>Stored as FANIC key/value text payload.</td></tr>
+            <tr><td>rating</td><td>AgeRating</td><td>Mapped to ComicInfo age ratings (for example Everyone, Teen, Mature 17+, Adults Only 18+).</td></tr>
+            <tr><td>published_at</td><td>Year, Month, Day</td><td>Split into date parts.</td></tr>
+            <tr><td>id, slug, status, cover_page_index, creators[]</td><td>ScanInformation</td><td>Stored as fanic_meta JSON payload.</td></tr>
+            <tr><td>pages[], cover_page_index</td><td>Pages/Page</td><td>Writes Image, Type (FrontCover/Story), and available dimensions.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card info-card">
+        <h3>9. Rating Enum</h3>
+        <p>FANIC canonical ratings are:</p>
+        <ul>
+          <li>Not Rated</li>
+          <li>General Audiences</li>
+          <li>Teen And Up Audiences</li>
+          <li>Mature</li>
+          <li>Explicit</li>
+        </ul>
+        <p>Ingest normalizes common aliases (such as G, PG-13, M, and NC-17), and export maps FANIC ratings to ComicInfo AgeRating values.</p>
+      </section>
+
+      <section class="card info-card">
+        <h3>10. Recommended Producer Layout</h3>
+        <pre class="code-block">my-comic.cbz
+|- ComicInfo.xml
+|- chapter-01/001-cover.jpg
+|- chapter-01/002-page.jpg
+|- chapter-02/003-page.jpg
+|- extras/004-bonus.jpg
+</pre>
+        <p>Recommendations:</p>
+        <ul>
+          <li>Use zero-padded page filenames for stable natural sorting.</li>
+          <li>Use per-chapter directories if you want FANIC to auto-create chapters on import.</li>
+          <li>Keep ComicInfo.xml at archive root.</li>
+        </ul>
+      </section>
+
+      <section class="card info-card">
+        <h3>11. Compliance Notes</h3>
+        <ul>
+          <li>CBZ without metadata is valid if it has at least one supported image.</li>
+          <li>ComicInfo.xml is optional but strongly recommended.</li>
+          <li>Chapter import is optional; no directory structure means no auto-created chapters.</li>
+          <li>Unknown ComicInfo.xml elements are ignored during ingest.</li>
+          <li>FANIC-specific extensions are stored in schema-safe string fields (for example ScanInformation and Notes) for round-trip metadata recovery.</li>
+          <li>This document defines FANIC behavior and may be versioned in future revisions.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="/static/user-menu.js"></script>
+  </body>
+</html>
+
+
+

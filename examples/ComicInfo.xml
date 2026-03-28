@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ComicInfo>
+  <Title>Sample FANIC Export</Title>
+  <Series>Metro Cases</Series>
+  <Number>2</Number>
+  <Count>12</Count>
+  <Summary>A sample ComicInfo file committed for schema-validation examples.</Summary>
+  <Year>2026</Year>
+  <Month>3</Month>
+  <Day>26</Day>
+  <Writer>Alice Artist, Bob Writer</Writer>
+  <Genre>F/F</Genre>
+  <PageCount>12</PageCount>
+  <LanguageISO>en</LanguageISO>
+  <Characters>Nick Wilde, Judy Hopps</Characters>
+  <ScanInformation>fanic_meta={"id":"sample-work-123","slug":"sample-fanic-export","status":"complete","cover_page_index":1}</ScanInformation>
+  <StoryArc>Nick Wilde/Judy Hopps</StoryArc>
+  <SeriesGroup>Zootopia</SeriesGroup>
+  <AgeRating>Teen</AgeRating>
+  <Pages>
+    <Page Image="0" Type="FrontCover" ImageWidth="1200" ImageHeight="1800" />
+    <Page Image="1" Type="Story" ImageWidth="1200" ImageHeight="1800" />
+  </Pages>
+  <MainCharacterOrTeam>Nick Wilde</MainCharacterOrTeam>
+  <Review>No Archive Warnings Apply</Review>
+</ComicInfo>

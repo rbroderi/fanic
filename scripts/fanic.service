@@ -1,0 +1,40 @@
+[Unit]
+Description=FANIC web service
+After=network.target
+
+[Service]
+Type=simple
+User=fanic
+Group=fanic
+WorkingDirectory=/opt/fanic
+Environment=PATH=/opt/fanic/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=FANIC_DATA_DIR=/mnt/storage
+Environment=FANIC_DB_PATH=/opt/fanic/runtime/fanic.db
+Environment=FANIC_LOG_PATH_TEMPLATE=/var/log/fanic/%%TIMESTAMP%%.log
+Environment=PYTHONDONTWRITEBYTECODE=1
+UMask=0027
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TasksMax=512
+MemoryMax=8G
+ReadWritePaths=/mnt/storage /opt/fanic/runtime /var/log/fanic
+ExecStart=/opt/fanic/.venv/bin/python -m fanic.main serve --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
