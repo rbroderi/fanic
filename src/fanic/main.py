@@ -80,6 +80,16 @@ def build_parser() -> argparse.ArgumentParser:
     runserver = subcommands.add_parser("serve", help="Run local web server")
     runserver.add_argument("--host", default="127.0.0.1")
     runserver.add_argument("--port", default=8000, type=int)
+    runserver.add_argument(
+        "--unix-socket",
+        default=None,
+        help="Bind to this Unix socket path instead of --host/--port",
+    )
+    runserver.add_argument(
+        "--unix-socket-perms",
+        default="660",
+        help="Unix socket permissions (octal string, used with --unix-socket)",
+    )
     runserver.set_defaults(command="serve")
 
     hash_password = subcommands.add_parser(
@@ -199,7 +209,12 @@ def main() -> int:
         case "serve":
             from fanic.cylinder_main import serve as serve
 
-            return serve(host=args.host, port=args.port)
+            return serve(
+                host=args.host,
+                port=args.port,
+                unix_socket=args.unix_socket,
+                unix_socket_perms=str(args.unix_socket_perms),
+            )
         case "hash-admin-password":
             password = str(args.password) if args.password is not None else getpass.getpass("Admin password: ")
             if not password:

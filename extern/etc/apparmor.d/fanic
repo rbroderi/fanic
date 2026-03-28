@@ -48,6 +48,8 @@ profile fanic flags=(attach_disconnected,mediate_deleted) {
   # Runtime write locations.
   /opt/fanic/runtime/ rw,
   /opt/fanic/runtime/** rwk,
+  /run/fanic/ rw,
+  /run/fanic/** rwk,
   /var/log/fanic/ rw,
   /var/log/fanic/** rwk,
   /dev/shm/ rw,
