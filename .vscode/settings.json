@@ -1,0 +1,28 @@
+{
+    "python.analysis.extraPaths": [
+        "src"
+    ],
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    "mypy-type-checker.args": [
+        "--python-executable",
+        "${workspaceFolder}/.venv/Scripts/python.exe"
+    ],
+    "editor.rulers": [
+        88,
+        120
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "cSpell.words": [
+        "autopep",
+        "CSAM",
+        "doxxing",
+        "fanart",
+        "FANIC",
+        "fanicsite",
+        "lazi",
+        "PHOTOREAL",
+        "pyproject",
+        "pyupgrade",
+        "SUPERADMIN"
+    ]
+}

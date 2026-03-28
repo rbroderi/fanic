@@ -1,0 +1,28 @@
+name: autopep695
+
+on:
+  push:
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - ".github/workflows/autopep695.yml"
+  pull_request:
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - ".github/workflows/autopep695.yml"
+
+jobs:
+  autopep695:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run autopep695 check
+        run: uvx autopep695 check src tests
