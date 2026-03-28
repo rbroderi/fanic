@@ -159,7 +159,7 @@ Accessible at `/admin/*` for users with an admin role:
 
 ## Alpha Invite Gate
 
-When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite code before accessing any part of the site. Valid codes are set via `FANIC_ALPHA_INVITE_CODES` (comma-separated). Accepted users receive a signed cookie lasting `FANIC_ALPHA_INVITE_COOKIE_MAX_AGE` seconds (default 30 days).
+When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite code before accessing any part of the site. Valid codes are set via `FANIC_ALPHA_INVITE_CODES_CSV` (comma-separated). Accepted users receive a signed cookie lasting `FANIC_ALPHA_INVITE_COOKIE_MAX_AGE` seconds (default 30 days).
 
 ## API Surface
 
@@ -225,7 +225,7 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `FANIC_ENV` | `development` | `development` or `production` |
+| `FANIC_ENVIRONMENT` | `development` | `development` or `production` |
 | `FANIC_DATA_DIR` | `./data/` | Storage root for database, CBZ, works, and fanart |
 | `FANIC_REQUIRE_HTTPS` | `true` | Enforce HTTPS for form POSTs |
 | `FANIC_CSRF_PROTECT` | `true` | CSRF token validation |
@@ -279,7 +279,7 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 | `FANIC_THUMBNAIL_AVIF_QUALITY` | `30` | Thumbnail AVIF quality (1–100) |
 | `FANIC_IMAGE_AVIF_QUALITY` | `60` | Full-size page AVIF quality (1–100) |
 
-In development mode (`FANIC_ENV=development`), HTTPS and CSRF enforcement are disabled for local workflow compatibility.
+In development mode (`FANIC_ENVIRONMENT=development`), HTTPS and CSRF enforcement are disabled for local workflow compatibility.
 
 Generate a ready-to-paste admin password hash:
 
