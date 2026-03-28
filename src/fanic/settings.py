@@ -401,10 +401,7 @@ class FanicSettings(BaseSettings):
             if not self.auth0_logout_return_url.strip():
                 missing.append("FANIC_AUTH0_LOGOUT_RETURN_URL")
             if missing:
-                raise RuntimeError(
-                    "Auth0 is enabled but these settings are missing: "
-                    + ", ".join(missing)
-                )
+                raise RuntimeError("Auth0 is enabled but these settings are missing: " + ", ".join(missing))
 
     @property
     def session_secure_effective(self) -> bool:
@@ -436,11 +433,7 @@ class FanicSettings(BaseSettings):
 
     @property
     def allowed_cbz_content_types(self) -> set[str]:
-        return {
-            value.strip().lower()
-            for value in self.allowed_cbz_content_types_csv.split(",")
-            if value.strip()
-        }
+        return {value.strip().lower() for value in self.allowed_cbz_content_types_csv.split(",") if value.strip()}
 
     @property
     def allowed_page_extensions(self) -> set[str]:
@@ -456,19 +449,11 @@ class FanicSettings(BaseSettings):
 
     @property
     def allowed_page_content_types(self) -> set[str]:
-        return {
-            value.strip().lower()
-            for value in self.allowed_page_content_types_csv.split(",")
-            if value.strip()
-        }
+        return {value.strip().lower() for value in self.allowed_page_content_types_csv.split(",") if value.strip()}
 
     @property
     def alpha_invite_codes(self) -> set[str]:
-        return {
-            value.strip()
-            for value in self.alpha_invite_codes_csv.split(",")
-            if value.strip()
-        }
+        return {value.strip() for value in self.alpha_invite_codes_csv.split(",") if value.strip()}
 
     @property
     def auth0_enabled_effective(self) -> bool:

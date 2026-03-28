@@ -17,25 +17,20 @@ class LoginMessage:
 def _message_block(request: RequestLike) -> LoginMessage:
     msg = request.args.get("msg", "")
     retry_after = request.args.get("retry_after", "").strip()
+    username = current_user(request)
 
     match msg:
         case "invalid":
-            return LoginMessage(
-                "Invalid username or password. Please try again.", "error"
-            )
+            return LoginMessage("Invalid username or password. Please try again.", "error")
         case "success":
             user_text = username if username else "user"
             return LoginMessage(f"Success: logged in as {user_text}.", "success")
         case "logged_out":
             return LoginMessage("You have been logged out.", "info")
         case "csrf-invalid":
-            return LoginMessage(
-                "Invalid CSRF token. Please retry from the form page.", "error"
-            )
+            return LoginMessage("Invalid CSRF token. Please retry from the form page.", "error")
         case "https-required":
-            return LoginMessage(
-                "Secure HTTPS connection is required for login.", "error"
-            )
+            return LoginMessage("Secure HTTPS connection is required for login.", "error")
         case "locked":
             retry_value = retry_after if retry_after else "a few minutes"
             return LoginMessage(
@@ -43,17 +38,12 @@ def _message_block(request: RequestLike) -> LoginMessage:
                 "error",
             )
         case "auth-disabled":
-            return LoginMessage(
-                "Auth0 login is not enabled on this deployment.", "error"
-            )
+            return LoginMessage("Auth0 login is not enabled on this deployment.", "error")
         case "auth-failed":
             return LoginMessage("Authentication failed. Please try again.", "error")
         case "callback-invalid":
-            return LoginMessage(
-                "The login callback was invalid or expired. Please try again.", "error"
-            )
+            return LoginMessage("The login callback was invalid or expired. Please try again.", "error")
         case _:
-            username = current_user(request)
             if username:
                 return LoginMessage(f"Success: logged in as {username}.", "success")
             return LoginMessage("", "")

@@ -165,9 +165,7 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
 
     if DATA_ROOT.exists() and any(DATA_ROOT.iterdir()):
         if not force:
-            raise FileExistsError(
-                "Data directory is not empty. Re-run with force=True to overwrite it."
-            )
+            raise FileExistsError("Data directory is not empty. Re-run with force=True to overwrite it.")
         shutil.rmtree(DATA_ROOT)
 
     with tempfile.TemporaryDirectory(prefix="fanic-restore-") as tmp_dir:
@@ -177,8 +175,7 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
             _safe_extract_zip(archive, extract_root)
 
         has_runtime_payload = any(
-            name == "fanic.db" or name.startswith("cbz/") or name.startswith("works/")
-            for name in member_names
+            name == "fanic.db" or name.startswith("cbz/") or name.startswith("works/") for name in member_names
         )
         if not has_runtime_payload:
             raise ValueError("Backup archive does not contain FANIC runtime data")

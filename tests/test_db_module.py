@@ -14,9 +14,7 @@ def _table_exists_fn() -> Callable[[sqlite3.Connection, str], bool]:
 
 
 def _ensure_runtime_schema_fn() -> Callable[[sqlite3.Connection], None]:
-    return cast(
-        Callable[[sqlite3.Connection], None], getattr(db, "_ensure_runtime_schema")
-    )
+    return cast(Callable[[sqlite3.Connection], None], getattr(db, "_ensure_runtime_schema"))
 
 
 def test_managed_connection_closes_on_context_exit(
@@ -53,9 +51,7 @@ def test_ensure_runtime_schema_noops_without_users_table() -> None:
         connection.execute("CREATE TABLE user_preferences (username TEXT PRIMARY KEY)")
         ensure_runtime_schema(connection)
 
-        user_count = connection.execute(
-            "SELECT COUNT(*) FROM user_preferences"
-        ).fetchone()
+        user_count = connection.execute("SELECT COUNT(*) FROM user_preferences").fetchone()
         assert user_count is not None
         assert int(user_count[0]) == 0
     finally:
@@ -86,12 +82,7 @@ def test_ensure_runtime_schema_creates_auth_identity_table_and_indexes() -> None
         ).fetchone()
         assert identity_table is not None
 
-        index_names = {
-            str(row[1])
-            for row in connection.execute(
-                "PRAGMA index_list('auth_identities')"
-            ).fetchall()
-        }
+        index_names = {str(row[1]) for row in connection.execute("PRAGMA index_list('auth_identities')").fetchall()}
         assert "idx_auth_identities_username" in index_names
         assert "idx_auth_identities_email" in index_names
     finally:
@@ -105,9 +96,7 @@ def test_initialize_database_reset_recreates_database(
     data_root = tmp_path / "data"
     db_path = data_root / "fanic.sqlite3"
 
-    schema_path = (
-        Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
-    )
+    schema_path = Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
 
     monkeypatch.setattr(db, "DATA_ROOT", data_root)
     monkeypatch.setattr(db, "DB_PATH", db_path)
@@ -129,10 +118,7 @@ def test_initialize_database_reset_recreates_database(
     connection = sqlite3.connect(db_path)
     try:
         tables = {
-            str(row[0])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            str(row[0]) for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     finally:
         connection.close()
@@ -206,9 +192,7 @@ def test_restore_runtime_backup_requires_force_when_data_exists(
     (data_root / "existing.txt").write_text("existing", encoding="utf-8")
 
     backup_path = tmp_path / "restore-source.zip"
-    with zipfile.ZipFile(
-        backup_path, mode="w", compression=zipfile.ZIP_DEFLATED
-    ) as archive:
+    with zipfile.ZipFile(backup_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("fanic.db", "newdb")
 
     with pytest.raises(FileExistsError):
@@ -241,9 +225,7 @@ def test_restore_runtime_backup_replaces_runtime_data_when_forced(
     (cbz_dir / "old.cbz").write_text("old", encoding="utf-8")
 
     backup_path = tmp_path / "restore-source.zip"
-    with zipfile.ZipFile(
-        backup_path, mode="w", compression=zipfile.ZIP_DEFLATED
-    ) as archive:
+    with zipfile.ZipFile(backup_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("fanic.db", "new-db")
         archive.writestr("cbz/new.cbz", "new-cbz")
         archive.writestr("works/work-2/pages/001.jpg", "img")
