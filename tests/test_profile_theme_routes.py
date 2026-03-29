@@ -181,6 +181,9 @@ def test_profile_get_marks_custom_theme_checked(
         captured["mature_checked"] = replacements["__PROFILE_VIEW_MATURE_CHECKED_ATTR__"]
         captured["settings_hidden"] = replacements["__PROFILE_SETTINGS_HIDDEN_ATTR__"]
         captured["public_link_hidden"] = replacements["__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__"]
+        captured["public_href"] = replacements["__PROFILE_PUBLIC_HREF__"]
+        captured["immutable_public_link_hidden"] = replacements["__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__"]
+        captured["immutable_public_href"] = replacements["__PROFILE_IMMUTABLE_PUBLIC_HREF__"]
         captured["history_hidden"] = replacements["__PROFILE_HISTORY_HIDDEN_ATTR__"]
         captured["details"] = replacements["__PROFILE_DETAILS__"]
         response.status_code = 200
@@ -199,6 +202,9 @@ def test_profile_get_marks_custom_theme_checked(
     assert captured["mature_checked"] == "checked"
     assert captured["settings_hidden"] == ""
     assert captured["public_link_hidden"] == ""
+    assert captured["public_href"] == "/users/AliceDisplay"
+    assert captured["immutable_public_link_hidden"] == ""
+    assert captured["immutable_public_href"] == "/users/alice"
     assert captured["history_hidden"] == ""
     assert captured["details"] == "Display name: AliceDisplay"
 
