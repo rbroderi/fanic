@@ -22,6 +22,7 @@ import structlog
 from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 
+from fanic.cylinder_sites.site_layout import site_header_parts_for_template
 from fanic.ingest import ingest_cbz
 from fanic.repository import UserRole
 from fanic.repository import get_user_role
@@ -157,6 +158,16 @@ SITE_FOOTER_HTML = (
     "</div>"
     "</footer>"
 )
+
+SITE_HEAD_ASSETS_HTML = (
+    '<link rel="icon" href="/static/logo.png" type="image/png" />\n'
+    '    <link rel="preconnect" href="https://fonts.googleapis.com" />\n'
+    '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n'
+    '    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />\n'
+    '    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />\n'
+    '    <link rel="stylesheet" href="/static/styles.css" />'
+)
+SITE_COMMON_SCRIPTS_HTML = '<script src="/static/user-menu.js"></script>'
 
 THEME_VAR_ALLOWLIST = {
     "bg",
@@ -1050,13 +1061,84 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         if is_admin
         else ""
     )
+    login_hidden_attr = "hidden" if logged_in else ""
+    profile_hidden_attr = "" if logged_in else "hidden"
+    logout_hidden_attr = "" if logged_in else "hidden"
+    user_menu_panel_content = (
+        f'<p id="userMenuStatus" class="user-menu-status">'
+        f"{'Logged in as ' + escape(username) + '.' if logged_in and username else 'Not logged in.'}"
+        "</p>"
+        f'<a id="userMenuLogin" class="user-menu-link" href="/account/login" {login_hidden_attr}>Login</a>'
+        f'<a id="userMenuSignup" class="user-menu-link" href="https://fanic.media/account/auth0/signup" {login_hidden_attr}>Create an account</a>'
+        f'<a id="userMenuProfile" class="user-menu-link" href="/user/profile" {profile_hidden_attr}>Profile</a>'
+        "__USER_MENU_UPLOAD_LINK__"
+        f'<form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" {logout_hidden_attr}>'
+        '<button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>'
+        "</form>"
+    )
+    user_menu_html = (
+        '<div class="user-menu">'
+        '<button id="userMenuButton" class="user-menu-button" type="button" '
+        'aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" '
+        'title="User menu">'
+        '<i class="fa-solid fa-user" aria-hidden="true"></i>'
+        '<span class="sr-only">User menu</span>'
+        "</button>"
+        '<div id="userMenuPanel" class="user-menu-panel" hidden>'
+        f"{user_menu_panel_content}"
+        "</div>"
+        "</div>"
+    )
     return {
         "__USER_MENU_STATUS__": f"Logged in as {escape(username)}." if logged_in and username else "Not logged in.",
-        "__USER_MENU_LOGIN_HIDDEN_ATTR__": "hidden" if logged_in else "",
-        "__USER_MENU_PROFILE_HIDDEN_ATTR__": "" if logged_in else "hidden",
-        "__USER_MENU_LOGOUT_HIDDEN_ATTR__": "" if logged_in else "hidden",
+        "__USER_MENU_LOGIN_HIDDEN_ATTR__": login_hidden_attr,
+        "__USER_MENU_PROFILE_HIDDEN_ATTR__": profile_hidden_attr,
+        "__USER_MENU_LOGOUT_HIDDEN_ATTR__": logout_hidden_attr,
+        "__USER_MENU_PANEL_CONTENT__": user_menu_panel_content,
+        "__USER_MENU_HTML__": user_menu_html,
+        "__SITE_TAGLINE__": "Fan Archive Nexus for Illustrated Comics",
+        "__SITE_LOGO_HTML__": (
+            '<h1 class="site-title">'
+            '<a href="/" aria-label="FANIC home">'
+            '<img class="site-logo" src="/static/logo.png" alt="FANIC Logo" />'
+            "</a>"
+            "</h1>"
+        ),
+        "__USER_MENU_UPLOAD_LINK__": "",
         "__ADMIN_REPORTS_LINK__": admin_reports_link,
     }
+
+
+def _replace_markers(text: str, replacements: dict[str, str]) -> str:
+    resolved = text
+    for marker, value in replacements.items():
+        resolved = resolved.replace(marker, value)
+    return resolved
+
+
+def _site_header_html(template_name: str, replacements: dict[str, str]) -> str:
+    header_parts = site_header_parts_for_template(template_name)
+    resolved_nav_links = _replace_markers(header_parts.nav_links, replacements)
+    resolved_meta_html = _replace_markers(header_parts.meta_html, replacements)
+    resolved_extra_html = _replace_markers(header_parts.extra_html, replacements)
+    resolved_logo = _replace_markers(replacements.get("__SITE_LOGO_HTML__", ""), replacements)
+    resolved_user_menu = _replace_markers(replacements.get("__USER_MENU_HTML__", ""), replacements)
+
+    return (
+        '<header class="site-header">'
+        '<div class="site-header-row">'
+        f"{resolved_logo}"
+        f"{resolved_meta_html}"
+        '<div class="header-actions">'
+        '<nav class="site-nav" aria-label="Primary">'
+        f"{resolved_nav_links}"
+        "</nav>"
+        f"{resolved_user_menu}"
+        "</div>"
+        f"{resolved_extra_html}"
+        "</div>"
+        "</header>"
+    )
 
 
 def _theme_value_is_safe(value: str) -> bool:
@@ -1157,6 +1239,9 @@ def render_html_template(
     merged = user_menu_replacements(request)
     if replacements:
         merged.update(replacements)
+    merged["__SITE_HEAD_ASSETS__"] = SITE_HEAD_ASSETS_HTML
+    merged["__SITE_HEADER_HTML__"] = _site_header_html(template_name, merged)
+    merged["__SITE_COMMON_SCRIPTS__"] = SITE_COMMON_SCRIPTS_HTML
 
     for marker, value in merged.items():
         html = html.replace(marker, value)

@@ -118,3 +118,21 @@ health:
 [unix]
 health:
     nginx_port=8080; wsgi_port=8000; if command -v nginx >/dev/null 2>&1; then nginx_installed=true; else nginx_installed=false; fi; if pgrep -x nginx >/dev/null 2>&1; then nginx_process=true; else nginx_process=false; fi; if ss -ltn "( sport = :${nginx_port} )" 2>/dev/null | grep -q LISTEN; then nginx_listening=true; else nginx_listening=false; fi; if ss -ltn "( sport = :${wsgi_port} )" 2>/dev/null | grep -q LISTEN; then wsgi_listening=true; else wsgi_listening=false; fi; if curl -fsS "http://127.0.0.1:${nginx_port}/" >/dev/null 2>&1; then nginx_http=ok; else nginx_http=down; fi; if curl -fsS "http://127.0.0.1:${wsgi_port}/" >/dev/null 2>&1; then wsgi_http=ok; else wsgi_http=down; fi; echo "nginx installed : ${nginx_installed}"; echo "nginx process   : ${nginx_process}"; echo "nginx listening : ${nginx_listening} (127.0.0.1:${nginx_port})"; echo "nginx http      : ${nginx_http}"; echo "wsgi listening  : ${wsgi_listening} (127.0.0.1:${wsgi_port})"; echo "wsgi http       : ${wsgi_http}"
+
+# Stop the WSGI app (fanic systemd service) if running.
+[windows]
+stop:
+    echo "stop is only supported on Linux systemd deployments"; exit 1
+
+[unix]
+stop:
+    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; if ! sudo systemctl is-active --quiet fanic; then echo "fanic.service is not running"; exit 0; fi; sudo systemctl stop fanic
+
+# Restart the WSGI app (fanic systemd service).
+[windows]
+restart:
+    echo "restart is only supported on Linux systemd deployments"; exit 1
+
+[unix]
+restart:
+    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; sudo systemctl daemon-reload; sudo systemctl restart fanic

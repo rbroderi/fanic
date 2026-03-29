@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FANIC FAQ</title>
     <meta name="description" content="Frequently asked questions about FANIC." />
-    <link rel="icon" href="/static/logo.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-    <link rel="stylesheet" href="/static/styles.css" />
+    __SITE_HEAD_ASSETS__
     <style>
       .faq-shell {
         max-width: 980px;
@@ -43,33 +38,7 @@
     </style>
   </head>
   <body>
-    <header class="site-header">
-      <div class="site-header-row">
-        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
-        <p class="profile-meta">Fan Archive Nexus for Illustrated Comics</p>
-        <div class="header-actions">
-          <nav class="site-nav" aria-label="Primary">
-            __ADMIN_REPORTS_LINK__
-            <a href="/cbz-format">CBZ SPEC INFO</a>
-            <a href="/faq" aria-current="page">FAQ</a>
-          </nav>
-          <div class="user-menu">
-            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
-              <i class="fa-solid fa-user" aria-hidden="true"></i>
-              <span class="sr-only">User menu</span>
-            </button>
-            <div id="userMenuPanel" class="user-menu-panel" hidden>
-              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
-                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
+    __SITE_HEADER_HTML__
 
     <main class="layout faq-shell">
       <section class="card">
@@ -112,7 +81,7 @@
       </section>
     </main>
 
-    <script src="/static/user-menu.js"></script>
+    __SITE_COMMON_SCRIPTS__
   </body>
 </html>
 
