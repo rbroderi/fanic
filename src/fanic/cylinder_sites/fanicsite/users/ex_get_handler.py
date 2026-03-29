@@ -13,6 +13,7 @@ from fanic.repository import UserBookmarkRow
 from fanic.repository import WorkListItem
 from fanic.repository import can_view_work
 from fanic.repository import get_local_user
+from fanic.repository import get_local_user_by_display_name
 from fanic.repository import list_fanart_items_by_uploader
 from fanic.repository import list_user_bookmarks
 from fanic.repository import list_works_by_uploader
@@ -73,13 +74,19 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if tail is None or len(tail) != 1:
         return text_error(response, "Not found", 404)
 
-    profile_username = tail[0].strip()
-    if not profile_username:
+    profile_key = tail[0].strip()
+    if not profile_key:
         return text_error(response, "Not found", 404)
 
     viewer = current_user(request)
-    local_user = get_local_user(profile_username)
-    profile_display_name = local_user["display_name"] if local_user is not None else profile_username
+    local_user = get_local_user(profile_key)
+    if local_user is None:
+        local_user = get_local_user_by_display_name(profile_key)
+    if local_user is None:
+        return text_error(response, "Not found", 404)
+
+    profile_username = local_user["username"]
+    profile_display_name = local_user["display_name"]
     uploaded = [work for work in list_works_by_uploader(profile_username) if can_view_work(viewer, work)]
     raw_bookmarks = list_user_bookmarks(profile_username)
     fanart_items = list_fanart_items_by_uploader(profile_username, limit=30)

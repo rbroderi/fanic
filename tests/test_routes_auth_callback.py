@@ -118,4 +118,4 @@ def test_auth_callback_success_uses_session_token_for_userinfo(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/"
+    assert result.headers["Location"] == "/user/profile"

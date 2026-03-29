@@ -364,6 +364,36 @@ def get_local_user(username: str) -> LocalUserRow | None:
     }
 
 
+def get_local_user_by_display_name(display_name: str) -> LocalUserRow | None:
+    normalized_display_name = display_name.strip().lower()
+    if not normalized_display_name:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT username, display_name, email, is_over_18, age_gate_completed, role, active, created_at
+            FROM users
+            WHERE lower(display_name) = ?
+            """,
+            (normalized_display_name,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "username": str(row["username"]),
+        "display_name": str(row["display_name"]),
+        "email": str(row["email"]) if row["email"] is not None else None,
+        "is_over_18": None if row["is_over_18"] is None else bool(int(row["is_over_18"])),
+        "age_gate_completed": bool(int(row["age_gate_completed"])),
+        "role": _normalize_user_role(row["role"]),
+        "active": bool(int(row["active"])),
+        "created_at": str(row["created_at"]),
+    }
+
+
 def _username_exists(username: str) -> bool:
     with get_connection() as connection:
         row = connection.execute(
@@ -697,7 +727,7 @@ def update_user_onboarding(
                 is_over_18 = ?,
                 age_gate_completed = 1
             WHERE username = ?
-                            AND age_gate_completed = 0
+                            AND (age_gate_completed = 0 OR is_over_18 IS NULL)
             """,
             (
                 normalized_display_name,
