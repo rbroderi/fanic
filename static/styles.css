@@ -622,6 +622,67 @@ a {
   height: 0.85rem;
 }
 
+#ingestHistoryList {
+  list-style: none;
+  margin: 0.5rem 0 0.8rem;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ingest-history-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 0.5rem 0.65rem;
+}
+
+.ingest-history-item p {
+  margin: 0;
+}
+
+.ingest-history-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.2rem;
+}
+
+.ingest-history-badge {
+  display: inline-block;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+  padding: 0.22rem 0.48rem;
+}
+
+.ingest-history-badge--queued {
+  color: #8a5a00;
+  background: #fff4d7;
+  border-color: #e9d4a4;
+}
+
+.ingest-history-badge--running {
+  color: #1f4f8f;
+  background: #e6f0ff;
+  border-color: #b8ccee;
+}
+
+.ingest-history-badge--done {
+  color: #1c6a35;
+  background: #e5f6ea;
+  border-color: #b8e2c6;
+}
+
+.ingest-history-badge--failed {
+  color: #8b1e1e;
+  background: #fdeaea;
+  border-color: #efc0c0;
+}
+
 .upload-form button {
   background: var(--accent);
   color: #fff;

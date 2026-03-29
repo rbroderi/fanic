@@ -116,7 +116,6 @@ class FanicSettings(BaseSettings):
 
     # Session, invite gate, and local admin bootstrap
     admin_password_hash: str
-    admin_username: str
     alpha_invite_codes_csv: str
     alpha_invite_cookie_max_age: int
     alpha_invite_gate_enabled: bool

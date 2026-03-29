@@ -205,7 +205,13 @@ server {
         access_log off;
     }
 
-    location /fanart/ {
+    location /fanart/images/ {
+      alias ${FANART_DIR}/;
+      try_files \$uri =404;
+      access_log off;
+    }
+
+    location /fanart/thumbs/ {
         alias ${FANART_DIR}/;
         try_files \$uri =404;
         access_log off;

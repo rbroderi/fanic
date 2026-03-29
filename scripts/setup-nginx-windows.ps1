@@ -187,7 +187,13 @@ http {
             access_log off;
         }
 
-        location /fanart/ {
+        location /fanart/images/ {
+            alias $fanartPathNginx/;
+            try_files `$uri =404;
+            access_log off;
+        }
+
+        location /fanart/thumbs/ {
             alias $fanartPathNginx/;
             try_files `$uri =404;
             access_log off;

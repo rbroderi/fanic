@@ -4,6 +4,10 @@
   const progressWrap = document.getElementById("uploadProgressWrap");
   const progressBar = document.getElementById("uploadProgressBar");
   const progressText = document.getElementById("uploadProgressText");
+  const tokenInput = form.querySelector("input[name='upload_token']");
+  const historySection = document.getElementById("ingestHistorySection");
+  const historyList = document.getElementById("ingestHistoryList");
+  const clearHistoryButton = document.getElementById("clearIngestHistoryButton");
 
   if (!form || !cbzInput || !progressWrap || !progressBar || !progressText) {
     return;
@@ -17,6 +21,10 @@
   let processingStep = 0;
   let processingStartedAt = 0;
   let pollTimer = null;
+  let historyPollTimer = null;
+
+  const HISTORY_STORAGE_KEY = "fanic.comic_ingest_history.v1";
+  const MAX_HISTORY_ITEMS = 8;
 
   const PROCESSING_MESSAGES = [
     "Upload complete. Unpacking CBZ...",
@@ -65,6 +73,171 @@
     }
   }
 
+  function loadHistory() {
+    if (!window.localStorage) {
+      return [];
+    }
+    try {
+      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(history) {
+    if (!window.localStorage) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    } catch {
+      // Ignore local storage failures.
+    }
+  }
+
+  function upsertHistoryItem(entry) {
+    const token = String(entry.token || "");
+    if (!token) {
+      return;
+    }
+
+    const history = loadHistory();
+    const next = [entry];
+    for (const item of history) {
+      if (!item || item.token === token) {
+        continue;
+      }
+      next.push(item);
+      if (next.length >= MAX_HISTORY_ITEMS) {
+        break;
+      }
+    }
+    saveHistory(next);
+    renderHistory(next);
+  }
+
+  function renderHistory(historyArg) {
+    if (!historySection || !historyList) {
+      return;
+    }
+
+    const history = historyArg || loadHistory();
+    historyList.innerHTML = "";
+    historySection.hidden = history.length === 0;
+    if (history.length === 0) {
+      return;
+    }
+
+    for (const item of history) {
+      const token = String(item.token || "");
+      const stage = String(item.stage || "queued");
+      const message = String(item.message || "Waiting for status...");
+      const done = Boolean(item.done);
+      const ok = Boolean(item.ok);
+      const shortToken = token.length > 12 ? `${token.slice(0, 12)}...` : token;
+      let badgeVariant = "queued";
+      if (done) {
+        badgeVariant = ok ? "done" : "failed";
+      } else if (stage === "queued") {
+        badgeVariant = "queued";
+      } else {
+        badgeVariant = "running";
+      }
+
+      const listItem = document.createElement("li");
+      listItem.className = "ingest-history-item";
+      const line = document.createElement("p");
+      line.className = "profile-meta ingest-history-line";
+
+      const badge = document.createElement("span");
+      badge.className = `ingest-history-badge ingest-history-badge--${badgeVariant}`;
+      badge.textContent = done ? (ok ? "complete" : "failed") : stage;
+      line.appendChild(badge);
+
+      const tokenLabel = document.createElement("span");
+      tokenLabel.textContent = shortToken;
+      line.appendChild(tokenLabel);
+
+      listItem.appendChild(line);
+
+      const detail = document.createElement("p");
+      detail.className = "profile-meta";
+      detail.textContent = message;
+      listItem.appendChild(detail);
+
+      const redirectTo = String(item.redirect_to || "");
+      if (done && ok && redirectTo) {
+        const link = document.createElement("a");
+        link.href = redirectTo;
+        link.textContent = "Open imported comic";
+        listItem.appendChild(link);
+      }
+
+      historyList.appendChild(listItem);
+    }
+  }
+
+  function updateHistoryFromProgress(token, progress) {
+    const previous = loadHistory().find((entry) => entry && entry.token === token);
+    const entry = {
+      token,
+      stage: String(progress.stage || ""),
+      message: String(progress.message || ""),
+      done: Boolean(progress.done),
+      ok: Boolean(progress.ok),
+      redirect_to: String(progress.redirect_to || ""),
+      updated_at: Number(progress.updated_at || Date.now() / 1000),
+      created_at: previous && previous.created_at ? previous.created_at : Date.now(),
+    };
+    upsertHistoryItem(entry);
+  }
+
+  function fetchProgress(token) {
+    const url = `/api/comic-ingest/progress?token=${encodeURIComponent(token)}`;
+    return window
+      .fetch(url, { method: "GET", cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!data || !data.progress) {
+          return null;
+        }
+        return data.progress;
+      })
+      .catch(() => null);
+  }
+
+  function refreshHistoryStatuses() {
+    const history = loadHistory();
+    const activeTokens = history
+      .filter((entry) => entry && entry.token && !entry.done)
+      .map((entry) => String(entry.token));
+    if (activeTokens.length === 0) {
+      return;
+    }
+
+    Promise.all(
+      activeTokens.map((token) =>
+        fetchProgress(token).then((progress) => {
+          if (progress) {
+            updateHistoryFromProgress(token, progress);
+          }
+        }),
+      ),
+    ).then(() => {
+      renderHistory();
+    });
+  }
+
   function buildToken() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
       return window.crypto.randomUUID();
@@ -79,21 +252,13 @@
     }
 
     const poll = () => {
-      const url = `/api/comic-ingest/progress?token=${encodeURIComponent(token)}`;
-      window
-        .fetch(url, { method: "GET", cache: "no-store" })
-        .then((response) => {
-          if (!response.ok) {
-            return null;
-          }
-          return response.json();
-        })
-        .then((data) => {
-          if (!data || !data.progress) {
+      fetchProgress(token)
+        .then((progress) => {
+          if (!progress) {
             return;
           }
 
-          const progress = data.progress;
+          updateHistoryFromProgress(token, progress);
           const current = Number(progress.current || 0);
           const total = Number(progress.total || 0);
           const stage = String(progress.stage || "").toLowerCase();
@@ -114,6 +279,21 @@
 
           if (progress.done) {
             stopProgressPolling();
+            stopProcessingTimer();
+
+            if (progress.ok) {
+              progressBar.value = 100;
+              progressBar.max = 100;
+              progressText.textContent = "Import complete.";
+              const redirectTo = String(progress.redirect_to || "");
+              if (redirectTo) {
+                progressText.textContent = "Import complete. Redirecting...";
+                window.location.assign(redirectTo);
+                return;
+              }
+            }
+
+            setButtonsDisabled(false);
           }
         })
         .catch(() => {
@@ -156,6 +336,21 @@
     const data = new FormData(form);
     const uploadToken = buildToken();
     data.set("upload_token", uploadToken);
+    if (tokenInput) {
+      tokenInput.value = uploadToken;
+    }
+
+    upsertHistoryItem({
+      token: uploadToken,
+      stage: "queued",
+      message: "Upload started",
+      done: false,
+      ok: false,
+      redirect_to: "",
+      created_at: Date.now(),
+      updated_at: Date.now() / 1000,
+    });
+
     if (submitter && submitter.name) {
       data.set(submitter.name, submitter.value);
     }
@@ -219,4 +414,32 @@
 
     xhr.send(data);
   });
+
+  if (clearHistoryButton) {
+    clearHistoryButton.addEventListener("click", () => {
+      saveHistory([]);
+      renderHistory([]);
+    });
+  }
+
+  renderHistory();
+  historyPollTimer = window.setInterval(refreshHistoryStatuses, 4000);
+
+  const existingToken = tokenInput && tokenInput.value ? tokenInput.value.trim() : "";
+  if (existingToken) {
+    upsertHistoryItem({
+      token: existingToken,
+      stage: "queued",
+      message: "Resuming existing upload",
+      done: false,
+      ok: false,
+      redirect_to: "",
+      created_at: Date.now(),
+      updated_at: Date.now() / 1000,
+    });
+    showProgress();
+    setButtonsDisabled(true);
+    startProcessingTimer();
+    startProgressPolling(existingToken);
+  }
 })();
