@@ -2590,8 +2590,8 @@ def get_manifest(work_id: str) -> dict[str, object] | None:
         manifest_pages.append(
             {
                 "index": int(page["page_index"]),
-                "image_url": f"/works/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}",
-                "thumb_url": f"/works/{quote(work_id, safe='')}/thumbs/{quote(thumb_filename, safe='/')}",
+                "image_url": f"/comic/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}",
+                "thumb_url": f"/comic/{quote(work_id, safe='')}/thumbs/{quote(thumb_filename, safe='/')}",
                 "width": page["width"],
                 "height": page["height"],
             }

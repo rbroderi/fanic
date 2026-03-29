@@ -419,7 +419,7 @@ def test_create_app_redirects_underage_user_to_profile(
     response_chunks = list(
         app(
             {
-                "PATH_INFO": "/works/work-1",
+                "PATH_INFO": "/comic/work-1",
                 "REQUEST_METHOD": "GET",
                 "HTTP_COOKIE": f"{SESSION_COOKIE_NAME}=session-token",
             },

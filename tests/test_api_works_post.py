@@ -20,7 +20,7 @@ def test_api_works_post_bookmark_persists_for_logged_in_user(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/api/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/api/comic.ex.post.py",
         "fanicsite_api_works_ex_post_bookmark_test",
     )
 
@@ -42,7 +42,7 @@ def test_api_works_post_bookmark_persists_for_logged_in_user(
     monkeypatch.setattr(module, "upsert_user_bookmark", fake_upsert_user_bookmark)
 
     request = dummy_request(
-        path="/api/works/work-123/bookmark",
+        path="/api/comic/work-123/bookmark",
         method="POST",
         form={
             "user_id": "alice",
@@ -66,12 +66,12 @@ def test_api_works_post_bookmark_requires_authentication(
     dummy_response: Callable[[], ResponseLike],
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/api/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/api/comic.ex.post.py",
         "fanicsite_api_works_ex_post_bookmark_auth_test",
     )
 
     request = dummy_request(
-        path="/api/works/work-123/bookmark",
+        path="/api/comic/work-123/bookmark",
         method="POST",
         form={
             "user_id": "anon",

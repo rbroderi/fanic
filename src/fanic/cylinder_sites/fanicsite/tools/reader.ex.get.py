@@ -44,8 +44,8 @@ def _reader_pages_from_version_manifest(
         thumb_filename = str(page.get("thumb_filename", "")).strip()
         if image_filename:
             thumb_name = thumb_filename if thumb_filename else image_filename
-            image_url = media_url(f"/works/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}")
-            thumb_url = media_url(f"/works/{quote(work_id, safe='')}/thumbs/{quote(thumb_name, safe='/')}")
+            image_url = media_url(f"/comic/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}")
+            thumb_url = media_url(f"/comic/{quote(work_id, safe='')}/thumbs/{quote(thumb_name, safe='/')}")
         else:
             image_url = media_url(str(page.get("image_url", "")).strip())
             thumb_url = media_url(str(page.get("thumb_url", "")).strip())
@@ -85,7 +85,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     manifest: dict[str, object] | None
     reader_pages: list[dict[str, object]]
     chapters: object
-    work_href = f"/works/{work_id}"
+    work_href = f"/comic/{work_id}"
     if version_id:
         version_manifest = get_work_version_manifest(work_id, version_id)
         if version_manifest is None:
@@ -96,7 +96,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             version_manifest,
         )
         chapters = version_manifest.get("chapters", [])
-        work_href = f"/works/{work_id}/versions/{version_id}"
+        work_href = f"/comic/{work_id}/versions/{version_id}"
     else:
         manifest = get_manifest(work_id)
         if manifest is None:
@@ -151,7 +151,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__READER_REPORT_TITLE__": "Report this work",
             "__READER_REPORT_WORK_ID__": escape(work_id),
             "__READER_REPORT_WORK_TITLE__": escape(manifest_title),
-            "__READER_REPORT_CLAIMED_URL__": f"/works/{escape(work_id)}",
+            "__READER_REPORT_CLAIMED_URL__": f"/comic/{escape(work_id)}",
             "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
             "__READER_BOOKMARK_HIDDEN_ATTR__": "",
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,

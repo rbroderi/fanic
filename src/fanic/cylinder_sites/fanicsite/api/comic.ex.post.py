@@ -7,7 +7,7 @@ from fanic.repository import upsert_user_bookmark
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["api", "works"])
+    tail = route_tail(request, ["api", "comic"])
     if tail is None or len(tail) != 2:
         return json_response(response, {"detail": "Not found"}, 404)
 

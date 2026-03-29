@@ -18,7 +18,7 @@ from fanic.cylinder_sites.common import validate_cbz_upload_policy
 from fanic.cylinder_sites.common import validate_csrf
 from fanic.cylinder_sites.common import validate_page_upload_policy
 from fanic.cylinder_sites.common import validate_saved_upload_size
-from fanic.cylinder_sites.ingest_page import render_ingest_page
+from fanic.cylinder_sites.fanicsite.comic.upload_page import render_upload_page
 from fanic.ingest import ModerationBlockedError
 from fanic.ingest import editor_add_chapter
 from fanic.ingest import editor_delete_chapter
@@ -118,14 +118,14 @@ def _render_editor_result(
     response: ResponseLike,
     editor_state: dict[str, str],
     *,
-    ingest_status: str,
-    ingest_status_kind: str,
+    upload_status_text: str,
+    upload_status_kind: str,
     result_payload: dict[str, object] | None = None,
 ) -> ResponseLike:
     work_id = editor_state.get("editor_work_id", "")
     pages = list_work_page_rows(work_id) if work_id else []
     chapters = list_work_chapters(work_id) if work_id else []
-    return render_ingest_page(
+    return render_upload_page(
         request,
         response,
         editor_work_id=work_id,
@@ -136,15 +136,15 @@ def _render_editor_result(
         editor_language=editor_state.get("editor_language", "en"),
         editor_pages=pages,
         editor_chapters=chapters,
-        ingest_status=ingest_status,
-        ingest_status_kind=ingest_status_kind,
+        upload_status_text=upload_status_text,
+        upload_status_kind=upload_status_kind,
         result_payload=result_payload,
     )
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     _ = request_id(request, response)
-    if request.path != "/ingest":
+    if request.path != "/comic/upload":
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):
@@ -155,11 +155,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     username = current_user(request)
     if username is None:
-        return render_ingest_page(
+        return render_upload_page(
             request,
             response,
-            ingest_status="Login required before uploads.",
-            ingest_status_kind="error",
+            upload_status_text="Login required before uploads.",
+            upload_status_kind="error",
         )
 
     action = request.form.get("action", "").strip()
@@ -177,28 +177,28 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     if action in {"load-metadata", "ingest"}:
         if not terms_accepted:
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status="You must agree to the Terms and Conditions before uploading.",
-                ingest_status_kind="error",
+                upload_status_text="You must agree to the Terms and Conditions before uploading.",
+                upload_status_kind="error",
             )
 
         if cbz_upload is None:
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status="Please choose a CBZ file first.",
-                ingest_status_kind="error",
+                upload_status_text="Please choose a CBZ file first.",
+                upload_status_kind="error",
             )
 
         cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
         if cbz_policy_error:
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status=cbz_policy_error,
-                ingest_status_kind="error",
+                upload_status_text=cbz_policy_error,
+                upload_status_kind="error",
             )
 
         started_upload_session = False
@@ -217,11 +217,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 if limit_code == "upload_rate_limited"
                 else "Too many concurrent uploads. Please wait for active uploads to finish."
             )
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status=message,
-                ingest_status_kind="error",
+                upload_status_text=message,
+                upload_status_kind="error",
             )
 
         try:
@@ -244,11 +244,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "CBZ upload",
                 )
                 if cbz_size_error:
-                    return render_ingest_page(
+                    return render_upload_page(
                         request,
                         response,
-                        ingest_status=cbz_size_error,
-                        ingest_status_kind="error",
+                        upload_status_text=cbz_size_error,
+                        upload_status_kind="error",
                     )
                 if metadata:
                     override_path = Path(temp_dir) / "metadata.json"
@@ -307,8 +307,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="CBZ imported into editor draft. Review pages, reorder, and finalize using the editor workflow.",
-                ingest_status_kind="success",
+                upload_status_text="CBZ imported into editor draft. Review pages, reorder, and finalize using the editor workflow.",
+                upload_status_kind="success",
                 result_payload={
                     "ok": True,
                     "mode": "editor",
@@ -333,11 +333,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
             source_member = str(moderation.get("source_member", "") if moderation.get("source_member", "") else "")
             source_suffix = f" ({source_member})" if source_member else ""
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status=(f"CBZ import blocked by moderation policy{source_suffix}."),
-                ingest_status_kind="error",
+                upload_status_text=(f"CBZ import blocked by moderation policy{source_suffix}."),
+                upload_status_kind="error",
                 result_payload={
                     "ok": False,
                     "mode": "editor",
@@ -378,15 +378,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     done=True,
                     ok=False,
                 )
-            return render_ingest_page(
+            return render_upload_page(
                 request,
                 response,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="CBZ import failed [ingest_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
         finally:
             if started_upload_session:
@@ -401,8 +401,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="You must agree to the Terms and Conditions before uploading.",
-                ingest_status_kind="error",
+                upload_status_text="You must agree to the Terms and Conditions before uploading.",
+                upload_status_kind="error",
             )
 
         if page_upload is None:
@@ -410,8 +410,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Choose an image page before uploading.",
-                ingest_status_kind="error",
+                upload_status_text="Choose an image page before uploading.",
+                upload_status_kind="error",
             )
 
         page_policy_error = validate_page_upload_policy(page_upload)
@@ -420,8 +420,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=page_policy_error,
-                ingest_status_kind="error",
+                upload_status_text=page_policy_error,
+                upload_status_kind="error",
             )
 
         started_upload_session = False
@@ -436,8 +436,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=message,
-                ingest_status_kind="error",
+                upload_status_text=message,
+                upload_status_kind="error",
             )
 
         editor_metadata: dict[str, object] = {
@@ -463,8 +463,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         request,
                         response,
                         editor_state,
-                        ingest_status=page_size_error,
-                        ingest_status_kind="error",
+                        upload_status_text=page_size_error,
+                        upload_status_kind="error",
                     )
                 result = ingest_editor_page(
                     image_path=page_path,
@@ -479,7 +479,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=(
+                upload_status_text=(
                     "Page uploaded to comic draft."
                     if not bool(result.get("rating_auto_elevated"))
                     else (
@@ -487,7 +487,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         f"{result.get('rating_before')} to {result.get('rating_after')} based on moderation."
                     )
                 ),
-                ingest_status_kind="success",
+                upload_status_kind="success",
                 result_payload={
                     "ok": True,
                     "mode": "editor",
@@ -506,8 +506,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Editor upload blocked by moderation policy.",
-                ingest_status_kind="error",
+                upload_status_text="Editor upload blocked by moderation policy.",
+                upload_status_kind="error",
                 result_payload={
                     "ok": False,
                     "mode": "editor",
@@ -543,12 +543,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Editor upload failed [editor_add_page_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
         finally:
             if started_upload_session:
@@ -561,8 +561,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Choose an image to replace the page.",
-                ingest_status_kind="error",
+                upload_status_text="Choose an image to replace the page.",
+                upload_status_kind="error",
             )
 
         page_policy_error = validate_page_upload_policy(page_upload)
@@ -571,8 +571,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=page_policy_error,
-                ingest_status_kind="error",
+                upload_status_text=page_policy_error,
+                upload_status_kind="error",
             )
 
         started_upload_session = False
@@ -587,8 +587,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=message,
-                ingest_status_kind="error",
+                upload_status_text=message,
+                upload_status_kind="error",
             )
 
         try:
@@ -607,8 +607,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         request,
                         response,
                         editor_state,
-                        ingest_status=page_size_error,
-                        ingest_status_kind="error",
+                        upload_status_text=page_size_error,
+                        upload_status_kind="error",
                     )
                 result = editor_replace_page_image(
                     image_path=page_path,
@@ -620,7 +620,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=(
+                upload_status_text=(
                     "Page replaced."
                     if not bool(result.get("rating_auto_elevated"))
                     else (
@@ -628,7 +628,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         f"{result.get('rating_before')} to {result.get('rating_after')} based on moderation."
                     )
                 ),
-                ingest_status_kind="success",
+                upload_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except ModerationBlockedError as exc:
@@ -642,8 +642,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Replace blocked by moderation policy.",
-                ingest_status_kind="error",
+                upload_status_text="Replace blocked by moderation policy.",
+                upload_status_kind="error",
                 result_payload={
                     "ok": False,
                     "mode": "editor",
@@ -679,12 +679,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Replace failed [editor_replace_page_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
         finally:
             if started_upload_session:
@@ -703,8 +703,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Page deleted.",
-                ingest_status_kind="success",
+                upload_status_text="Page deleted.",
+                upload_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
@@ -718,12 +718,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Delete failed [editor_delete_page_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
     if action == "editor-move-page":
@@ -741,8 +741,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Page reordered.",
-                ingest_status_kind="success",
+                upload_status_text="Page reordered.",
+                upload_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
@@ -756,12 +756,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Reorder failed [editor_move_page_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
     if action == "editor-reorder-gallery":
@@ -791,8 +791,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Gallery order saved. Page order and chapter assignments updated.",
-                ingest_status_kind="success",
+                upload_status_text="Gallery order saved. Page order and chapter assignments updated.",
+                upload_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
@@ -806,12 +806,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Reorder failed [editor_reorder_gallery_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
     if action == "editor-add-chapter":
@@ -835,8 +835,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Chapter added.",
-                ingest_status_kind="success",
+                upload_status_text="Chapter added.",
+                upload_status_kind="success",
                 result_payload={"ok": True, "mode": "editor", "result": result},
             )
         except Exception as exc:
@@ -850,12 +850,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Add chapter failed [editor_add_chapter_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
     if action == "editor-delete-chapter":
@@ -873,8 +873,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Chapter deleted.",
-                ingest_status_kind="success",
+                upload_status_text="Chapter deleted.",
+                upload_status_kind="success",
             )
         except Exception as exc:
             log_exception(
@@ -887,12 +887,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Delete chapter failed [editor_delete_chapter_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
     if action == "editor-update-chapter":
@@ -920,8 +920,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status="Chapter updated.",
-                ingest_status_kind="success",
+                upload_status_text="Chapter updated.",
+                upload_status_kind="success",
             )
         except Exception as exc:
             log_exception(
@@ -934,12 +934,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 request,
                 response,
                 editor_state,
-                ingest_status=admin_aware_detail(
+                upload_status_text=admin_aware_detail(
                     request,
                     public_detail="Update chapter failed [editor_update_chapter_failed].",
                     exc=exc,
                 ),
-                ingest_status_kind="error",
+                upload_status_kind="error",
             )
 
-    return render_ingest_page(request, response)
+    return render_upload_page(request, response)

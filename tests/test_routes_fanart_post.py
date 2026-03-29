@@ -74,8 +74,8 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
     monkeypatch: Any,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
-        "fanicsite_fanart_ex_post_upload_moderation_test",
+        "src/fanic/cylinder_sites/fanicsite/fanart/upload.ex.post.py",
+        "fanicsite_fanart_upload_ex_post_upload_moderation_test",
     )
 
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)

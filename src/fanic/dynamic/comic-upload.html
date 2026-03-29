@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FANIC Ingest and Update</title>
+    <title>FANIC Comic Upload and Editor</title>
     __SITE_HEAD_ASSETS__
   </head>
   <body>
@@ -24,7 +24,7 @@
 
       <section id="uploadCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
         <h3>Import CBZ Into Editor</h3>
-        <form id="ingestForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
+        <form id="ingestForm" class="upload-form" enctype="multipart/form-data" method="post" action="__INGEST_FORM_ACTION__">
           <input name="upload_token" type="hidden" value="__UPLOAD_TOKEN__" />
           <label for="cbzFile">Comic Archive (.cbz)</label>
           <input id="cbzFile" name="cbz" type="file" accept=".cbz" />
@@ -104,7 +104,7 @@
       <section id="editorCard" class="card info-card" __UPLOAD_HIDDEN_ATTR__>
         <h3>Build Comic In Editor Mode</h3>
         <p>Upload pages, reorder by drag and drop, and organize chapter groups like the edit metadata workflow.</p>
-        <form id="editorForm" class="upload-form" enctype="multipart/form-data" method="post" action="/ingest">
+        <form id="editorForm" class="upload-form" enctype="multipart/form-data" method="post" action="__INGEST_FORM_ACTION__">
           <input name="action" type="hidden" value="editor-add-page" />
           <input name="editor_work_id" type="hidden" value="__EDITOR_WORK_ID__" />
 
@@ -157,7 +157,7 @@
             <p id="selectedPageLabel" class="profile-meta">No page selected.</p>
             <p id="galleryDirtyBadge" class="status-text warning" hidden>Unsaved gallery order changes. Save gallery order before replacing or deleting pages.</p>
 
-            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="__INGEST_FORM_ACTION__">
               <input type="hidden" name="action" value="editor-add-page" />
               <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
               <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
@@ -171,7 +171,7 @@
               <button type="submit">Insert page</button>
             </form>
 
-            <form class="upload-form" method="post" enctype="multipart/form-data" action="/ingest">
+            <form class="upload-form" method="post" enctype="multipart/form-data" action="__INGEST_FORM_ACTION__">
               <input type="hidden" name="action" value="editor-replace-page" />
               <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
               <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
@@ -185,7 +185,7 @@
               <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
             </form>
 
-            <form class="upload-form" method="post" action="/ingest" onsubmit="return confirm('Delete selected page?');">
+            <form class="upload-form" method="post" action="__INGEST_FORM_ACTION__" onsubmit="return confirm('Delete selected page?');">
               <input type="hidden" name="action" value="editor-delete-page" />
               <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
               <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
@@ -197,7 +197,7 @@
               <button id="deleteSelectedButton" type="submit" class="button-muted" disabled>Delete selected page</button>
             </form>
 
-            <form class="upload-form" method="post" action="/ingest">
+            <form class="upload-form" method="post" action="__INGEST_FORM_ACTION__">
               <input type="hidden" name="action" value="editor-reorder-gallery" />
               <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
               <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
@@ -215,7 +215,7 @@
         <section class="card info-card" __EDITOR_MANAGER_HIDDEN_ATTR__>
           <h4>Chapters</h4>
           <p class="profile-meta">Chapters follow page identity during reorder/delete.</p>
-          <form class="upload-form" method="post" action="/ingest">
+          <form class="upload-form" method="post" action="__INGEST_FORM_ACTION__">
             <input type="hidden" name="action" value="editor-add-chapter" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input type="hidden" name="editor_title" value="__EDITOR_TITLE__" />
@@ -247,7 +247,7 @@
       </section>
     </main>
     __SITE_COMMON_SCRIPTS__
-    <script src="/static/ingest-upload-progress.js"></script>
+    <script src="/static/comic-upload-progress.js"></script>
     <script src="/static/work-edit.js"></script>
   </body>
 </html>

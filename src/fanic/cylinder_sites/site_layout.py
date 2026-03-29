@@ -15,7 +15,7 @@ _NAV_LINKS_BY_TEMPLATE: dict[str, str] = {
     "fanart-upload.html": '<a href="/?view=fanart">Browse fanart</a><a href="/">Browse comics</a>',
     "faq.html": '__ADMIN_REPORTS_LINK__<a href="/cbz-format">CBZ SPEC INFO</a><a href="/faq" aria-current="page">FAQ</a>',
     "feedback.html": '__ADMIN_REPORTS_LINK__<a href="/feedback" aria-current="page">Feedback</a>',
-    "ingest.html": '__ADMIN_REPORTS_LINK__<a href="/cbz-format">CBZ SPEC INFO</a>',
+    "comic-upload.html": '__ADMIN_REPORTS_LINK__<a href="/cbz-format">CBZ SPEC INFO</a>',
     "login.html": '__ADMIN_REPORTS_LINK__<a href="/account/login" aria-current="page">Login</a>',
     "notification.html": '__ADMIN_REPORTS_LINK__<a href="/user/profile">Profile</a><a href="/user/notifications" aria-current="page">Notification</a>',
     "profile.html": '__ADMIN_REPORTS_LINK__<a href="/user/profile" aria-current="page">Profile</a>',

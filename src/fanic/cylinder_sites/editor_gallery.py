@@ -57,7 +57,7 @@ def _page_thumb_button_html(
     if not thumb_name:
         thumb_name = str(image_obj).strip()
     work_id_url = quote(work_id, safe="")
-    thumb_url = media_url(f"/works/{work_id_url}/thumbs/{quote(thumb_name, safe='/')}")
+    thumb_url = media_url(f"/comic/{work_id_url}/thumbs/{quote(thumb_name, safe='/')}")
     safe_name = escape(image_filename)
     safe_thumb_url = escape(thumb_url)
     return (

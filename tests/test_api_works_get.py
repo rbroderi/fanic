@@ -6,7 +6,7 @@ def test_build_comicinfo_xml_includes_extended_fanic_metadata(
     load_route_module: Callable[[str, str], ModuleType],
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/api/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/api/comic.ex.get.py",
         "fanicsite_api_works_ex_get_comicinfo_export_test",
     )
 

@@ -33,7 +33,7 @@ def _work_grid_html(
         work_id_raw = str(work.get("id", "")).strip()
         if not work_id_raw:
             continue
-        work_href = f"/works/{quote(work_id_raw, safe='')}?back={quote(back_href, safe='')}"
+        work_href = f"/comic/{quote(work_id_raw, safe='')}?back={quote(back_href, safe='')}"
         title = escape(str(work.get("title", "Untitled")))
         summary_raw = str(work.get("summary", ""))
         summary = escape(summary_raw if summary_raw else "No summary yet.")
@@ -43,14 +43,14 @@ def _work_grid_html(
         cover_thumb_name = str(work.get("cover_thumb_filename", "")).strip()
         work_id_quoted = quote(str(work.get("id", "")), safe="")
         if cover_thumb_name:
-            cover_src = media_url(f"/works/{work_id_quoted}/thumbs/{quote(cover_thumb_name, safe='/')}")
+            cover_src = media_url(f"/comic/{work_id_quoted}/thumbs/{quote(cover_thumb_name, safe='/')}")
         else:
             cover_src = media_url("/static/logo.png")
 
         delete_html = ""
         if can_delete:
             delete_html = """
-        <form method=\"post\" action=\"/works/{work_id}/delete\" class=\"admin-delete-form\" onsubmit=\"return confirm('Delete this comic? This cannot be undone.');\">
+        <form method=\"post\" action=\"/comic/{work_id}/delete\" class=\"admin-delete-form\" onsubmit=\"return confirm('Delete this comic? This cannot be undone.');\">
           <button type=\"submit\" class=\"icon-delete-button\" title=\"Delete comic\" aria-label=\"Delete comic\">
             <i class=\"fa-solid fa-trash\" aria-hidden=\"true\"></i>
           </button>
@@ -191,7 +191,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 (
                     '<a class="user-menu-link" href="/fanart/upload">Upload fanart</a>'
                     if view == "fanart"
-                    else '<a class="user-menu-link" href="/ingest">Upload comic</a>'
+                    else '<a class="user-menu-link" href="/comic/upload">Upload comic</a>'
                 )
                 if username
                 else ""

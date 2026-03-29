@@ -15,8 +15,6 @@ from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import send_file
 from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
-from fanic.cylinder_sites.editor_metadata import render_options_html
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.repository import FanartItemRow
 from fanic.repository import fanart_file_for
@@ -35,81 +33,47 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     return response
 
 
-def _upload_status(msg: str) -> tuple[str, str, str]:
-    match msg:
-        case "uploaded":
-            return ("Fanart uploaded.", "success", "")
-        case "uploaded-rating-elevated":
-            return (
-                "Fanart uploaded. Rating auto-elevated based on moderation detection.",
-                "success",
-                "",
-            )
-        case "invalid":
-            return ("Please complete all required fields.", "error", "")
-        case "missing-file":
-            return ("Choose an image file to upload.", "error", "")
-        case "policy":
-            return ("Upload rejected by file policy.", "error", "")
-        case "blocked":
-            return (
-                "Upload blocked by moderation policy (photorealistic images are not allowed).",
-                "error",
-                "",
-            )
-        case "login-required":
-            return ("Login required before uploading fanart.", "error", "")
-        case "terms":
-            return (
-                "You must agree to the Terms and Conditions before uploading.",
-                "error",
-                "",
-            )
-        case _:
-            return ("", "", "hidden")
-
-
 def _standardized_download_filename(
-    uploader_username: str,
+    work_owner_username: str,
     title: str,
     image_filename: str,
 ) -> str:
-    uploader_slug = slugify(uploader_username).replace("-", "_")
+    owner_slug = slugify(work_owner_username).replace("-", "_")
     title_slug = slugify(title).replace("-", "_")
     suffix = Path(image_filename).suffix.lower()
     safe_suffix = suffix if suffix else ".avif"
-    return f"{uploader_slug}_{title_slug}{safe_suffix}"
+    return f"{owner_slug}_{title_slug}{safe_suffix}"
 
 
-def _fanart_grid_html(
-    uploader_username: str,
-    items: Sequence[FanartItemRow],
+def _work_grid_html(
+    work_owner_username: str,
+    works: Sequence[FanartItemRow],
     *,
     can_delete: bool,
 ) -> str:
-    if not items:
+    if not works:
         return '<p class="profile-meta">No fanart uploaded yet.</p>'
 
-    safe_uploader = quote(uploader_username, safe="")
+    safe_owner = quote(work_owner_username, safe="")
     parts: list[str] = []
-    for item in items:
-        item_id = str(item.get("id", "")).strip()
-        if not item_id:
+    for work in works:
+        work_id = str(work.get("id", "")).strip()
+        if not work_id:
             continue
 
-        safe_item_id = quote(item_id, safe="")
-        title_raw = str(item.get("title", "Untitled"))
+        safe_work_id = quote(work_id, safe="")
+        title_raw = str(work.get("title", "Untitled"))
         title = escape(title_raw)
-        summary_raw = str(item.get("summary", "")).strip()
+        summary_raw = str(work.get("summary", "")).strip()
         summary = escape(summary_raw if summary_raw else "No summary yet.")
-        fandom_raw = str(item.get("fandom", "")).strip()
+        fandom_raw = str(work.get("fandom", "")).strip()
         fandom_html = f" | fandom: {escape(fandom_raw)}" if fandom_raw else ""
-        rating_html = rating_badge_html(item.get("rating", "Not Rated"))
-        image_name = str(item.get("image_filename", "")).strip()
-        thumb_name = str(item.get("thumb_filename", "")).strip()
-        created_at = escape(str(item.get("created_at", "")))
-        size_text = f"{item.get('width', 0)}x{item.get('height', 0)}"
-        reader_href = f"/fanart/{safe_uploader}/reader?item_id={safe_item_id}"
+        rating_html = rating_badge_html(work.get("rating", "Not Rated"))
+        image_name = str(work.get("image_filename", "")).strip()
+        thumb_name = str(work.get("thumb_filename", "")).strip()
+        created_at = escape(str(work.get("created_at", "")))
+        size_text = f"{work.get('width', 0)}x{work.get('height', 0)}"
+        reader_href = f"/fanart/{safe_owner}/reader?item_id={safe_work_id}"
         download_href = f"/fanart/download/{quote(image_name, safe='/')}" if image_name else reader_href
         claimed_url = f"/fanart/images/{quote(image_name, safe='/')}" if image_name else reader_href
         report_href = (
@@ -123,7 +87,7 @@ def _fanart_grid_html(
         delete_html = ""
         if can_delete:
             delete_html = f"""
-        <form method="post" action="/fanart/{safe_uploader}/{safe_item_id}/delete" class="admin-delete-form" onsubmit="return confirm('Delete this fanart? This cannot be undone.');">
+                <form method="post" action="/fanart/{safe_owner}/{safe_work_id}/delete" class="admin-delete-form" onsubmit="return confirm('Delete this fanart? This cannot be undone.');">
           <button type="submit" class="icon-delete-button" title="Delete fanart" aria-label="Delete fanart">
             <i class="fa-solid fa-trash" aria-hidden="true"></i>
           </button>
@@ -148,43 +112,43 @@ def _fanart_grid_html(
     return "".join(parts)
 
 
-def _fanart_reader_bootstrap(
-    uploader_username: str,
-    items: Sequence[FanartItemRow],
-    requested_item_id: str,
+def _work_reader_bootstrap(
+    work_owner_username: str,
+    works: Sequence[FanartItemRow],
+    requested_work_id: str,
 ) -> dict[str, object]:
     pages: list[dict[str, object]] = []
     selected_index = 1
-    safe_uploader = quote(uploader_username, safe="")
+    safe_owner = quote(work_owner_username, safe="")
 
-    for item in items:
-        item_id = str(item.get("id", "")).strip()
-        image_name = str(item.get("image_filename", "")).strip()
-        if not item_id or not image_name:
+    for work in works:
+        work_id = str(work.get("id", "")).strip()
+        image_name = str(work.get("image_filename", "")).strip()
+        if not work_id or not image_name:
             continue
 
-        thumb_name = str(item.get("thumb_filename", "")).strip()
+        thumb_name = str(work.get("thumb_filename", "")).strip()
         thumb_url = media_url(f"/fanart/thumbs/{quote(thumb_name, safe='/')}")
         if not thumb_name:
             thumb_url = media_url(f"/fanart/images/{quote(image_name, safe='/')}")
         page: dict[str, object] = {
             "index": len(pages) + 1,
-            "id": item_id,
-            "title": str(item.get("title", "Untitled")),
+            "id": work_id,
+            "title": str(work.get("title", "Untitled")),
             "image_url": media_url(f"/fanart/images/{quote(image_name, safe='/')}"),
             "thumb_url": thumb_url,
-            "width": item.get("width"),
-            "height": item.get("height"),
+            "width": work.get("width"),
+            "height": work.get("height"),
         }
         pages.append(page)
-        if requested_item_id and item_id == requested_item_id:
+        if requested_work_id and work_id == requested_work_id:
             selected_index = len(pages)
 
     return {
         "mode": "fanart",
         "work_id": "",
-        "title": f"@{uploader_username} fanart",
-        "work_href": f"/fanart/{safe_uploader}",
+        "title": f"@{work_owner_username} fanart",
+        "work_href": f"/fanart/{safe_owner}",
         "user_id": "anon",
         "page_index": selected_index,
         "pages": pages,
@@ -200,27 +164,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if tail == []:
         return _redirect(response, "/?view=fanart")
 
-    if len(tail) == 1 and tail[0] == "upload":
-        upload_msg = request.args.get("msg", "").strip()
-        status_text, status_class, status_hidden_attr = _upload_status(upload_msg)
-        return render_html_template(
-            request,
-            response,
-            "fanart-upload.html",
-            {
-                "__UPLOAD_STATUS_TEXT__": status_text,
-                "__UPLOAD_STATUS_CLASS__": status_class,
-                "__UPLOAD_STATUS_HIDDEN_ATTR__": status_hidden_attr,
-                "__TITLE__": escape(request.args.get("title", "").strip()),
-                "__SUMMARY__": escape(request.args.get("summary", "").strip()),
-                "__FANDOM__": escape(request.args.get("fandom", "").strip()),
-                "__RATING_OPTIONS_HTML__": render_options_html(
-                    RATING_CHOICES,
-                    request.args.get("rating", "Not Rated").strip(),
-                ),
-            },
-        )
-
     if len(tail) >= 2 and tail[0] in {"images", "thumbs"}:
         media_kind = tail[0]
         file_name = "/".join(part for part in tail[1:] if part)
@@ -228,10 +171,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         if media_kind == "images":
-            item = get_fanart_item_by_image_filename(file_name)
+            work = get_fanart_item_by_image_filename(file_name)
         else:
-            item = get_fanart_item_by_thumb_filename(file_name)
-        if item is None:
+            work = get_fanart_item_by_thumb_filename(file_name)
+        if work is None:
             return text_error(response, "Not found", 404)
 
         if media_kind == "images":
@@ -249,8 +192,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not file_name:
             return text_error(response, "Not found", 404)
 
-        item = get_fanart_item_by_image_filename(file_name)
-        if item is None:
+        work = get_fanart_item_by_image_filename(file_name)
+        if work is None:
             return text_error(response, "Not found", 404)
 
         path = fanart_file_for(file_name)
@@ -258,47 +201,47 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         download_filename = _standardized_download_filename(
-            str(item.get("uploader_username", "")),
-            str(item.get("title", "untitled")),
+            str(work.get("uploader_username", "")),
+            str(work.get("title", "untitled")),
             file_name,
         )
         return send_file(response, path, filename=download_filename)
 
     if len(tail) == 1:
-        uploader_username = tail[0].strip()
-        if not uploader_username:
+        work_owner_username = tail[0].strip()
+        if not work_owner_username:
             return text_error(response, "Not found", 404)
 
         username = current_user(request)
         can_delete = role_for_user(username) in {"superadmin", "admin"}
-        items = list_fanart_items_by_uploader(uploader_username, limit=200)
+        works = list_fanart_items_by_uploader(work_owner_username, limit=200)
         return render_html_template(
             request,
             response,
             "fanart-gallery.html",
             {
-                "__GALLERY_TITLE__": f"@{escape(uploader_username)}",
+                "__GALLERY_TITLE__": f"@{escape(work_owner_username)}",
                 "__GALLERY_SUBTITLE__": "Fanart gallery",
-                "__GALLERY_READER_HREF__": (f"/fanart/{quote(uploader_username, safe='')}/reader"),
-                "__FANART_GRID_HTML__": _fanart_grid_html(
-                    uploader_username,
-                    items,
+                "__GALLERY_READER_HREF__": (f"/fanart/{quote(work_owner_username, safe='')}/reader"),
+                "__FANART_GRID_HTML__": _work_grid_html(
+                    work_owner_username,
+                    works,
                     can_delete=can_delete,
                 ),
             },
         )
 
     if len(tail) == 2 and tail[1] == "reader":
-        uploader_username = tail[0].strip()
-        if not uploader_username:
+        work_owner_username = tail[0].strip()
+        if not work_owner_username:
             return text_error(response, "Not found", 404)
         back_href = request.args.get("back", "").strip()
         back_href = back_href if back_href else "/?view=fanart"
 
-        items = list_fanart_items_by_uploader(uploader_username, limit=500)
-        bootstrap = _fanart_reader_bootstrap(
-            uploader_username,
-            items,
+        works = list_fanart_items_by_uploader(work_owner_username, limit=500)
+        bootstrap = _work_reader_bootstrap(
+            work_owner_username,
+            works,
             request.args.get("item_id", "").strip(),
         )
         pages_obj = bootstrap.get("pages", [])
@@ -338,12 +281,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__READER_TITLE__": escape(str(bootstrap.get("title", "Fanart Reader"))),
                 "__READER_BACK_HREF__": escape(back_href),
                 "__READER_BACK_LABEL__": "Back to search",
-                "__READER_WORK_HREF__": escape(f"/fanart/{quote(uploader_username, safe='')}"),
+                "__READER_WORK_HREF__": escape(f"/fanart/{quote(work_owner_username, safe='')}"),
                 "__READER_WORK_LABEL__": "Gallery",
                 "__READER_REPORT_HIDDEN_ATTR__": "",
                 "__READER_REPORT_TITLE__": "Report this image",
                 "__READER_REPORT_WORK_ID__": "",
-                "__READER_REPORT_WORK_TITLE__": escape(f"@{uploader_username} fanart"),
+                "__READER_REPORT_WORK_TITLE__": escape(f"@{work_owner_username} fanart"),
                 "__READER_REPORT_CLAIMED_URL__": escape(initial_claimed_url),
                 "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
                 "__READER_BOOKMARK_HIDDEN_ATTR__": "hidden",
