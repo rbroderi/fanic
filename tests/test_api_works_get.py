@@ -7,7 +7,7 @@ def test_build_comicinfo_xml_includes_extended_fanic_metadata(
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/api/comic.ex.get.py",
-        "fanicsite_api_works_ex_get_comicinfo_export_test",
+        "fanicsite_api_comic_ex_get_comicinfo_export_test",
     )
 
     work: dict[str, object] = {

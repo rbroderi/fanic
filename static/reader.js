@@ -131,7 +131,7 @@ async function saveProgress() {
   if (!state.workId) {
     return;
   }
-  await fetch(`/api/works/${state.workId}/progress?page_index=${state.index}&user_id=${state.userId}`, {
+  await fetch(`/api/comic/${state.workId}/progress?page_index=${state.index}&user_id=${state.userId}`, {
     method: "POST",
   });
 }
@@ -180,7 +180,7 @@ async function saveBookmark() {
   payload.set("page_index", String(state.index));
   payload.set("message", bookmarkMessage.value.trim());
 
-  const result = await fetch(`/api/works/${state.workId}/bookmark`, {
+  const result = await fetch(`/api/comic/${state.workId}/bookmark`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body: payload.toString(),
@@ -438,7 +438,7 @@ async function init() {
   const title = typeof bootstrap?.title === "string" ? bootstrap.title : "FANIC Reader";
   document.title = `${title} - FANIC Reader`;
 
-  const defaultWorkHref = state.workId ? `/works/${state.workId}` : "/?view=fanart";
+  const defaultWorkHref = state.workId ? `/comic/${state.workId}` : "/?view=fanart";
   const workHref = typeof bootstrap?.work_href === "string" ? bootstrap.work_href : defaultWorkHref;
   const workLink = document.getElementById("workLink");
   if (workLink) {

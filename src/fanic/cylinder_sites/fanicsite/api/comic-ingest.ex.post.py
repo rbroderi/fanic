@@ -1,13 +1,16 @@
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import cast
 
 from fanic.cylinder_sites.common import MAX_CBZ_UPLOAD_BYTES
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import admin_aware_detail
+from fanic.cylinder_sites.common import begin_comic_ingest_session
 from fanic.cylinder_sites.common import begin_upload_session
 from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import end_comic_ingest_session
 from fanic.cylinder_sites.common import end_upload_session
 from fanic.cylinder_sites.common import json_response
 from fanic.cylinder_sites.common import log_exception
@@ -57,9 +60,18 @@ def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
     return clean
 
 
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    if not isinstance(value, (str, int, float)):
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     _ = request_id(request, response)
-    tail = route_tail(request, ["api", "ingest"])
+    tail = route_tail(request, ["api", "comic-ingest"])
     if tail is None:
         return json_response(response, {"detail": "Not found"}, 404)
 
@@ -81,6 +93,23 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 status_code,
             )
 
+        started_comic_ingest_session = False
+        queue_allowed, queue_retry_after, queue_position = begin_comic_ingest_session()
+        if not queue_allowed:
+            return json_response(
+                response,
+                {
+                    "ok": False,
+                    "error": "comic_ingest_queue_timeout",
+                    "detail": "Comic ingest queue is full. Please retry shortly.",
+                    "retry_after": queue_retry_after,
+                    "queue_position": queue_position,
+                    "request_id": request_id(request, response),
+                },
+                429,
+            )
+
+        started_comic_ingest_session = True
         started_upload_session = False
         allowed, limit_code, retry_after = begin_upload_session(username)
         if not allowed:
@@ -145,6 +174,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         finally:
             if started_upload_session:
                 end_upload_session(username)
+            if started_comic_ingest_session:
+                end_comic_ingest_session()
 
     if tail == ["progress"]:
         token = request.args.get("token", "").strip()
@@ -172,6 +203,49 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     upload_token = request.form.get("upload_token", "").strip()
+
+    def on_queued(queue_position: int) -> None:
+        if not upload_token:
+            return
+        set_progress(
+            upload_token,
+            stage="queued",
+            message=f"Waiting in comic ingest queue (position {queue_position})",
+            done=False,
+            ok=False,
+        )
+
+    started_comic_ingest_session = False
+    queue_allowed, queue_retry_after, queue_position = begin_comic_ingest_session(
+        on_queued=on_queued,
+    )
+    if not queue_allowed:
+        if upload_token:
+            set_progress(
+                upload_token,
+                stage="throttled",
+                message=(
+                    f"Comic ingest queue timeout at position {queue_position}. Please retry."
+                    if queue_position > 0
+                    else "Comic ingest queue is full"
+                ),
+                done=True,
+                ok=False,
+            )
+        return json_response(
+            response,
+            {
+                "ok": False,
+                "error": "comic_ingest_queue_timeout",
+                "detail": "Comic ingest queue is full. Please retry shortly.",
+                "retry_after": queue_retry_after,
+                "queue_position": queue_position,
+                "request_id": request_id(request, response),
+            },
+            429,
+        )
+
+    started_comic_ingest_session = True
     started_upload_session = False
     allowed, limit_code, retry_after = begin_upload_session(username)
     if not allowed:
@@ -288,7 +362,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         reasons_obj = moderation.get("reasons")
         reasons: list[str] = []
         if isinstance(reasons_obj, list):
-            reasons = [str(reason) for reason in reasons_obj]
+            reasons = [str(reason) for reason in cast(list[object], reasons_obj)]
+
+        nsfw_score = _coerce_float(moderation.get("nsfw_score", 0.0), 0.0)
 
         return json_response(
             response,
@@ -309,9 +385,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "style": str(moderation.get("style", "unknown")),
                     "style_debug": moderation.get("style_debug", {}),
                     "style_confidences": moderation.get("style_confidences", {}),
-                    "nsfw_score": float(
-                        moderation.get("nsfw_score", 0.0) if moderation.get("nsfw_score", 0.0) else 0.0
-                    ),
+                    "nsfw_score": nsfw_score,
                     "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                     "reasons": reasons,
                     "source_member": str(
@@ -347,3 +421,5 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     finally:
         if started_upload_session:
             end_upload_session(username)
+        if started_comic_ingest_session:
+            end_comic_ingest_session()

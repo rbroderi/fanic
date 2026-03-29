@@ -48,7 +48,7 @@ def test_dmca_get_renders_form_with_prefilled_reason(
         path="/dmca",
         args={
             "work_id": "work-42",
-            "claimed_url": "/works/work-42",
+            "claimed_url": "/comic/work-42",
             "issue_type": "illegal-content",
         },
     )
@@ -58,7 +58,7 @@ def test_dmca_get_renders_form_with_prefilled_reason(
     assert result.status_code == 200
     assert captured["template"] == "dmca.html"
     assert captured["work_id"] == "work-42"
-    assert captured["claimed_url"] == "/works/work-42"
+    assert captured["claimed_url"] == "/comic/work-42"
     assert "Illegal content" in captured["options"]
     assert "selected" in captured["options"]
 
@@ -87,7 +87,7 @@ def test_dmca_post_rejects_missing_required_fields(
             "reporter_name": "",
             "reporter_email": "owner@example.com",
             "issue_type": "illegal-content",
-            "claimed_url": "https://example.test/works/work-1",
+            "claimed_url": "https://example.test/comic/work-1",
             "details": "Unauthorized copy",
             "attest": "on",
         },
@@ -132,7 +132,7 @@ def test_dmca_get_normalizes_relative_claimed_url_to_absolute(
         path="/dmca",
         args={
             "work_id": "work-42",
-            "claimed_url": "/works/work-42",
+            "claimed_url": "/comic/work-42",
         },
     )
     request.host_url = "https://fanic.test/"
@@ -142,7 +142,7 @@ def test_dmca_get_normalizes_relative_claimed_url_to_absolute(
 
     assert result.status_code == 200
     assert captured["template"] == "dmca.html"
-    assert captured["claimed_url"] == "https://fanic.test/works/work-42"
+    assert captured["claimed_url"] == "https://fanic.test/comic/work-42"
 
 
 def test_dmca_post_persists_report_and_redirects(
@@ -184,7 +184,7 @@ def test_dmca_post_persists_report_and_redirects(
             "reporter_name": "Owner Name",
             "reporter_email": "owner@example.com",
             "issue_type": "illegal-content",
-            "claimed_url": "https://example.test/works/work-1",
+            "claimed_url": "https://example.test/comic/work-1",
             "evidence_url": "https://example.test/original",
             "details": "This is my copyrighted work.",
             "attest": "on",

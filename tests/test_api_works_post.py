@@ -13,7 +13,7 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
-def test_api_works_post_bookmark_persists_for_logged_in_user(
+def test_api_comic_post_bookmark_persists_for_logged_in_user(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
@@ -21,7 +21,7 @@ def test_api_works_post_bookmark_persists_for_logged_in_user(
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/api/comic.ex.post.py",
-        "fanicsite_api_works_ex_post_bookmark_test",
+        "fanicsite_api_comic_ex_post_bookmark_test",
     )
 
     captured: dict[str, object] = {}
@@ -60,14 +60,14 @@ def test_api_works_post_bookmark_persists_for_logged_in_user(
     assert captured["message"] == "Loved this chapter."
 
 
-def test_api_works_post_bookmark_requires_authentication(
+def test_api_comic_post_bookmark_requires_authentication(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/api/comic.ex.post.py",
-        "fanicsite_api_works_ex_post_bookmark_auth_test",
+        "fanicsite_api_comic_ex_post_bookmark_auth_test",
     )
 
     request = dummy_request(

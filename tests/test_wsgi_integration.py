@@ -83,7 +83,7 @@ def test_wsgi_missing_work_returns_404() -> None:
     monkeypatch.setattr(cylinder_main, "initialize_moderation_models", lambda: {})
     monkeypatch.setattr(cylinder_main, "_alpha_invite_gate_middleware", lambda app: app)
 
-    status_code, body = _call_app("/works/does-not-exist")
+    status_code, body = _call_app("/comic/does-not-exist")
     assert status_code == 404
     assert b"Work not found" in body or b"Not found" in body
 

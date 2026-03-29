@@ -112,7 +112,7 @@ STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
 if [[ "${NO_PROMPT}" != "true" ]]; then
   echo
   echo "FANIC nginx setup for Ubuntu"
-  echo "This config serves /cbz, /fanart, /static, /works from storage and proxies all other routes to WSGI."
+  echo "This config serves /cbz, /fanart, and /static from storage and proxies all other routes to WSGI."
   echo
 
   LISTEN_PORT="$(prompt_default "Local listen port" "${LISTEN_PORT}")"
@@ -131,10 +131,9 @@ REPO_ROOT="$(realpath "${REPO_ROOT}")"
 STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
 CBZ_DIR="${STORAGE_ROOT}/cbz"
 STATIC_DIR="${STORAGE_ROOT}/static"
-WORKS_DIR="${STORAGE_ROOT}/works"
 FANART_DIR="${STORAGE_ROOT}/fanart"
 
-for dir_path in "${CBZ_DIR}" "${STATIC_DIR}" "${WORKS_DIR}" "${FANART_DIR}"; do
+for dir_path in "${CBZ_DIR}" "${STATIC_DIR}" "${FANART_DIR}"; do
   if [[ ! -d "${dir_path}" ]]; then
     echo "Expected directory not found: ${dir_path}" >&2
     exit 1
@@ -206,12 +205,6 @@ server {
         access_log off;
     }
 
-    location /works/ {
-        alias ${WORKS_DIR}/;
-        try_files \$uri =404;
-        access_log off;
-    }
-
     location /fanart/ {
         alias ${FANART_DIR}/;
         try_files \$uri =404;
@@ -257,7 +250,6 @@ echo "Setup complete"
 echo "repo root: ${REPO_ROOT}"
 echo "serving /cbz from: ${CBZ_DIR}"
 echo "serving /static from: ${STATIC_DIR}"
-echo "serving /works from: ${WORKS_DIR}"
 echo "serving /fanart from: ${FANART_DIR}"
 echo "proxying dynamic routes to: http://${WSGI_HOST}:${WSGI_PORT}"
 echo "open: http://127.0.0.1:${LISTEN_PORT}"

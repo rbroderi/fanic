@@ -57,7 +57,7 @@ def _sample_notifications(username: str, *, limit: int = 200) -> list[dict[str, 
             "work_id": "work-1",
             "kind": "comment",
             "message": "bob commented.",
-            "href": "/works/work-1",
+            "href": "/comic/work-1",
             "is_read": False,
             "created_at": "2026-03-23 00:00:00",
         }

@@ -141,6 +141,8 @@ class FanicSettings(BaseSettings):
     auth_max_failures: int
     auth_window_seconds: int
     profile_history_limit: int
+    comic_ingest_max_concurrent: int = 3
+    comic_ingest_queue_wait_seconds: int = 180
     upload_max_concurrent_per_user: int
     upload_rate_max_requests: int
     upload_rate_window_seconds: int

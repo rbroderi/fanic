@@ -51,7 +51,7 @@ if (-not $StorageRoot) {
 if (-not $NoPrompt) {
     Write-Host ""
     Write-Host "FANIC nginx setup for Windows"
-    Write-Host "This installs nginx, serves /cbz, /fanart, /static, /works from storage, and proxies all other routes to WSGI."
+    Write-Host "This installs nginx, serves /cbz, /fanart, and /static from storage, and proxies all other routes to WSGI."
     Write-Host ""
 
     $NginxVersion = Prompt-Default -Message "nginx version" -Default $NginxVersion
@@ -70,16 +70,12 @@ $RepoRoot = (Resolve-Path $RepoRoot).Path
 $StorageRoot = (Resolve-Path $StorageRoot).Path
 $CbzDir = Join-Path $StorageRoot "cbz"
 $DynamicStaticDir = Join-Path $StorageRoot "static"
-$WorksDir = Join-Path $StorageRoot "works"
 $FanartDir = Join-Path $StorageRoot "fanart"
 if (-not (Test-Path $CbzDir)) {
     throw "Expected cbz file directory was not found: $CbzDir"
 }
 if (-not (Test-Path $DynamicStaticDir)) {
     throw "Expected static file directory was not found: $DynamicStaticDir"
-}
-if (-not (Test-Path $WorksDir)) {
-    throw "Expected works file directory was not found: $WorksDir"
 }
 if (-not (Test-Path $FanartDir)) {
     throw "Expected fanart file directory was not found: $FanartDir"
@@ -132,7 +128,6 @@ if (Test-Path $confPath) {
 
 $dynamicPathNginx = To-NginxPath -PathValue ((Resolve-Path $DynamicStaticDir).Path)
 $cbzPathNginx = To-NginxPath -PathValue ((Resolve-Path $CbzDir).Path)
-$worksPathNginx = To-NginxPath -PathValue ((Resolve-Path $WorksDir).Path)
 $fanartPathNginx = To-NginxPath -PathValue ((Resolve-Path $FanartDir).Path)
 $nginxPrefix = To-NginxPath -PathValue ((Resolve-Path $NginxRoot).Path)
 if (-not $nginxPrefix.EndsWith("/")) {
@@ -188,12 +183,6 @@ http {
 
         location /cbz/ {
             alias $cbzPathNginx/;
-            try_files `$uri =404;
-            access_log off;
-        }
-
-        location /works/ {
-            alias $worksPathNginx/;
             try_files `$uri =404;
             access_log off;
         }
@@ -254,7 +243,6 @@ Write-Host "Setup complete"
 Write-Host "nginx root: $NginxRoot"
 Write-Host "serving /cbz from: $CbzDir"
 Write-Host "serving /static from: $DynamicStaticDir"
-Write-Host "serving /works from: $WorksDir"
 Write-Host "serving /fanart from: $FanartDir"
 Write-Host "proxying dynamic routes to: http://${WsgiHost}:${WsgiPort}"
 Write-Host "open: http://127.0.0.1:$ListenPort"
