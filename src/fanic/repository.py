@@ -585,11 +585,15 @@ def get_or_create_user_for_auth0_identity(
             desired_role: UserRole = (
                 "superadmin" if normalized_email and normalized_email == superadmin_email else existing_user["role"]
             )
-            preferred_display_name = display_name.strip() if display_name.strip() else existing_user["display_name"]
-            resolved_display_name = _next_available_display_name(
-                preferred_display_name,
-                username,
-            )
+            onboarding_completed = bool(existing_user["age_gate_completed"]) and existing_user["is_over_18"] is not None
+            if onboarding_completed:
+                resolved_display_name = existing_user["display_name"]
+            else:
+                preferred_display_name = display_name.strip() if display_name.strip() else existing_user["display_name"]
+                resolved_display_name = _next_available_display_name(
+                    preferred_display_name,
+                    username,
+                )
             candidate_email = normalized_email if normalized_email else existing_user["email"]
             resolved_email = candidate_email
             if isinstance(candidate_email, str) and _email_in_use_by_other_username(candidate_email, username):
@@ -617,11 +621,15 @@ def get_or_create_user_for_auth0_identity(
     if local_user is not None:
         username = local_user["username"]
         desired_role = "superadmin" if normalized_email == superadmin_email else local_user["role"]
-        preferred_display_name = display_name.strip() if display_name.strip() else local_user["display_name"]
-        resolved_display_name = _next_available_display_name(
-            preferred_display_name,
-            username,
-        )
+        onboarding_completed = bool(local_user["age_gate_completed"]) and local_user["is_over_18"] is not None
+        if onboarding_completed:
+            resolved_display_name = local_user["display_name"]
+        else:
+            preferred_display_name = display_name.strip() if display_name.strip() else local_user["display_name"]
+            resolved_display_name = _next_available_display_name(
+                preferred_display_name,
+                username,
+            )
         resolved_email = normalized_email if normalized_email else local_user["email"]
         upsert_user(
             username,
