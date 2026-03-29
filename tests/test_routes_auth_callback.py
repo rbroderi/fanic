@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from json import JSONDecodeError
 from types import ModuleType
 from typing import Any
 from typing import Protocol
@@ -119,3 +120,75 @@ def test_auth_callback_success_uses_session_token_for_userinfo(
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/user/profile"
+
+
+def test_auth_callback_non_json_token_exchange_redirects_with_specific_message(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/account/callback.ex.get.py",
+        "fanicsite_account_callback_ex_get_non_json_exchange_test",
+    )
+
+    class FakeSettings:
+        auth0_configured: bool = True
+
+    class FakeConfig:
+        token_endpoint: str = "https://auth.example.com/oauth/token"
+        callback_url: str = "https://app.example.com/account/callback"
+        userinfo_endpoint: str = "https://auth.example.com/userinfo"
+
+    class FakeClient:
+        def fetch_token(
+            self,
+            endpoint: str,
+            *,
+            code: str,
+            redirect_uri: str,
+            code_verifier: str,
+        ) -> dict[str, object]:
+            _ = (endpoint, code, redirect_uri, code_verifier)
+            raise JSONDecodeError("Expecting value", "", 0)
+
+        def get(self, endpoint: str) -> object:
+            _ = endpoint
+            raise AssertionError("userinfo request should not run when token exchange fails")
+
+    def always_true(_request: object, _response: object) -> bool:
+        return True
+
+    def fake_config_from_settings(_settings_obj: object) -> FakeConfig:
+        return FakeConfig()
+
+    def fake_client_builder(_config_obj: object) -> FakeClient:
+        _ = _config_obj
+        return FakeClient()
+
+    def fake_oauth_state(_request_obj: object) -> dict[str, str]:
+        _ = _request_obj
+        return {
+            "state": "state-1",
+            "code_verifier": "verifier-1",
+            "next_url": "/",
+        }
+
+    monkeypatch.setattr(module, "enforce_https_termination", always_true)
+    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "auth0_config_from_settings", fake_config_from_settings)
+    monkeypatch.setattr(module, "build_oauth_client", fake_client_builder)
+    monkeypatch.setattr(module, "read_auth0_oauth_state", fake_oauth_state)
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _response: None)
+    monkeypatch.setattr(module, "log_exception", lambda *_args, **_kwargs: None)
+
+    request = dummy_request(
+        path="/account/callback",
+        args={"state": "state-1", "code": "code-1"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/account/login?msg=auth-upstream-blocked"

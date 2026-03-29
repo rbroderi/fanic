@@ -1,3 +1,4 @@
+from json import JSONDecodeError
 from typing import Any
 from typing import cast
 
@@ -22,6 +23,10 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     response.headers["Location"] = location
     response.set_data(f"See Other: {location}")
     return response
+
+
+def _is_non_json_auth_provider_response(exc: Exception) -> bool:
+    return isinstance(exc, JSONDecodeError) or exc.__class__.__name__ == "JSONDecodeError"
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -67,14 +72,19 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         userinfo_response = client.get(config.userinfo_endpoint)
         userinfo = cast(dict[str, object], userinfo_response.json())
     except Exception as exc:
+        redirect_message = "auth-failed"
+        error_code = "auth0_callback_exchange_failed"
+        if _is_non_json_auth_provider_response(exc):
+            redirect_message = "auth-upstream-blocked"
+            error_code = "auth0_callback_exchange_non_json"
         log_exception(
             request,
-            code="auth0_callback_exchange_failed",
+            code=error_code,
             exc=exc,
             message="Auth0 callback token exchange failed",
         )
         clear_auth0_oauth_cookie(response)
-        return _redirect(response, "/account/login?msg=auth-failed")
+        return _redirect(response, f"/account/login?msg={redirect_message}")
 
     subject = str(userinfo.get("sub", "")).strip()
     email_obj = userinfo.get("email")

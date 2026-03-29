@@ -1,0 +1,5 @@
+[DEFAULT]
+# Cloudflare edge banning via API token action
+# Token/zone values are loaded from cloudflare-secrets.local
+action_cf = cloudflare-token[cfzone="%(cfzone)s", cftoken="%(cftoken)s"]
+action = %(action_cf)s

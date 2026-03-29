@@ -46,6 +46,12 @@ def _message_block(request: RequestLike) -> LoginMessage:
             )
         case "auth-failed":
             return LoginMessage("Authentication failed. Please try again.", "error")
+        case "auth-upstream-blocked":
+            return LoginMessage(
+                "Authentication provider response was blocked or invalid. "
+                "This is often caused by proxy or WAF challenges on the auth domain.",
+                "error",
+            )
         case "callback-invalid":
             return LoginMessage("The login callback was invalid or expired. Please try again.", "error")
         case _:
