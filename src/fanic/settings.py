@@ -5,7 +5,9 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-from typing import ClassVar, Self
+from typing import ClassVar
+from typing import Self
+from typing import override
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -31,6 +33,11 @@ class BytesUnit(Enum):
     def bytes(self) -> int:
         return self.value[1]
 
+    def to_bytes(self, value: float | int) -> int:
+        if value < 0:
+            raise ValueError("Unit value must be non-negative")
+        return int(round(float(value) * self.bytes))
+
     @classmethod
     def parse_match(cls, raw_value: str) -> re.Match[str] | None:
         return cls.__match_pattern.fullmatch(raw_value)
@@ -38,19 +45,23 @@ class BytesUnit(Enum):
     @classmethod
     def from_token(cls, token: str | None) -> Self:
         normalized = token.upper() if token else cls.B.label.upper()
-        match normalized:
-            case "B" | "BYTE" | "BYTES":
-                return cls.B
-            case "KIB" | "KB":
-                return cls.KIB
-            case "MIB" | "MB":
-                return cls.MIB
-            case "GIB" | "GB":
-                return cls.GIB
-            case "TIB" | "TB":
-                return cls.TIB
-            case _:
-                raise ValueError("Unknown size unit. Use one of: B, KiB, MiB, GiB, TiB")
+        member_name_by_token = {
+            "B": "B",
+            "BYTE": "B",
+            "BYTES": "B",
+            "KIB": "KIB",
+            "KB": "KIB",
+            "MIB": "MIB",
+            "MB": "MIB",
+            "GIB": "GIB",
+            "GB": "GIB",
+            "TIB": "TIB",
+            "TB": "TIB",
+        }
+        member_name = member_name_by_token.get(normalized)
+        if member_name is None:
+            raise ValueError("Unknown size unit. Use one of: B, KiB, MiB, GiB, TiB")
+        return cls[member_name]
 
 
 _SETTINGS_TOML_OVERRIDE = os.getenv("FANIC_SETTINGS_TOML")
@@ -70,6 +81,7 @@ class FanicSettings(BaseSettings):
     )
 
     @classmethod
+    @override
     def settings_customise_sources(
         cls,
         settings_cls: type[BaseSettings],
@@ -331,12 +343,6 @@ class FanicSettings(BaseSettings):
         )
 
 
-def from_unit(unit: BytesUnit, value: float | int) -> int:
-    if value < 0:
-        raise ValueError("Unit value must be non-negative")
-    return int(round(float(value) * unit.bytes))
-
-
 def parse_byte_size(value: str | int) -> int:
     if isinstance(value, int):
         if value < 0:
@@ -365,12 +371,12 @@ def parse_byte_size(value: str | int) -> int:
 
     unit = BytesUnit.from_token(unit_raw)
 
-    return from_unit(unit=unit, value=number)
+    return unit.to_bytes(number)
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> FanicSettings:
-    return FanicSettings()
+    return FanicSettings()  # pyright: ignore[reportCallIssue]
 
 
 _SETTINGS = get_settings()
