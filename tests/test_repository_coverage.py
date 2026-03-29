@@ -6,6 +6,7 @@ from types import TracebackType
 from typing import Literal
 from typing import cast
 from typing import override
+from uuid import UUID
 
 import pytest
 
@@ -164,7 +165,7 @@ def test_get_or_create_user_for_auth0_identity_creates_new_user_and_identity(
         display_name="Person Example",
     )
 
-    assert username == "person"
+    assert str(UUID(username)) == username
 
     local_user = repository.get_local_user(username)
     assert local_user is not None
@@ -194,7 +195,7 @@ def test_get_or_create_user_for_auth0_identity_promotes_superadmin_email(
         email_verified=True,
         display_name="Primary Admin",
     )
-    assert first_username == "admin"
+    assert str(UUID(first_username)) == first_username
 
     local_user = repository.get_local_user(first_username)
     assert local_user is not None
@@ -207,6 +208,41 @@ def test_get_or_create_user_for_auth0_identity_promotes_superadmin_email(
         display_name="Primary Admin Updated",
     )
     assert repeated_username == first_username
+
+
+def test_update_user_onboarding_only_applies_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    repository.create_user(
+        "alice",
+        display_name="AliceStart",
+        email="alice@example.com",
+        is_over_18=None,
+        age_gate_completed=False,
+    )
+
+    first_saved = repository.update_user_onboarding(
+        "alice",
+        display_name="AliceOnce",
+        is_over_18=True,
+    )
+    second_saved = repository.update_user_onboarding(
+        "alice",
+        display_name="AliceTwice",
+        is_over_18=False,
+    )
+
+    assert first_saved is True
+    assert second_saved is False
+
+    user_row = repository.get_local_user("alice")
+    assert user_row is not None
+    assert user_row["display_name"] == "AliceOnce"
+    assert user_row["is_over_18"] is True
+    assert user_row["age_gate_completed"] is True
 
 
 def test_work_crud_tags_pages_comments_kudos_and_versions(
@@ -543,6 +579,70 @@ def test_user_role_management_operations(
             "",
             display_name="",
             email=None,
+            role="user",
+            active=True,
+        )
+
+
+def test_create_user_rejects_duplicate_email_case_insensitive(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    repository.create_user(
+        "alice",
+        display_name="Alice",
+        email="Alice@Example.com",
+        role="user",
+        active=True,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.create_user(
+            "bob",
+            display_name="Bob",
+            email="alice@example.com",
+            role="user",
+            active=True,
+        )
+
+
+def test_create_user_rejects_non_alphanumeric_display_name(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError):
+        repository.create_user(
+            "alice",
+            display_name="Alice Smith",
+            email="alice@example.com",
+            role="user",
+            active=True,
+        )
+
+
+def test_create_user_rejects_duplicate_display_name_case_insensitive(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    repository.create_user(
+        "alice",
+        display_name="Alice",
+        email="alice@example.com",
+        role="user",
+        active=True,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.create_user(
+            "bob",
+            display_name="alice",
+            email="bob@example.com",
             role="user",
             active=True,
         )

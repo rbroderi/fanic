@@ -114,10 +114,25 @@ def test_route_helpers_and_user_menu(
         "role_for_user",
         _role_for_alice_or_guest,
     )
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        lambda _username: {
+            "username": "alice",
+            "display_name": "AliceDisplay",
+            "email": "alice@example.com",
+            "is_over_18": True,
+            "age_gate_completed": True,
+            "role": "user",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
     logged_in = module.user_menu_replacements(request)
     assert logged_in["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == "hidden"
     assert logged_in["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == ""
     assert logged_in["__ADMIN_REPORTS_LINK__"] == ""
+    assert logged_in["__USER_MENU_STATUS__"] == "Logged in as AliceDisplay."
 
     monkeypatch.setattr(module, "current_user", fake_current_user_admin)
     monkeypatch.setattr(module, "role_for_user", _role_superadmin)

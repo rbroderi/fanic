@@ -7,10 +7,12 @@ from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import clear_auth0_oauth_cookie
 from fanic.cylinder_sites.common import enforce_https_termination
+from fanic.cylinder_sites.common import log_exception
 from fanic.cylinder_sites.common import read_auth0_oauth_state
 from fanic.cylinder_sites.common import set_login_cookie
 from fanic.cylinder_sites.common import text_error
 from fanic.repository import get_or_create_user_for_auth0_identity
+from fanic.repository import user_requires_onboarding
 from fanic.settings import get_settings
 
 
@@ -33,7 +35,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(response, "/account/login?msg=auth-disabled")
 
     error = request.args.get("error", "").strip()
+    error_description = request.args.get("error_description", "").strip()
     if error:
+        lowered_description = error_description.lower()
+        if error == "access_denied" and "verify" in lowered_description:
+            return _redirect(response, "/account/login?msg=auth-email-unverified")
         return _redirect(response, "/account/login?msg=auth-failed")
 
     oauth_state = read_auth0_oauth_state(request)
@@ -57,9 +63,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             code_verifier=oauth_state["code_verifier"],
         )
         token = cast(dict[str, object], token_obj)
-        userinfo_response = client.get(config.userinfo_endpoint, token=token)
+        client.token = token
+        userinfo_response = client.get(config.userinfo_endpoint)
         userinfo = cast(dict[str, object], userinfo_response.json())
-    except Exception:
+    except Exception as exc:
+        log_exception(
+            request,
+            code="auth0_callback_exchange_failed",
+            exc=exc,
+            message="Auth0 callback token exchange failed",
+        )
         clear_auth0_oauth_cookie(response)
         return _redirect(response, "/account/login?msg=auth-failed")
 
@@ -75,6 +88,23 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     display_name = str(name_obj).strip()
 
     if not subject:
+        error_from_userinfo = str(userinfo.get("error", "")).strip().lower()
+        error_description_from_userinfo = str(userinfo.get("error_description", "")).strip()
+        lowered_userinfo_description = error_description_from_userinfo.lower()
+        if error_from_userinfo == "access_denied" and "verify" in lowered_userinfo_description:
+            clear_auth0_oauth_cookie(response)
+            return _redirect(response, "/account/login?msg=auth-email-unverified")
+
+        log_exception(
+            request,
+            code="auth0_callback_missing_subject",
+            exc=ValueError("Auth0 callback userinfo did not include subject"),
+            message="Auth0 callback user profile parsing failed",
+            extra={
+                "userinfo_error": error_from_userinfo,
+                "userinfo_error_description": error_description_from_userinfo,
+            },
+        )
         clear_auth0_oauth_cookie(response)
         return _redirect(response, "/account/login?msg=auth-failed")
 
@@ -87,6 +117,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     clear_auth0_oauth_cookie(response)
     set_login_cookie(response, username)
+
+    if user_requires_onboarding(username):
+        return _redirect(response, "/user/profile?msg=onboarding-required")
 
     next_url = oauth_state.get("next_url", "/").strip()
     if not next_url.startswith("/") or next_url.startswith("//"):

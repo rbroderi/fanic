@@ -1,3 +1,4 @@
+import sqlite3
 import tomllib
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,7 @@ from fanic.cylinder_sites.common import validate_csrf
 from fanic.repository import set_user_prefers_explicit
 from fanic.repository import set_user_prefers_mature
 from fanic.repository import set_user_theme_preference
+from fanic.repository import update_user_onboarding
 
 
 def _redirect(response: ResponseLike, location: str) -> ResponseLike:
@@ -42,6 +44,28 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Forbidden", 403)
 
     profile_action = request.form.get("profile_action", "preferences").strip()
+    if profile_action == "onboarding":
+        display_name = request.form.get("display_name", "").strip()
+        is_over_18_raw = request.form.get("is_over_18", "").strip().lower()
+        if is_over_18_raw not in {"yes", "no"}:
+            return _redirect(response, "/user/profile?msg=onboarding-invalid")
+
+        try:
+            saved = update_user_onboarding(
+                username,
+                display_name=display_name,
+                is_over_18=is_over_18_raw == "yes",
+            )
+        except sqlite3.IntegrityError:
+            return _redirect(response, "/user/profile?msg=onboarding-name-taken")
+        except ValueError:
+            return _redirect(response, "/user/profile?msg=onboarding-invalid")
+
+        if not saved:
+            return _redirect(response, "/user/profile?msg=onboarding-already-complete")
+
+        return _redirect(response, "/user/profile?msg=onboarding-saved")
+
     if profile_action == "theme":
         custom_theme_enabled = request.form.get("custom_theme_enabled", "") == "on"
         theme_upload = request.files.get("theme_toml")

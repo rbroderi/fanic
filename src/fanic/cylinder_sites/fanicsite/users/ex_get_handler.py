@@ -12,6 +12,7 @@ from fanic.repository import FanartItemRow
 from fanic.repository import UserBookmarkRow
 from fanic.repository import WorkListItem
 from fanic.repository import can_view_work
+from fanic.repository import get_local_user
 from fanic.repository import list_fanart_items_by_uploader
 from fanic.repository import list_user_bookmarks
 from fanic.repository import list_works_by_uploader
@@ -77,6 +78,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Not found", 404)
 
     viewer = current_user(request)
+    local_user = get_local_user(profile_username)
+    profile_display_name = local_user["display_name"] if local_user is not None else profile_username
     uploaded = [work for work in list_works_by_uploader(profile_username) if can_view_work(viewer, work)]
     raw_bookmarks = list_user_bookmarks(profile_username)
     fanart_items = list_fanart_items_by_uploader(profile_username, limit=30)
@@ -95,10 +98,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     )
 
     replacements = {
-        "__PROFILE_PAGE_TITLE__": f"FANIC Profile - {escape(profile_username)}",
-        "__PROFILE_CARD_TITLE__": f"{escape(profile_username)}'s Profile",
+        "__PROFILE_PAGE_TITLE__": f"FANIC Profile - {escape(profile_display_name)}",
+        "__PROFILE_CARD_TITLE__": f"{escape(profile_display_name)}'s Profile",
         "__PROFILE_CARD_SUBTITLE__": "Public profile and uploaded works.",
-        "__PROFILE_DETAILS__": f"Username: {escape(profile_username)}",
+        "__PROFILE_DETAILS__": f"Display name: {escape(profile_display_name)}",
         "__PROFILE_SHARED_SECTIONS__": shared_sections_html,
     }
 

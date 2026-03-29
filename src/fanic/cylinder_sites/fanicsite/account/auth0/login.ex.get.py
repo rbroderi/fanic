@@ -41,6 +41,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     extra: dict[str, object] = {
         "redirect_uri": config.callback_url,
         "code_verifier": code_verifier,
+        "prompt": "login",
     }
     if config.audience:
         extra["audience"] = config.audience

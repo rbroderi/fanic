@@ -57,9 +57,9 @@ function ensureUserMenuThemeToggle() {
 
   toggleRow.append(toggleInput, toggleText);
 
-  const logoutForm = document.getElementById("userMenuLogoutForm");
-  if (logoutForm && logoutForm.parentElement === userMenuPanel) {
-    userMenuPanel.insertBefore(toggleRow, logoutForm);
+  const logoutAction = document.getElementById("userMenuLogout");
+  if (logoutAction && logoutAction.parentElement === userMenuPanel) {
+    userMenuPanel.insertBefore(toggleRow, logoutAction);
   } else {
     userMenuPanel.append(toggleRow);
   }
@@ -83,9 +83,9 @@ function ensureUserMenuNotificationLink() {
     notificationLink.setAttribute("hidden", "hidden");
   }
 
-  const logoutForm = document.getElementById("userMenuLogoutForm");
-  if (logoutForm && logoutForm.parentElement === userMenuPanel) {
-    userMenuPanel.insertBefore(notificationLink, logoutForm);
+  const logoutAction = document.getElementById("userMenuLogout");
+  if (logoutAction && logoutAction.parentElement === userMenuPanel) {
+    userMenuPanel.insertBefore(notificationLink, logoutAction);
   } else {
     userMenuPanel.append(notificationLink);
   }
@@ -116,9 +116,9 @@ function ensureUserMenuFeedbackLink() {
     return;
   }
 
-  const logoutForm = document.getElementById("userMenuLogoutForm");
-  if (logoutForm && logoutForm.parentElement === userMenuPanel) {
-    userMenuPanel.insertBefore(feedbackLink, logoutForm);
+  const logoutAction = document.getElementById("userMenuLogout");
+  if (logoutAction && logoutAction.parentElement === userMenuPanel) {
+    userMenuPanel.insertBefore(feedbackLink, logoutAction);
   } else {
     userMenuPanel.append(feedbackLink);
   }
@@ -182,6 +182,43 @@ function bindCustomThemePreferenceToggle() {
   customThemeToggle.dataset.themeBound = "true";
 }
 
+function bindProfileDisplayNameValidation() {
+  const displayNameInput = document.getElementById("profileDisplayName");
+  if (!displayNameInput || !(displayNameInput instanceof HTMLInputElement)) {
+    return;
+  }
+  const hint = document.getElementById("profileDisplayNameHint");
+  const validPattern = /^[A-Za-z0-9]+$/;
+
+  function validateDisplayName() {
+    const value = displayNameInput.value.trim();
+    let message = "";
+    if (!value) {
+      message = "Display name is required.";
+    } else if (!validPattern.test(value)) {
+      message = "Display name must use only letters and numbers.";
+    }
+
+    displayNameInput.setCustomValidity(message);
+    if (hint) {
+      if (message) {
+        hint.textContent = message;
+        hint.hidden = false;
+      } else {
+        hint.textContent = "";
+        hint.hidden = true;
+      }
+    }
+  }
+
+  displayNameInput.addEventListener("input", validateDisplayName);
+  displayNameInput.addEventListener("blur", validateDisplayName);
+  if (displayNameInput.form) {
+    displayNameInput.form.addEventListener("submit", validateDisplayName);
+  }
+  validateDisplayName();
+}
+
 applyTheme(preferredTheme());
 ensureUserMenuNotificationLink();
 ensureUserMenuFeedbackLink();
@@ -190,6 +227,7 @@ for (const toggle of themeToggles()) {
   bindThemeToggle(toggle);
 }
 bindCustomThemePreferenceToggle();
+bindProfileDisplayNameValidation();
 applyTheme(preferredTheme());
 
 if (userMenuButton && userMenuPanel && userMenuStatus && userMenuLogin && userMenuProfile && userMenuLogout) {

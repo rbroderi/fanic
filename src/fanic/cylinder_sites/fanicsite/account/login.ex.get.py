@@ -39,6 +39,11 @@ def _message_block(request: RequestLike) -> LoginMessage:
             )
         case "auth-disabled":
             return LoginMessage("Auth0 login is not enabled on this deployment.", "error")
+        case "auth-email-unverified":
+            return LoginMessage(
+                "Please verify your email address, then sign in again.",
+                "error",
+            )
         case "auth-failed":
             return LoginMessage("Authentication failed. Please try again.", "error")
         case "callback-invalid":

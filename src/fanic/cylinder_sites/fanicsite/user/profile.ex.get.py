@@ -9,6 +9,7 @@ from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
 from fanic.repository import can_view_work
+from fanic.repository import get_local_user
 from fanic.repository import get_user_theme_preference
 from fanic.repository import list_fanart_items_by_uploader
 from fanic.repository import list_recent_reading_history
@@ -117,6 +118,34 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         theme_status_class = "error"
         theme_status_hidden = ""
 
+    onboarding_status_text = ""
+    onboarding_status_class = ""
+    onboarding_status_hidden = "hidden"
+    if save_msg == "onboarding-required":
+        onboarding_status_text = "Please finish onboarding before using the rest of the site."
+        onboarding_status_class = "error"
+        onboarding_status_hidden = ""
+    elif save_msg == "onboarding-saved":
+        onboarding_status_text = "Profile details saved."
+        onboarding_status_class = "success"
+        onboarding_status_hidden = ""
+    elif save_msg == "onboarding-invalid":
+        onboarding_status_text = "Display name must use only letters and numbers, and age selection is required."
+        onboarding_status_class = "error"
+        onboarding_status_hidden = ""
+    elif save_msg == "onboarding-name-taken":
+        onboarding_status_text = "That display name is already in use."
+        onboarding_status_class = "error"
+        onboarding_status_hidden = ""
+    elif save_msg == "onboarding-already-complete":
+        onboarding_status_text = "Onboarding has already been completed for this account."
+        onboarding_status_class = "error"
+        onboarding_status_hidden = ""
+    elif save_msg == "underage-restricted":
+        onboarding_status_text = "Your account is currently limited to this page."
+        onboarding_status_class = "error"
+        onboarding_status_hidden = ""
+
     if username is None:
         shared_sections_html = render_profile_shared_sections(
             {
@@ -140,6 +169,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden",
             "__PROFILE_PUBLIC_HREF__": "",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "hidden",
+            "__PROFILE_ONBOARDING_HIDDEN_ATTR__": "hidden",
+            "__PROFILE_DISPLAY_NAME_VALUE__": "",
+            "__PROFILE_IS_OVER_18_YES_SELECTED_ATTR__": "",
+            "__PROFILE_IS_OVER_18_NO_SELECTED_ATTR__": "",
+            "__PROFILE_ONBOARDING_STATUS__": onboarding_status_text,
+            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
+            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "hidden",
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": "",
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": "",
@@ -189,6 +225,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         view_explicit_checked = "checked" if user_prefers_explicit(username) else ""
         theme_preference = get_user_theme_preference(username)
         custom_theme_checked = "checked" if theme_preference["enabled"] else ""
+        local_user = get_local_user(username)
+        display_name = username
+        is_over_18: bool | None = None
+        age_gate_completed = False
+        if local_user is not None:
+            display_name = local_user["display_name"]
+            is_over_18 = local_user["is_over_18"]
+            age_gate_completed = local_user["age_gate_completed"]
+
+        over_18_yes_selected = "selected" if is_over_18 is True else ""
+        over_18_no_selected = "selected" if is_over_18 is False else ""
+        onboarding_hidden_attr = "hidden" if age_gate_completed else ""
         replacements = {
             "__PROFILE_PAGE_TITLE__": "FANIC Profile",
             "__PROFILE_CARD_TITLE__": "Your Profile",
@@ -197,10 +245,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_STATUS__": "Logged in.",
             "__PROFILE_STATUS_CLASS__": "",
             "__PROFILE_STATUS_HIDDEN_ATTR__": "",
-            "__PROFILE_DETAILS__": f"Username: {escape(username)}",
+            "__PROFILE_DETAILS__": f"Display name: {escape(display_name)}",
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "",
             "__PROFILE_PUBLIC_HREF__": f"/users/{escape(username)}",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "",
+            "__PROFILE_ONBOARDING_HIDDEN_ATTR__": onboarding_hidden_attr,
+            "__PROFILE_DISPLAY_NAME_VALUE__": escape(display_name),
+            "__PROFILE_IS_OVER_18_YES_SELECTED_ATTR__": over_18_yes_selected,
+            "__PROFILE_IS_OVER_18_NO_SELECTED_ATTR__": over_18_no_selected,
+            "__PROFILE_ONBOARDING_STATUS__": onboarding_status_text,
+            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
+            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "",
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": view_mature_checked,
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": view_explicit_checked,

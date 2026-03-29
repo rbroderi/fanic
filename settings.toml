@@ -10,7 +10,7 @@ db_path = "/opt/fanic/runtime/fanic.db"
 
 media_base_url = "http://127.0.0.1:8080"
 enable_beartype = true
-log_path_template = "logs/%TIMESTAMP%.log"
+log_path_template = "/var/log/fanic/%TIMESTAMP%.log"
 
 explicit_threshold = 0.7
 openclip_cache_dir = "~/.cache/clip"
@@ -46,7 +46,7 @@ auth0_domain = ""
 auth0_client_id = ""
 auth0_client_secret = "" # pragma: allowlist secret
 auth0_callback_url = "https://fanic.media/account/callback"
-auth0_logout_return_url = "https://fanic.media/"
+auth0_logout_return_url = "https://fanic.media/account/logged-out"
 auth0_audience = ""
 auth0_connection = "Username-Password-Authentication"
 auth0_superadmin_email = "admin@fanic.media"
