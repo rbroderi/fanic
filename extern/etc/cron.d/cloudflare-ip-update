@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+# Hourly Cloudflare IP allowlist refresh for UFW
+17 * * * * root /bin/bash /etc/cloudflare/ip_update.sh >> /var/log/cloudflare-ip-update.log 2>&1
