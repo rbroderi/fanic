@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    "bodil.prettier-toml",
+    "charliermarsh.ruff",
+    "detachhead.basedpyright",
+    "github.copilot-chat",
+    "github.vscode-github-actions",
+    "kevinrose.vsc-python-indent",
+    "ms-python.debugpy",
+    "ms-python.mypy-type-checker",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.vscode-python-envs",
+    "ms-vscode.powershell",
+    "sclu1034.justfile",
+    "streetsidesoftware.code-spell-checker",
+    "tamasfe.even-better-toml",
+    "tobiashochguertel.just-formatter",
+    "usernamehw.errorlens"
+  ]
+}
