@@ -601,6 +601,8 @@ def get_or_create_user_for_auth0_identity(
                 email=resolved_email,
                 active=True,
                 role=desired_role,
+                is_over_18=existing_user["is_over_18"],
+                age_gate_completed=existing_user["age_gate_completed"],
             )
             upsert_auth_identity(
                 provider="auth0",
@@ -628,6 +630,8 @@ def get_or_create_user_for_auth0_identity(
             email=resolved_email,
             active=True,
             role=desired_role,
+            is_over_18=local_user["is_over_18"],
+            age_gate_completed=local_user["age_gate_completed"],
         )
         upsert_auth_identity(
             provider="auth0",

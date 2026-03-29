@@ -210,6 +210,46 @@ def test_get_or_create_user_for_auth0_identity_promotes_superadmin_email(
     assert repeated_username == first_username
 
 
+def test_get_or_create_user_for_auth0_identity_preserves_onboarding_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    class _Settings:
+        auth0_superadmin_email: str = "admin@fanic.media"
+
+    monkeypatch.setattr(repository, "get_settings", lambda: _Settings())
+
+    username = repository.get_or_create_user_for_auth0_identity(
+        subject="auth0|preserve-1",
+        email="person@example.com",
+        email_verified=True,
+        display_name="PersonOne",
+    )
+    assert str(UUID(username)) == username
+
+    saved = repository.update_user_onboarding(
+        username,
+        display_name="PersonOne",
+        is_over_18=True,
+    )
+    assert saved is True
+
+    repeated_username = repository.get_or_create_user_for_auth0_identity(
+        subject="auth0|preserve-1",
+        email="person@example.com",
+        email_verified=True,
+        display_name="PersonOne",
+    )
+    assert repeated_username == username
+
+    local_user = repository.get_local_user(username)
+    assert local_user is not None
+    assert local_user["is_over_18"] is True
+    assert local_user["age_gate_completed"] is True
+
+
 def test_update_user_onboarding_only_applies_once(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
