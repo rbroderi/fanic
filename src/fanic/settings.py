@@ -76,6 +76,7 @@ class FanicSettings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         extra="ignore",
         env_prefix="FANIC_",
+        env_file=".env",
         populate_by_name=True,
         toml_file=_SETTINGS_TOML_PATH,
     )
@@ -187,6 +188,36 @@ class FanicSettings(BaseSettings):
     @classmethod
     def _expand_openclip_cache_dir(cls, value: str) -> str:
         return str(Path(value).expanduser())
+
+    @field_validator("session_secret", mode="before")
+    @classmethod
+    def _session_secret_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_SESSION_SECRET_FILE")
+
+    @field_validator("admin_password_hash", mode="before")
+    @classmethod
+    def _admin_password_hash_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_ADMIN_PASSWORD_HASH_FILE")
+
+    @field_validator("auth0_client_secret", mode="before")
+    @classmethod
+    def _auth0_client_secret_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_SECRET_FILE")
+
+    @field_validator("auth0_domain", mode="before")
+    @classmethod
+    def _auth0_domain_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_AUTH0_DOMAIN_FILE")
+
+    @field_validator("auth0_client_id", mode="before")
+    @classmethod
+    def _auth0_client_id_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_ID_FILE")
+
+    @field_validator("alpha_invite_codes_csv", mode="before")
+    @classmethod
+    def _alpha_invite_codes_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_ALPHA_INVITE_CODES_CSV_FILE")
 
     @field_validator(
         "max_cbz_upload_bytes",
@@ -372,6 +403,19 @@ def parse_byte_size(value: str | int) -> int:
     unit = BytesUnit.from_token(unit_raw)
 
     return unit.to_bytes(number)
+
+
+def _resolve_value_from_file(value: Any, file_env_var_name: str) -> Any:
+    file_path_raw = os.getenv(file_env_var_name, "").strip()
+    if not file_path_raw:
+        return value
+
+    file_path = Path(file_path_raw).expanduser()
+    try:
+        loaded = file_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Unable to read {file_env_var_name} file at '{file_path}'") from exc
+    return loaded.strip()
 
 
 @lru_cache(maxsize=1)

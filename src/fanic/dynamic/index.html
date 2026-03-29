@@ -4,46 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FANIC Archive</title>
-    <link rel="icon" href="/static/logo.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-    <link rel="stylesheet" href="/static/styles.css" />
+    __SITE_HEAD_ASSETS__
   </head>
   <body class="home-page __HOME_VIEW_CLASS__">
-    <header class="site-header">
-      <div class="site-header-row">
-        <h1 class="site-title"><a href="/" aria-label="FANIC home"><img class="site-logo" src="/static/logo.png" alt="FANIC Logo" /></a></h1>
-        <div class="header-actions">
-          <nav class="site-nav" aria-label="Primary">
-            __ADMIN_REPORTS_LINK__
-          </nav>
-          <div class="user-menu">
-            <button id="userMenuButton" class="user-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" title="User menu">
-              <i class="fa-solid fa-user" aria-hidden="true"></i>
-              <span class="sr-only">User menu</span>
-            </button>
-            <div id="userMenuPanel" class="user-menu-panel" hidden>
-              <p id="userMenuStatus" class="user-menu-status">__USER_MENU_STATUS__</p>
-              <a id="userMenuLogin" class="user-menu-link" href="/account/login" __USER_MENU_LOGIN_HIDDEN_ATTR__>Login</a>
-              <a id="userMenuProfile" class="user-menu-link" href="/user/profile" __USER_MENU_PROFILE_HIDDEN_ATTR__>Profile</a>
-              __USER_MENU_UPLOAD_LINK__
-              <form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" __USER_MENU_LOGOUT_HIDDEN_ATTR__>
-                <button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>
-              </form>
-            </div>
-          </div>
-        </div>
-        <section class="home-tabs-shell" aria-label="Browse views tabs">
-          <nav class="browse-tabs" aria-label="Browse views">
-            <a href="/?view=comics" __COMICS_TAB_CURRENT__>Comics</a>
-            <a href="/?view=fanart" __FANART_TAB_CURRENT__>Fanart</a>
-          </nav>
-        </section>
-        <p class="profile-meta" __VIEW_TAGLINE_HIDDEN_ATTR__>+Fanart</p>
-      </div>
-    </header>
+    __SITE_HEADER_HTML__
     <main class="layout">
       <section class="card">
         <form id="filters" class="filter-row" method="get" action="__FILTER_ACTION__">
@@ -71,7 +35,7 @@
       </section>
       <section class="work-grid" id="workGrid">__WORK_GRID_HTML__</section>
     </main>
-    <script src="/static/user-menu.js"></script>
+    __SITE_COMMON_SCRIPTS__
   </body>
 </html>
 
