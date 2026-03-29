@@ -159,3 +159,66 @@ rebuild-thumbnails *args:
 [unix]
 rebuild-thumbnails *args:
     uv run scripts/rebuild-thumbnails.py {{ args }}
+
+# Build frontend TypeScript into static JavaScript assets.
+[windows]
+frontend-build:
+    npm run frontend:build
+
+[unix]
+frontend-build:
+    npm run frontend:build
+
+# Build frontend TypeScript with source maps for local debugging.
+[windows]
+frontend-build-dev:
+    npm run frontend:build:dev
+
+[unix]
+frontend-build-dev:
+    npm run frontend:build:dev
+
+# Type-check frontend TypeScript without emitting files.
+[windows]
+frontend-typecheck:
+    npm run frontend:typecheck
+
+[unix]
+frontend-typecheck:
+    npm run frontend:typecheck
+
+# Lint frontend TypeScript.
+[windows]
+frontend-lint:
+    npm run frontend:lint
+
+[unix]
+frontend-lint:
+    npm run frontend:lint
+
+# Check frontend TypeScript formatting.
+[windows]
+frontend-format-check:
+    npm run frontend:format:check
+
+[unix]
+frontend-format-check:
+    npm run frontend:format:check
+
+# Format frontend TypeScript files in place.
+[windows]
+frontend-format:
+    npm run frontend:format
+
+[unix]
+frontend-format:
+    npm run frontend:format
+
+# Watch and recompile frontend TypeScript on file changes.
+[windows]
+frontend-watch:
+    npm run frontend:watch
+
+[unix]
+frontend-watch:
+    npm run frontend:watch

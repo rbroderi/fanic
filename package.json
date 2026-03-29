@@ -1,0 +1,23 @@
+{
+  "name": "fanic-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Frontend TypeScript build for FANIC static assets",
+  "scripts": {
+    "frontend:build": "tsc -p tsconfig.json",
+    "frontend:build:dev": "tsc -p tsconfig.dev.json",
+    "frontend:lint": "eslint \"frontend/**/*.ts\"",
+    "frontend:lint:fix": "eslint \"frontend/**/*.ts\" --fix",
+    "frontend:format": "prettier \"frontend/**/*.ts\" --write",
+    "frontend:format:check": "prettier \"frontend/**/*.ts\" --check",
+    "frontend:watch": "tsc -p tsconfig.dev.json --watch",
+    "frontend:typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "eslint": "^9.36.0",
+    "prettier": "^3.6.2",
+    "typescript-eslint": "^8.44.0",
+    "typescript": "^5.9.2"
+  }
+}

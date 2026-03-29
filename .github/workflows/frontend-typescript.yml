@@ -1,0 +1,41 @@
+name: Frontend TypeScript
+
+on:
+  push:
+    paths:
+      - "frontend/**/*.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "tsconfig.dev.json"
+      - ".github/workflows/frontend-typescript.yml"
+  pull_request:
+    paths:
+      - "frontend/**/*.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "tsconfig.dev.json"
+      - ".github/workflows/frontend-typescript.yml"
+
+jobs:
+  frontend-typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend typecheck
+        run: npm run frontend:typecheck
+
+      - name: Run frontend build
+        run: npm run frontend:build

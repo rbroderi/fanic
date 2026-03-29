@@ -2,7 +2,9 @@ import argparse
 import atexit
 import functools
 import logging
+import shutil
 import signal
+import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -44,6 +46,42 @@ def _enable_beartype() -> None:
 
 
 _enable_beartype()
+
+
+def _compile_frontend_assets() -> int:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    package_json = repo_root / "package.json"
+    if not package_json.exists():
+        return OK
+
+    npm_path = shutil.which("npm")
+    if not npm_path:
+        print(
+            "frontend compile skipped: npm not found. Install Node.js/npm or remove package.json if unused.",
+            flush=True,
+        )
+        return ERROR
+
+    completed = subprocess.run(
+        [npm_path, "run", "frontend:build"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if completed.returncode != 0:
+        output = completed.stdout if completed.stdout else ""
+        errors = completed.stderr if completed.stderr else ""
+        if output:
+            print(output, flush=True)
+        if errors:
+            print(errors, flush=True)
+        print("frontend compile failed", flush=True)
+        return ERROR
+
+    print("frontend compile complete", flush=True)
+    return OK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -171,6 +209,10 @@ def main() -> int:
             return OK
         case "serve":
             from fanic.cylinder_main import serve as serve
+
+            compile_result = _compile_frontend_assets()
+            if compile_result != OK:
+                return compile_result
 
             return serve(
                 host=args.host,
