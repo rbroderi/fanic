@@ -43,7 +43,7 @@ def _work_grid_html(
         cover_thumb_name = str(work.get("cover_thumb_filename", "")).strip()
         work_id_quoted = quote(str(work.get("id", "")), safe="")
         if cover_thumb_name:
-            cover_src = media_url(f"/comic/{work_id_quoted}/thumbs/{quote(cover_thumb_name, safe='/')}")
+            cover_src = media_url(f"/static/{work_id_quoted}/thumbs/{quote(cover_thumb_name, safe='/')}")
         else:
             cover_src = media_url("/static/logo.png")
 
@@ -91,11 +91,13 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
         uploader = str(row.get("uploader_username", "")).strip()
         if not uploader:
             continue
+        display_name_raw = str(row.get("uploader_display_name", "")).strip()
+        display_name = display_name_raw if display_name_raw else uploader
         item_id = str(row.get("id", "")).strip()
         if not item_id:
             continue
 
-        safe_uploader = escape(uploader)
+        safe_display_name = escape(display_name)
         safe_item_id = quote(item_id, safe="")
         uploader_href = f"/fanart/{quote(uploader, safe='')}"
         viewer_href = f"{uploader_href}/reader?item_id={safe_item_id}&back={quote(back_href, safe='')}"
@@ -106,7 +108,7 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
         rating_html = rating_badge_html(row.get("rating", "Not Rated"))
         created_at = escape(str(row.get("created_at", "")))
         image_name = str(row.get("image_filename", "")).strip()
-        claimed_url = f"/fanart/images/{quote(image_name, safe='/')}" if image_name else viewer_href
+        claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else viewer_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
             f"&work_title={quote(title_raw, safe='')}"
@@ -114,7 +116,7 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
         )
         thumb_name = str(row.get("thumb_filename", "")).strip()
         if thumb_name:
-            thumb_src = f"/fanart/thumbs/{quote(thumb_name, safe='/')}"
+            thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}"
         else:
             thumb_src = "/static/logo.png"
 
@@ -122,10 +124,10 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
             f'''
       <article class="card work-card">
                 <a href="{viewer_href}">
-          <img class="work-cover" src="{thumb_src}" alt="{safe_uploader} fanart preview" loading="lazy" />
+            <img class="work-cover" src="{thumb_src}" alt="{safe_display_name} fanart preview" loading="lazy" />
         </a>
         <h3><a href="{viewer_href}">{title}</a></h3>
-                <h3><a href="{uploader_href}">@{safe_uploader}</a></h3>
+                <h3><a href="{uploader_href}">@{safe_display_name}</a></h3>
         <p class="work-meta">{rating_html} | {created_at}</p>
         <p>{summary}</p>
         <p><a href="{report_href}">Report</a></p>

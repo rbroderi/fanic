@@ -18,6 +18,7 @@ from fanic.settings import get_settings
 _SETTINGS = get_settings()
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
+THUMBNAIL_MAX_DIMENSIONS = tuple(getattr(_SETTINGS, "thumbnail_max_dimensions", (720, 720)))
 MAX_UPLOAD_IMAGE_PIXELS = int(getattr(_SETTINGS, "max_upload_image_pixels", 40000000))
 
 
@@ -162,7 +163,7 @@ def ingest_fanart_image(
             image_name = _store_content_addressed(images_dir, page_bytes, "avif")
 
             thumb_image = _prepare_image_for_avif(image)
-            thumb_image.thumbnail((360, 360))
+            thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
             thumb_bytes = _render_image_bytes(
                 thumb_image,
                 fmt="AVIF",

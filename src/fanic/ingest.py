@@ -51,6 +51,7 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 _SETTINGS = get_settings()
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
+THUMBNAIL_MAX_DIMENSIONS = tuple(getattr(_SETTINGS, "thumbnail_max_dimensions", (720, 720)))
 MAX_INGEST_PAGES = int(getattr(_SETTINGS, "max_ingest_pages", 2000))
 MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_member_uncompressed_bytes", 134217728))
 MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_total_uncompressed_bytes", 2147483648))
@@ -834,7 +835,7 @@ def ingest_cbz(
                                 len(image_members),
                             )
                         thumb_image = _prepare_image_for_avif(image)
-                        thumb_image.thumbnail((360, 360))
+                        thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
                         thumb_bytes = _render_image_bytes(
                             thumb_image,
                             fmt="AVIF",
@@ -982,7 +983,7 @@ def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, objec
         try:
             with Image.open(source_path) as image:
                 thumb_image = _prepare_image_for_avif(image)
-                thumb_image.thumbnail((360, 360))
+                thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
                 thumb_bytes = _render_image_bytes(
                     thumb_image,
                     fmt="AVIF",
@@ -1079,7 +1080,7 @@ def ingest_editor_page(
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
             thumb_image = _prepare_image_for_avif(image)
-            thumb_image.thumbnail((360, 360))
+            thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
             thumb_bytes = _render_image_bytes(
                 thumb_image,
                 fmt="AVIF",
@@ -1364,7 +1365,7 @@ def editor_replace_page_image(
             image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
 
             thumb_image = _prepare_image_for_avif(image)
-            thumb_image.thumbnail((360, 360))
+            thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
             thumb_bytes = _render_image_bytes(
                 thumb_image,
                 fmt="AVIF",

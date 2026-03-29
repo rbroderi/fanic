@@ -510,7 +510,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     cover_image_name = str(cover_files["image"]).strip() if cover_files else ""
     work_id_quoted = quote(work_id, safe="")
     if cover_image_name:
-        cover_src = media_url(f"/comic/{work_id_quoted}/pages/{quote(cover_image_name, safe='/')}")
+        cover_src = media_url(f"/static/{work_id_quoted}/pages/{quote(cover_image_name, safe='/')}")
     else:
         cover_src = media_url("/static/logo.png")
 
