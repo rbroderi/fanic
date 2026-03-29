@@ -231,7 +231,7 @@ def test_get_or_create_user_for_auth0_identity_preserves_onboarding_fields(
 
     saved = repository.update_user_onboarding(
         username,
-        display_name="PersonOne",
+        display_name="PersonCustom",
         is_over_18=True,
     )
     assert saved is True
@@ -240,12 +240,13 @@ def test_get_or_create_user_for_auth0_identity_preserves_onboarding_fields(
         subject="auth0|preserve-1",
         email="person@example.com",
         email_verified=True,
-        display_name="PersonOne",
+        display_name="AuthProviderName",
     )
     assert repeated_username == username
 
     local_user = repository.get_local_user(username)
     assert local_user is not None
+    assert local_user["display_name"] == "PersonCustom"
     assert local_user["is_over_18"] is True
     assert local_user["age_gate_completed"] is True
 

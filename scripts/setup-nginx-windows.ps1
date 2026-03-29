@@ -164,6 +164,12 @@ http {
             return 404;
         }
 
+        location = /robots.txt {
+            default_type text/plain;
+            add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+            return 200 "User-agent: *\nDisallow: /\n";
+        }
+
         location /static/ {
             alias $dynamicPathNginx/;
             try_files `$uri =404;
