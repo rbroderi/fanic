@@ -44,8 +44,9 @@ def _reader_pages_from_version_manifest(
         thumb_filename = str(page.get("thumb_filename", "")).strip()
         if image_filename:
             thumb_name = thumb_filename if thumb_filename else image_filename
-            image_url = media_url(f"/comic/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}")
-            thumb_url = media_url(f"/comic/{quote(work_id, safe='')}/thumbs/{quote(thumb_name, safe='/')}")
+            work_id_quoted = quote(work_id, safe="")
+            image_url = media_url(f"/static/{work_id_quoted}/pages/{quote(image_filename, safe='/')}")
+            thumb_url = media_url(f"/static/{work_id_quoted}/thumbs/{quote(thumb_name, safe='/')}")
         else:
             image_url = media_url(str(page.get("image_url", "")).strip())
             thumb_url = media_url(str(page.get("thumb_url", "")).strip())

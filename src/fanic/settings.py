@@ -178,6 +178,7 @@ class FanicSettings(BaseSettings):
     allowed_page_extensions_csv: str
     image_avif_quality: int
     thumbnail_avif_quality: int
+    thumbnail_max_size: str = "720x720"
 
     # Input normalization
     @field_validator("data_dir", "db_path", mode="before")
@@ -191,6 +192,23 @@ class FanicSettings(BaseSettings):
     @classmethod
     def _expand_openclip_cache_dir(cls, value: str) -> str:
         return str(Path(value).expanduser())
+
+    @field_validator("thumbnail_max_size", mode="before")
+    @classmethod
+    def _validate_thumbnail_max_size(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError("thumbnail_max_size must be a string formatted as YYYxZZZ")
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("thumbnail_max_size cannot be empty")
+        match = re.fullmatch(r"(\d+)x(\d+)", normalized)
+        if match is None:
+            raise ValueError("thumbnail_max_size must match YYYxZZZ, for example 720x720")
+        width = int(match.group(1))
+        height = int(match.group(2))
+        if width < 1 or height < 1:
+            raise ValueError("thumbnail_max_size dimensions must be positive")
+        return f"{width}x{height}"
 
     @field_validator("session_secret", mode="before")
     @classmethod
@@ -348,6 +366,11 @@ class FanicSettings(BaseSettings):
     @property
     def allowed_page_content_types(self) -> set[str]:
         return {value.strip().lower() for value in self.allowed_page_content_types_csv.split(",") if value.strip()}
+
+    @property
+    def thumbnail_max_dimensions(self) -> tuple[int, int]:
+        width_raw, height_raw = self.thumbnail_max_size.split("x", 1)
+        return (int(width_raw), int(height_raw))
 
     @property
     def alpha_invite_codes(self) -> set[str]:

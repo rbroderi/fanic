@@ -110,7 +110,7 @@ POST_RATE_WINDOW_SECONDS = 60
 POST_RATE_MAX_REQUESTS = 30
 
 _POST_FORM_OPEN_TAG_RE = re.compile(
-    r"<form\\b[^>]*\\bmethod\\s*=\\s*(['\"]?)post\\1[^>]*>",
+    r"<form\b[^>]*\bmethod\s*=\s*(['\"]?)post\1[^>]*>",
     flags=re.IGNORECASE,
 )
 _AUTH_LOCK = threading.Lock()
@@ -630,6 +630,21 @@ def request_is_secure(request: RequestLike) -> bool:
         url_scheme_obj = environ_map.get("wsgi.url_scheme", "")
         url_scheme = str(url_scheme_obj).lower()
         if url_scheme == "https":
+            return True
+
+        forwarded_proto_obj = environ_map.get("HTTP_X_FORWARDED_PROTO", "")
+        forwarded_proto = str(forwarded_proto_obj).split(",", maxsplit=1)[0].strip().lower()
+        if forwarded_proto == "https":
+            return True
+
+        forwarded_ssl_obj = environ_map.get("HTTP_X_FORWARDED_SSL", "")
+        forwarded_ssl = str(forwarded_ssl_obj).strip().lower()
+        if forwarded_ssl in {"on", "1", "true"}:
+            return True
+
+        front_end_https_obj = environ_map.get("HTTP_FRONT_END_HTTPS", "")
+        front_end_https = str(front_end_https_obj).strip().lower()
+        if front_end_https in {"on", "1", "true"}:
             return True
 
     return False

@@ -126,6 +126,7 @@ class NotificationRow(TypedDict):
 class FanartItemRow(TypedDict):
     id: str
     uploader_username: str
+    uploader_display_name: NotRequired[str]
     title: str
     summary: str
     fandom: str
@@ -1749,47 +1750,52 @@ def list_fanart_items(
 
     search = resolved_filters.get("q", "").strip()
     if search:
-        where.append("(uploader_username LIKE ? OR title LIKE ? OR summary LIKE ? OR fandom LIKE ?)")
+        where.append(
+            "(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ? OR u.display_name LIKE ?)"
+        )
         like_search = f"%{search}%"
-        params.extend([like_search, like_search, like_search, like_search])
+        params.extend([like_search, like_search, like_search, like_search, like_search])
 
     uploader = resolved_filters.get("user", "").strip()
     if uploader:
-        where.append("uploader_username LIKE ?")
+        where.append("(fi.uploader_username LIKE ? OR u.display_name LIKE ?)")
         like_uploader = f"%{uploader}%"
-        params.append(like_uploader)
+        params.extend([like_uploader, like_uploader])
 
     fandom = resolved_filters.get("fandom", "").strip()
     if fandom:
-        where.append("fandom LIKE ?")
+        where.append("fi.fandom LIKE ?")
         like_fandom = f"%{fandom}%"
         params.append(like_fandom)
 
     tag = resolved_filters.get("tag", "").strip()
     if tag:
-        where.append("(title LIKE ? OR summary LIKE ?)")
+        where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
         like_tag = f"%{tag}%"
         params.extend([like_tag, like_tag])
 
     status = resolved_filters.get("status", "").strip()
     if status == "complete":
-        where.append("summary <> ''")
+        where.append("fi.summary <> ''")
     elif status == "in_progress":
-        where.append("summary = ''")
+        where.append("fi.summary = ''")
 
     sort = resolved_filters.get("sort", "newest").strip()
-    order_by = "created_at DESC, id DESC"
+    order_by = "fi.created_at DESC, fi.id DESC"
     if sort == "oldest":
-        order_by = "created_at ASC, id ASC"
+        order_by = "fi.created_at ASC, fi.id ASC"
     elif sort == "title_asc":
-        order_by = "title COLLATE NOCASE ASC, id ASC"
+        order_by = "fi.title COLLATE NOCASE ASC, fi.id ASC"
     elif sort == "title_desc":
-        order_by = "title COLLATE NOCASE DESC, id DESC"
+        order_by = "fi.title COLLATE NOCASE DESC, fi.id DESC"
 
     sql = """
-            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
+            SELECT fi.id, fi.uploader_username,
+                   COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name,
+                   fi.title, fi.summary, fi.fandom, fi.rating, fi.image_filename, fi.thumb_filename,
+                   fi.width, fi.height, fi.created_at, fi.updated_at
+            FROM fanart_items fi
+            LEFT JOIN users u ON u.username = fi.uploader_username
     """
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -1809,6 +1815,7 @@ def list_fanart_items(
             {
                 "id": str(row["id"]),
                 "uploader_username": str(row["uploader_username"]),
+                "uploader_display_name": str(row["uploader_display_name"]),
                 "title": str(row["title"]),
                 "summary": str(row["summary"]),
                 "fandom": str(row["fandom"]),
@@ -1836,11 +1843,14 @@ def list_fanart_items_by_uploader(
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-            WHERE uploader_username = ?
-            ORDER BY created_at DESC, id DESC
+             SELECT fi.id, fi.uploader_username,
+                 COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name,
+                 fi.title, fi.summary, fi.fandom, fi.rating, fi.image_filename, fi.thumb_filename,
+                 fi.width, fi.height, fi.created_at, fi.updated_at
+             FROM fanart_items fi
+             LEFT JOIN users u ON u.username = fi.uploader_username
+             WHERE fi.uploader_username = ?
+             ORDER BY fi.created_at DESC, fi.id DESC
             LIMIT ?
             """,
             (normalized_uploader, int(limit)),
@@ -1855,6 +1865,7 @@ def list_fanart_items_by_uploader(
             {
                 "id": str(row["id"]),
                 "uploader_username": str(row["uploader_username"]),
+                "uploader_display_name": str(row["uploader_display_name"]),
                 "title": str(row["title"]),
                 "summary": str(row["summary"]),
                 "fandom": str(row["fandom"]),
@@ -2587,11 +2598,12 @@ def get_manifest(work_id: str) -> dict[str, object] | None:
         image_filename = str(page["image_filename"])
         thumb_value = page["thumb_filename"]
         thumb_filename = str(thumb_value) if thumb_value is not None else image_filename
+        work_id_quoted = quote(work_id, safe="")
         manifest_pages.append(
             {
                 "index": int(page["page_index"]),
-                "image_url": f"/comic/{quote(work_id, safe='')}/pages/{quote(image_filename, safe='/')}",
-                "thumb_url": f"/comic/{quote(work_id, safe='')}/thumbs/{quote(thumb_filename, safe='/')}",
+                "image_url": f"/static/{work_id_quoted}/pages/{quote(image_filename, safe='/')}",
+                "thumb_url": f"/static/{work_id_quoted}/thumbs/{quote(thumb_filename, safe='/')}",
                 "width": page["width"],
                 "height": page["height"],
             }

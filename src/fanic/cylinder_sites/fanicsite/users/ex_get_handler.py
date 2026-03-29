@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from html import escape
+from urllib.parse import quote
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -64,8 +65,8 @@ def _fanart_html(uploader_username: str, items: list[FanartItemRow]) -> str:
     rows: list[str] = []
     for item in items:
         title = escape(str(item.get("title", "Untitled")))
-        image_name = escape(str(item.get("image_filename", "")))
-        rows.append(f'<li><a href="/fanart/images/{image_name}">{title}</a></li>')
+        image_name = quote(str(item.get("image_filename", "")).strip(), safe="/")
+        rows.append(f'<li><a href="/static/fanart/images/{image_name}">{title}</a></li>')
     return '<ul class="work-links">' + "".join(rows) + "</ul>"
 
 

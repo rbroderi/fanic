@@ -564,6 +564,7 @@ def test_fanart_crud_and_lookup_helpers(
     filtered_items = repository.list_fanart_items({"q": "robot"}, limit=20)
     assert len(filtered_items) == 1
     assert filtered_items[0]["id"] == "fanart-2"
+    assert filtered_items[0]["uploader_display_name"] == "bob"
 
     user_items = repository.list_fanart_items({"user": "ali"}, limit=20)
     assert len(user_items) == 1
@@ -587,6 +588,7 @@ def test_fanart_crud_and_lookup_helpers(
     items = repository.list_fanart_items_by_uploader("alice", limit=20)
     assert len(items) == 1
     assert items[0]["id"] == "fanart-1"
+    assert items[0]["uploader_display_name"] == "alice"
 
     item_by_id = repository.get_fanart_item("fanart-1")
     assert item_by_id is not None

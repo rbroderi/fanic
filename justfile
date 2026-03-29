@@ -145,3 +145,17 @@ set-permissions root_dir="/opt/fanic/src":
 [unix]
 set-permissions root_dir="/opt/fanic/src":
     sudo bash scripts/set-source-permissions.sh "{{ root_dir }}"
+
+# Rebuild stored comic and fanart thumbnails using current settings.
+# Usage examples:
+#   just rebuild-thumbnails
+#   just rebuild-thumbnails --dry-run
+
+# just rebuild-thumbnails --scope comics
+[windows]
+rebuild-thumbnails *args:
+    uv run scripts\rebuild-thumbnails.py {{ args }}
+
+[unix]
+rebuild-thumbnails *args:
+    uv run scripts/rebuild-thumbnails.py {{ args }}

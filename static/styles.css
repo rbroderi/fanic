@@ -232,6 +232,10 @@ a {
   height: 1px;
   padding: 0;
   margin: -1px;
+  display: block;
+  aspect-ratio: var(--mobile-page-ratio, 3 / 4);
+  object-fit: contain;
+  background: #000;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   border: 0;
@@ -1074,11 +1078,23 @@ a {
 
 .thumb {
   width: 100%;
+  display: block;
+  aspect-ratio: var(--thumb-ratio, 3 / 4);
+  object-fit: contain;
+  background: #000;
   border-radius: 6px;
   border: 1px solid var(--line);
   margin-bottom: 0.6rem;
   cursor: pointer;
   transition: transform 140ms ease;
+}
+
+.thumb-loading {
+  background: #000;
+}
+
+.thumb-ready {
+  animation: reader-thumb-fade-in 180ms ease;
 }
 
 .thumb:hover {
@@ -1231,8 +1247,30 @@ a {
 
 .mobile-list img {
   width: 100%;
+  display: block;
+  aspect-ratio: var(--mobile-page-ratio, 3 / 4);
+  object-fit: contain;
+  background: #000;
   margin-bottom: 0.8rem;
+  border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.mobile-page-loading {
+  background: #000;
+}
+
+.mobile-page-ready {
+  animation: reader-thumb-fade-in 220ms ease;
+}
+
+@keyframes reader-thumb-fade-in {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 900px) {

@@ -13,7 +13,7 @@ db_path = "/opt/fanic/runtime/fanic.db"
 # Runtime behavior, logging, and media base URL.
 enable_beartype = true
 log_path_template = "/var/log/fanic/%TIMESTAMP%.log"
-media_base_url = "http://127.0.0.1:8080"
+media_base_url = "https://fanic.media"
 profile_history_limit = 100
 
 # Session cookie behavior.
@@ -74,3 +74,4 @@ style_min_confidence_photorealistic = 0.9
 style_min_top_margin = 0.05
 style_min_top_prob = 0.34
 thumbnail_avif_quality = 30
+thumbnail_max_size = "720x720"

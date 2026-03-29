@@ -111,6 +111,7 @@ def test_home_route_renders_fanart_tab(
             {
                 "id": "fanart-1",
                 "uploader_username": "alice",
+                "uploader_display_name": "AliceArtist",
                 "title": "Sky",
                 "summary": "Color test",
                 "fandom": "Skyverse",
@@ -155,10 +156,10 @@ def test_home_route_renders_fanart_tab(
 
     assert result.status_code == 200
     assert b"/fanart/alice/reader?item_id=fanart-1" in result.data
-    assert b'<h3><a href="/fanart/alice">@alice</a></h3>' in result.data
-    assert b"/fanart/thumbs/_objects/ab/thumb.avif" in result.data
+    assert b'<h3><a href="/fanart/alice">@AliceArtist</a></h3>' in result.data
+    assert b"/static/fanart/thumbs/_objects/ab/thumb.avif" in result.data
     assert (
-        b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
+        b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
         in result.data
     )
     assert seen_filters["q"] == "ali"
@@ -188,6 +189,7 @@ def test_fanart_route_gallery_and_media(
             {
                 "id": "art-1",
                 "uploader_username": "alice",
+                "uploader_display_name": "AliceArtist",
                 "title": "Sky",
                 "summary": "Color test",
                 "fandom": "Skyverse",
@@ -234,7 +236,8 @@ def test_fanart_route_gallery_and_media(
 
     assert gallery_result.status_code == 200
     assert rendered["template"] == "fanart-gallery.html"
-    assert "/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
+    assert rendered["__GALLERY_TITLE__"] == "@AliceArtist"
+    assert "/static/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
     assert "/fanart/download/_objects/aa/image.avif" in rendered["grid"]
     assert "/static/citrus.svg" in rendered["grid"]
     assert "fandom: Skyverse" in rendered["grid"]
@@ -242,7 +245,7 @@ def test_fanart_route_gallery_and_media(
     assert "/fanart/alice/art-1/delete" in rendered["grid"]
     assert "/fanart/alice/reader?item_id=art-1" in rendered["grid"]
     assert (
-        "/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Ffanart%2Fimages%2F_objects%2Faa%2Fimage.avif"
+        "/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Faa%2Fimage.avif"
         in rendered["grid"]
     )
 
@@ -259,33 +262,15 @@ def test_fanart_route_gallery_and_media(
     assert reader_bootstrap["page_index"] == 1
     assert rendered["__READER_REPORT_HIDDEN_ATTR__"] == ""
     assert rendered["__READER_REPORT_TITLE__"] == "Report this image"
-    assert rendered["__READER_REPORT_CLAIMED_URL__"].endswith("/fanart/images/_objects/aa/image.avif")
+    assert rendered["__READER_REPORT_WORK_TITLE__"] == "@AliceArtist fanart"
+    assert rendered["__READER_REPORT_CLAIMED_URL__"].endswith("/static/fanart/images/_objects/aa/image.avif")
     assert "Copyright infringement (DMCA)" in rendered["__REPORT_ISSUE_OPTIONS_HTML__"]
-
-    media_file = tmp_path / "thumb.avif"
-    media_file.write_bytes(b"avif")
-
-    monkeypatch.setattr(
-        module,
-        "get_fanart_item_by_thumb_filename",
-        lambda *_: {"id": "x"},
-    )
-    monkeypatch.setattr(module, "fanart_thumb_for", lambda *_: media_file)
-
-    def fake_send_file(response: ResponseLike, file_path: Path) -> ResponseLike:
-        response.status_code = 200
-        response.content_type = "image/avif"
-        response.set_data(file_path.read_bytes())
-        return response
-
-    monkeypatch.setattr(module, "send_file", fake_send_file)
 
     media_request = dummy_request(path="/fanart/thumbs/_objects/aa/thumb.avif")
     media_response = dummy_response()
     media_result = module.main(media_request, media_response)
 
-    assert media_result.status_code == 200
-    assert media_result.data == b"avif"
+    assert media_result.status_code == 404
 
     image_file = tmp_path / "image.avif"
     image_file.write_bytes(b"image")

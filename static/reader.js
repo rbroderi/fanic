@@ -32,6 +32,8 @@ const state = {
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
+const BLACK_PLACEHOLDER_DATA_URL =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1' fill='black'/%3E%3C/svg%3E";
 
 const readerImage = document.getElementById("readerImage");
 const counter = document.getElementById("counter");
@@ -53,6 +55,134 @@ const reportModal = document.getElementById("reportModal");
 const reportModalCancel = document.getElementById("reportModalCancel");
 const readerReportClaimedUrl = document.getElementById("readerReportClaimedUrl");
 const readerReportWorkTitle = document.getElementById("readerReportWorkTitle");
+let thumbObserver = null;
+let mobileObserver = null;
+
+function loadThumbImage(node) {
+  if (!(node instanceof HTMLImageElement)) {
+    return;
+  }
+  if (node.dataset.loaded === "1") {
+    return;
+  }
+  const source = node.dataset.src;
+  if (!source) {
+    return;
+  }
+  node.dataset.loaded = "1";
+  node.src = source;
+}
+
+function setupThumbProgressiveLoading() {
+  if (!thumbs) {
+    return;
+  }
+
+  if (thumbObserver) {
+    thumbObserver.disconnect();
+    thumbObserver = null;
+  }
+
+  const thumbNodes = Array.from(thumbs.querySelectorAll(".thumb"));
+  if (!thumbNodes.length) {
+    return;
+  }
+
+  if (!("IntersectionObserver" in window)) {
+    thumbNodes.forEach(loadThumbImage);
+    return;
+  }
+
+  thumbObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        const node = entry.target;
+        loadThumbImage(node);
+        observer.unobserve(node);
+      });
+    },
+    {
+      root: thumbs,
+      rootMargin: "280px 0px",
+      threshold: 0.01,
+    },
+  );
+
+  thumbNodes.forEach((node) => {
+    thumbObserver.observe(node);
+  });
+}
+
+function loadThumbByIndex(index) {
+  if (!thumbs) {
+    return;
+  }
+  const node = thumbs.querySelector(`.thumb[data-index="${index}"]`);
+  if (node) {
+    loadThumbImage(node);
+  }
+}
+
+function loadMobileImage(node) {
+  if (!(node instanceof HTMLImageElement)) {
+    return;
+  }
+  if (node.dataset.loaded === "1") {
+    return;
+  }
+  const source = node.dataset.src;
+  if (!source) {
+    return;
+  }
+  node.dataset.loaded = "1";
+  node.src = source;
+}
+
+function setupMobileProgressiveLoading() {
+  if (!mobileList) {
+    return;
+  }
+
+  if (mobileObserver) {
+    mobileObserver.disconnect();
+    mobileObserver = null;
+  }
+
+  const mobileNodes = Array.from(mobileList.querySelectorAll(".mobile-page"));
+  if (!mobileNodes.length) {
+    return;
+  }
+
+  if (!("IntersectionObserver" in window)) {
+    mobileNodes.forEach(loadMobileImage);
+    return;
+  }
+
+  mobileObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        const node = entry.target;
+        loadMobileImage(node);
+        observer.unobserve(node);
+      });
+    },
+    {
+      root: null,
+      rootMargin: "600px 0px",
+      threshold: 0.01,
+    },
+  );
+
+  mobileNodes.forEach((node) => {
+    mobileObserver.observe(node);
+  });
+}
 
 function applyZoom() {
   readerImage.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
@@ -257,6 +387,10 @@ function renderPage(index) {
     const preload = new Image();
     preload.src = nextPage.image_url;
   });
+
+  for (let offset = -2; offset <= 4; offset += 1) {
+    loadThumbByIndex(state.index + offset);
+  }
 }
 
 function normalizedChapters() {
@@ -411,23 +545,56 @@ function bindControls() {
 }
 
 function renderSidebar() {
+  if (!thumbs) {
+    return;
+  }
+
   thumbs.innerHTML = state.pages
-    .map(
-      (page) => `<img class="thumb" src="${page.thumb_url}" alt="Page ${page.index}" data-index="${page.index}" loading="lazy" />`,
-    )
+    .map((page) => {
+      const width = Number(page.width) || 0;
+      const height = Number(page.height) || 0;
+      const ratioStyle = width > 0 && height > 0 ? ` style="--thumb-ratio: ${width} / ${height};"` : "";
+      return `<img class="thumb thumb-loading" src="${BLACK_PLACEHOLDER_DATA_URL}" data-src="${page.thumb_url}" alt="Page ${page.index}" data-index="${page.index}" loading="lazy"${ratioStyle} />`;
+    })
     .join("");
 
   thumbs.querySelectorAll(".thumb").forEach((node) => {
+    node.addEventListener("load", () => {
+      if (node.dataset.loaded === "1") {
+        node.classList.remove("thumb-loading");
+        node.classList.add("thumb-ready");
+      }
+    });
     node.addEventListener("click", () => renderPage(Number(node.dataset.index)));
   });
+
+  setupThumbProgressiveLoading();
 }
 
 function renderMobileList() {
+  if (!mobileList) {
+    return;
+  }
+
   mobileList.innerHTML = state.pages
-    .map(
-      (page) => `<img src="${page.image_url}" alt="Page ${page.index}" loading="lazy" />`,
-    )
+    .map((page) => {
+      const width = Number(page.width) || 0;
+      const height = Number(page.height) || 0;
+      const ratioStyle = width > 0 && height > 0 ? ` style="--mobile-page-ratio: ${width} / ${height};"` : "";
+      return `<img class="mobile-page mobile-page-loading" src="${BLACK_PLACEHOLDER_DATA_URL}" data-src="${page.image_url}" alt="Page ${page.index}" loading="lazy"${ratioStyle} />`;
+    })
     .join("");
+
+  mobileList.querySelectorAll(".mobile-page").forEach((node) => {
+    node.addEventListener("load", () => {
+      if (node.dataset.loaded === "1") {
+        node.classList.remove("mobile-page-loading");
+        node.classList.add("mobile-page-ready");
+      }
+    });
+  });
+
+  setupMobileProgressiveLoading();
 }
 
 async function init() {
