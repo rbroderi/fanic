@@ -69,7 +69,6 @@ Open http://127.0.0.1:8000.
 | `fanic ingest <cbz>` | Ingest a CBZ archive (optional `--metadata` JSON) |
 | `fanic serve` | Run the local WSGI server (`--host`, `--port`) |
 | `fanic convert-thumbs-avif` | Batch-convert page thumbnails to AVIF (`--dry-run` supported) |
-| `fanic hash-admin-password` | Generate a PBKDF2-SHA256 admin password hash |
 | `fanic backup-data` | Create a ZIP backup of the database and media |
 | `fanic restore-data <zip>` | Restore from a backup archive |
 
@@ -171,8 +170,6 @@ When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/auth` | Check login status (`{logged_in, username}`) |
-| `POST` | `/api/auth/login` | Authenticate with username + password |
-| `POST` | `/api/auth/logout` | Clear session |
 
 ### Health
 
@@ -243,7 +240,6 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `FANIC_ADMIN_PASSWORD_HASH` | *(sha256 of "admin")* | Hash in `sha256$…` or `pbkdf2_sha256$…` format |
 | `FANIC_AUTH_MAX_FAILURES` | `5` | Failed attempts before lockout |
 | `FANIC_AUTH_WINDOW_SECONDS` | `300` | Lockout attempt window |
 | `FANIC_AUTH_LOCKOUT_SECONDS` | `900` | Lockout duration |
@@ -282,14 +278,6 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 | `FANIC_IMAGE_AVIF_QUALITY` | `60` | Full-size page AVIF quality (1–100) |
 
 In development mode (`FANIC_ENVIRONMENT=development`), HTTPS and CSRF enforcement are disabled for local workflow compatibility.
-
-Generate a ready-to-paste admin password hash:
-
-```powershell
-uv run fanic hash-admin-password
-# or non-interactive:
-uv run fanic hash-admin-password --password "change-me-now"
-```
 
 ## Metadata
 

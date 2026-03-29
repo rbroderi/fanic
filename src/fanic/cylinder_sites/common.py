@@ -1,4 +1,3 @@
-import hashlib
 import hmac
 import json
 import logging
@@ -92,7 +91,6 @@ ALLOWED_PAGE_CONTENT_TYPES = set(
         },
     )
 )
-ADMIN_PASSWORD_HASH = _SETTINGS.admin_password_hash
 AUTH_MAX_FAILURES = _SETTINGS.auth_max_failures
 AUTH_WINDOW_SECONDS = _SETTINGS.auth_window_seconds
 AUTH_LOCKOUT_SECONDS = _SETTINGS.auth_lockout_seconds
@@ -151,7 +149,6 @@ _SENSITIVE_FIELD_NAMES = {
     "cookie",
     "secret",
     "session",
-    "admin_password_hash",
 }
 
 _structlog_configured = False
@@ -714,37 +711,6 @@ def validate_csrf(request: RequestLike) -> bool:
             path=request.path,
         )
     return valid
-
-
-def _admin_password_hash_digest(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-def verify_admin_password(password: str) -> bool:
-    configured = ADMIN_PASSWORD_HASH.strip()
-    if configured.startswith("sha256$"):
-        expected = configured.split("$", maxsplit=1)[1]
-        provided = _admin_password_hash_digest(password)
-        return hmac.compare_digest(provided, expected)
-
-    if configured.startswith("pbkdf2_sha256$"):
-        parts = configured.split("$")
-        if len(parts) != 4:
-            return False
-        _, rounds_raw, salt, expected = parts
-        try:
-            rounds = int(rounds_raw)
-        except ValueError:
-            return False
-        derived = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            salt.encode("utf-8"),
-            rounds,
-        ).hex()
-        return hmac.compare_digest(derived, expected)
-
-    return False
 
 
 def _request_client_ip(request: RequestLike) -> str:

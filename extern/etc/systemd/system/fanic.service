@@ -17,8 +17,8 @@ Environment=FANIC_LOG_PATH_TEMPLATE=/var/log/fanic/%%TIMESTAMP%%.log
 Environment=PYTHONDONTWRITEBYTECODE=1
 # Optional secure secret file pointers (recommended for production):
 # Environment=FANIC_SESSION_SECRET_FILE=/etc/fanic/credentials/session_secret
-# Environment=FANIC_ADMIN_PASSWORD_HASH_FILE=/etc/fanic/credentials/admin_password_hash
 # Environment=FANIC_AUTH0_CLIENT_SECRET_FILE=/etc/fanic/credentials/auth0_client_secret
+# Environment=FANIC_AUTH0_AUDIENCE_FILE=/etc/fanic/credentials/auth0_audience
 # Environment=FANIC_ALPHA_INVITE_CODES_CSV_FILE=/etc/fanic/credentials/alpha_invite_codes_csv
 UMask=0027
 PrivateTmp=true
