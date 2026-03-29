@@ -1,0 +1,36 @@
+name: Frontend ESLint
+
+on:
+  push:
+    paths:
+      - "frontend/**/*.ts"
+      - "eslint.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-eslint.yml"
+  pull_request:
+    paths:
+      - "frontend/**/*.ts"
+      - "eslint.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-eslint.yml"
+
+jobs:
+  frontend-eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend eslint
+        run: npm run frontend:lint

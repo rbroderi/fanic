@@ -1,0 +1,39 @@
+name: Frontend Prettier
+
+on:
+  push:
+    paths:
+      - "frontend/**/*.ts"
+      - ".prettierrc.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-prettier.yml"
+  pull_request:
+    paths:
+      - "frontend/**/*.ts"
+      - ".prettierrc.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-prettier.yml"
+
+jobs:
+  frontend-prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run prettier write
+        run: npm run frontend:format
+
+      - name: Ensure no formatting changes are pending
+        run: git diff --exit-code
