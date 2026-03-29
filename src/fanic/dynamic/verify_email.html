@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__VERIFY_EMAIL_PAGE_TITLE__</title>
+    __SITE_HEAD_ASSETS__
+  </head>
+  <body>
+    __SITE_HEADER_HTML__
+
+    <main class="layout">
+      <section class="card profile-card">
+        <h2>Verify Your Email</h2>
+        <p class="profile-meta">A verification link has been sent to your email address.</p>
+        <p class="profile-meta" __VERIFY_EMAIL_EMAIL_HINT_HIDDEN_ATTR__>Email: __VERIFY_EMAIL_EMAIL_HINT__</p>
+        <p class="status-text __VERIFY_EMAIL_STATUS_CLASS__">__VERIFY_EMAIL_STATUS__</p>
+
+        <form class="profile-preferences" method="post" action="/account/verify-email">
+          <button type="submit">Refresh verification status</button>
+        </form>
+      </section>
+    </main>
+
+    __SITE_COMMON_SCRIPTS__
+  </body>
+</html>

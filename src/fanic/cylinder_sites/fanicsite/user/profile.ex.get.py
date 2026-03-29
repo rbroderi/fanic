@@ -103,6 +103,22 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     pref_status_class = "success" if save_msg == "saved" else ""
     pref_status_hidden = "" if save_msg == "saved" else "hidden"
 
+    display_name_status_text = ""
+    display_name_status_class = ""
+    display_name_status_hidden = "hidden"
+    if save_msg == "display-name-saved":
+        display_name_status_text = "Profile details updated."
+        display_name_status_class = "success"
+        display_name_status_hidden = ""
+    elif save_msg == "display-name-invalid":
+        display_name_status_text = "Display name must use only letters and numbers, and age selection is required."
+        display_name_status_class = "error"
+        display_name_status_hidden = ""
+    elif save_msg == "display-name-taken":
+        display_name_status_text = "That display name is already in use."
+        display_name_status_class = "error"
+        display_name_status_hidden = ""
+
     theme_status_text = ""
     theme_status_class = ""
     theme_status_hidden = "hidden"
@@ -166,6 +182,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_STATUS__": "Not logged in.",
             "__PROFILE_STATUS_CLASS__": "error",
             "__PROFILE_STATUS_HIDDEN_ATTR__": "",
+            "__PROFILE_ACCOUNT_SUMMARY_HIDDEN_ATTR__": "",
+            "__PROFILE_APPEARANCE_HIDDEN_ATTR__": "",
             "__PROFILE_DETAILS__": 'Use <a href="/account/login">Login</a> to sign in.',
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden",
             "__PROFILE_PUBLIC_HREF__": "",
@@ -180,11 +198,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
             "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "hidden",
+            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status_text,
+            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status_class,
+            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status_hidden,
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": "",
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": "",
             "__PROFILE_PREF_STATUS__": pref_status_text,
             "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,
             "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status_hidden,
+            "__PROFILE_THEME_FORM_HIDDEN_ATTR__": "",
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__": "",
             "__PROFILE_THEME_STATUS__": theme_status_text,
             "__PROFILE_THEME_STATUS_CLASS__": theme_status_class,
@@ -195,6 +217,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_SHARED_SECTIONS__": shared_sections_html,
         }
     else:
+        requires_onboarding = user_requires_onboarding(username)
+        if requires_onboarding:
+            response.status_code = 303
+            response.content_type = "text/plain; charset=utf-8"
+            response.headers["Location"] = "/user/onboarding?msg=onboarding-required"
+            response.set_data("See Other: /user/onboarding?msg=onboarding-required")
+            return response
         history_limit = get_settings().profile_history_limit
         recent_history = list_recent_reading_history(username, limit=history_limit)
         uploaded_works_raw = list_works_by_uploader(username)
@@ -216,11 +245,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         ]
         shared_sections_html = render_profile_shared_sections(
             {
-                "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "",
+                "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
                 "__PROFILE_UPLOADED_WORKS_HTML__": _uploaded_works_html(uploaded_works),
-                "__PROFILE_FANART_HIDDEN_ATTR__": "",
+                "__PROFILE_FANART_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
                 "__PROFILE_FANART_HTML__": _fanart_html(username, fanart_items),
-                "__PROFILE_BOOKMARKS_HIDDEN_ATTR__": "",
+                "__PROFILE_BOOKMARKS_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
                 "__PROFILE_BOOKMARKS_HTML__": _bookmarks_html(visible_bookmarks),
             }
         )
@@ -237,8 +266,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         over_18_yes_selected = "selected" if is_over_18 is True else ""
         over_18_no_selected = "selected" if is_over_18 is False else ""
-        requires_onboarding = user_requires_onboarding(username)
+        if save_msg == "onboarding-already-complete" and not requires_onboarding:
+            onboarding_status_text = ""
+            onboarding_status_class = ""
+            onboarding_status_hidden = "hidden"
         onboarding_hidden_attr = "" if requires_onboarding else "hidden"
+        account_summary_hidden_attr = "hidden" if requires_onboarding else ""
+        appearance_hidden_attr = "hidden" if requires_onboarding else ""
         replacements = {
             "__PROFILE_PAGE_TITLE__": "FANIC Profile",
             "__PROFILE_CARD_TITLE__": "Your Profile",
@@ -247,10 +281,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_STATUS__": "Logged in.",
             "__PROFILE_STATUS_CLASS__": "",
             "__PROFILE_STATUS_HIDDEN_ATTR__": "",
+            "__PROFILE_ACCOUNT_SUMMARY_HIDDEN_ATTR__": account_summary_hidden_attr,
+            "__PROFILE_APPEARANCE_HIDDEN_ATTR__": appearance_hidden_attr,
             "__PROFILE_DETAILS__": f"Display name: {escape(display_name)}",
-            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "",
+            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
             "__PROFILE_PUBLIC_HREF__": f"/users/{escape(display_name)}",
-            "__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__": "",
+            "__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
             "__PROFILE_IMMUTABLE_PUBLIC_HREF__": f"/users/{escape(username)}",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "",
             "__PROFILE_ONBOARDING_HIDDEN_ATTR__": onboarding_hidden_attr,
@@ -261,16 +297,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
             "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "",
+            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status_text,
+            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status_class,
+            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status_hidden,
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": view_mature_checked,
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": view_explicit_checked,
             "__PROFILE_PREF_STATUS__": pref_status_text,
             "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,
             "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status_hidden,
+            "__PROFILE_THEME_FORM_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__": custom_theme_checked,
             "__PROFILE_THEME_STATUS__": theme_status_text,
             "__PROFILE_THEME_STATUS_CLASS__": theme_status_class,
             "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status_hidden,
-            "__PROFILE_HISTORY_HIDDEN_ATTR__": "",
+            "__PROFILE_HISTORY_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
             "__PROFILE_HISTORY_LIMIT__": escape(str(history_limit)),
             "__PROFILE_HISTORY_HTML__": _recent_history_html(recent_history),
             "__PROFILE_SHARED_SECTIONS__": shared_sections_html,

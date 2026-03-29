@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__ONBOARDING_PAGE_TITLE__</title>
+    __SITE_HEAD_ASSETS__
+  </head>
+  <body>
+    __SITE_HEADER_HTML__
+
+    <main class="layout">
+      <section class="card profile-card">
+        <h2>Account Onboarding</h2>
+        <p class="profile-meta">Set your public display name and age status to continue.</p>
+
+        <form class="profile-preferences" method="post" action="/user/onboarding">
+          <label for="onboardingDisplayName">Display name</label>
+          <input id="onboardingDisplayName" name="display_name" type="text" maxlength="40" pattern="[A-Za-z0-9]+" value="__ONBOARDING_DISPLAY_NAME_VALUE__" required />
+          <p class="profile-meta">Letters and numbers only, no spaces or punctuation.</p>
+
+          <label for="onboardingAge">Are you 18 or older?</label>
+          <select id="onboardingAge" name="is_over_18" required>
+            <option value="">Choose one</option>
+            <option value="yes" __ONBOARDING_IS_OVER_18_YES_SELECTED_ATTR__>Yes</option>
+            <option value="no" __ONBOARDING_IS_OVER_18_NO_SELECTED_ATTR__>No</option>
+          </select>
+
+          <button type="submit">Finish setup Registration.</button>
+          <p class="status-text __ONBOARDING_STATUS_CLASS__" __ONBOARDING_STATUS_HIDDEN_ATTR__>__ONBOARDING_STATUS__</p>
+        </form>
+      </section>
+    </main>
+
+    __SITE_COMMON_SCRIPTS__
+  </body>
+</html>

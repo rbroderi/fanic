@@ -529,6 +529,28 @@ def get_auth_identity(provider: str, subject: str) -> AuthIdentityRow | None:
     }
 
 
+def get_auth0_email_verified_for_username(username: str) -> bool | None:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT email_verified
+            FROM auth_identities
+            WHERE provider = 'auth0' AND username = ?
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (normalized_username,),
+        ).fetchone()
+
+    if row is None:
+        return None
+    return bool(int(row["email_verified"]))
+
+
 def upsert_auth_identity(
     *,
     provider: str,
@@ -740,6 +762,61 @@ def update_user_onboarding(
                 age_gate_completed = 1
             WHERE username = ?
                             AND (age_gate_completed = 0 OR is_over_18 IS NULL)
+            """,
+            (
+                normalized_display_name,
+                1 if is_over_18 else 0,
+                normalized_username,
+            ),
+        )
+    return cursor.rowcount > 0
+
+
+def update_user_display_name(username: str, *, display_name: str) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_display_name = _validate_display_name(display_name)
+
+    if _display_name_in_use_by_other_username(normalized_display_name, normalized_username):
+        raise sqlite3.IntegrityError("display_name already exists")
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE users
+            SET display_name = ?
+            WHERE username = ?
+            """,
+            (normalized_display_name, normalized_username),
+        )
+    return cursor.rowcount > 0
+
+
+def update_user_profile_details(
+    username: str,
+    *,
+    display_name: str,
+    is_over_18: bool,
+) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_display_name = _validate_display_name(display_name)
+
+    if _display_name_in_use_by_other_username(normalized_display_name, normalized_username):
+        raise sqlite3.IntegrityError("display_name already exists")
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE users
+            SET display_name = ?,
+                is_over_18 = ?,
+                age_gate_completed = 1
+            WHERE username = ?
             """,
             (
                 normalized_display_name,

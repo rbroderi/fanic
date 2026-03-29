@@ -446,11 +446,12 @@ def test_profile_post_onboarding_saves_display_name_and_age_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
-        "fanicsite_user_profile_ex_post_onboarding_test",
+        "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.post.py",
+        "fanicsite_user_onboarding_ex_post_onboarding_test",
     )
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
 
     captured: dict[str, object] = {}
 
@@ -468,19 +469,15 @@ def test_profile_post_onboarding_saves_display_name_and_age_gate(
     monkeypatch.setattr(module, "update_user_onboarding", fake_update_user_onboarding)
 
     request = dummy_request(
-        path="/user/profile",
+        path="/user/onboarding",
         method="POST",
-        form={
-            "profile_action": "onboarding",
-            "display_name": "Alice Artist",
-            "is_over_18": "yes",
-        },
+        form={"display_name": "Alice Artist", "is_over_18": "yes"},
     )
     response = dummy_response()
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/user/profile?msg=onboarding-saved"
+    assert result.headers["Location"] == "/user/profile"
     assert captured["username"] == "alice"
     assert captured["display_name"] == "Alice Artist"
     assert captured["is_over_18"] is True
@@ -493,8 +490,8 @@ def test_profile_post_onboarding_rejects_repeat_submission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
-        "fanicsite_user_profile_ex_post_onboarding_repeat_test",
+        "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.post.py",
+        "fanicsite_user_onboarding_ex_post_onboarding_repeat_test",
     )
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
@@ -503,12 +500,53 @@ def test_profile_post_onboarding_rejects_repeat_submission(
         "update_user_onboarding",
         lambda _username, *, display_name, is_over_18: False,
     )
+    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
+
+    request = dummy_request(
+        path="/user/onboarding",
+        method="POST",
+        form={"display_name": "AliceArtist", "is_over_18": "yes"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/profile"
+
+
+def test_profile_post_display_name_saves_successfully(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_display_name_saved_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+
+    captured: dict[str, object] = {}
+
+    def fake_update_user_profile_details(
+        username: str,
+        *,
+        display_name: str,
+        is_over_18: bool,
+    ) -> bool:
+        captured["username"] = username
+        captured["display_name"] = display_name
+        captured["is_over_18"] = is_over_18
+        return True
+
+    monkeypatch.setattr(module, "update_user_profile_details", fake_update_user_profile_details)
 
     request = dummy_request(
         path="/user/profile",
         method="POST",
         form={
-            "profile_action": "onboarding",
+            "profile_action": "display-name",
             "display_name": "AliceArtist",
             "is_over_18": "yes",
         },
@@ -517,7 +555,120 @@ def test_profile_post_onboarding_rejects_repeat_submission(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/user/profile?msg=onboarding-already-complete"
+    assert result.headers["Location"] == "/user/profile?msg=display-name-saved"
+    assert captured["username"] == "alice"
+    assert captured["display_name"] == "AliceArtist"
+    assert captured["is_over_18"] is True
+
+
+def test_profile_post_display_name_rejects_invalid_name(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_display_name_invalid_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+
+    def fake_update_user_profile_details(
+        _username: str,
+        *,
+        display_name: str,
+        is_over_18: bool,
+    ) -> bool:
+        _ = display_name
+        _ = is_over_18
+        raise ValueError("display_name must contain only letters and numbers")
+
+    monkeypatch.setattr(module, "update_user_profile_details", fake_update_user_profile_details)
+
+    request = dummy_request(
+        path="/user/profile",
+        method="POST",
+        form={
+            "profile_action": "display-name",
+            "display_name": "Alice Artist",
+            "is_over_18": "yes",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/profile?msg=display-name-invalid"
+
+
+def test_profile_post_display_name_rejects_taken_name(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_display_name_taken_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+
+    def fake_update_user_profile_details(
+        _username: str,
+        *,
+        display_name: str,
+        is_over_18: bool,
+    ) -> bool:
+        _ = display_name
+        _ = is_over_18
+        raise module.sqlite3.IntegrityError("display_name already exists")
+
+    monkeypatch.setattr(module, "update_user_profile_details", fake_update_user_profile_details)
+
+    request = dummy_request(
+        path="/user/profile",
+        method="POST",
+        form={
+            "profile_action": "display-name",
+            "display_name": "TakenName",
+            "is_over_18": "no",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/profile?msg=display-name-taken"
+
+
+def test_profile_post_display_name_requires_age_selection(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
+        "fanicsite_user_profile_ex_post_display_name_requires_age_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+
+    request = dummy_request(
+        path="/user/profile",
+        method="POST",
+        form={
+            "profile_action": "display-name",
+            "display_name": "AliceArtist",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/profile?msg=display-name-invalid"
 
 
 def test_profile_get_exposes_onboarding_markers_for_logged_in_user(
@@ -594,7 +745,7 @@ def test_profile_get_exposes_onboarding_markers_for_logged_in_user(
     assert captured["onboarding_hidden"] == "hidden"
 
 
-def test_profile_get_shows_onboarding_when_age_missing_even_if_completed(
+def test_profile_get_redirects_to_onboarding_when_required(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
@@ -602,7 +753,7 @@ def test_profile_get_shows_onboarding_when_age_missing_even_if_completed(
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.get.py",
-        "fanicsite_user_profile_ex_get_onboarding_age_missing_test",
+        "fanicsite_user_profile_ex_get_onboarding_redirect_test",
     )
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
@@ -639,6 +790,42 @@ def test_profile_get_shows_onboarding_when_age_missing_even_if_completed(
 
     monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
 
+    request = dummy_request(path="/user/profile", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/onboarding?msg=onboarding-required"
+
+
+def test_onboarding_get_shows_page_when_required(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.get.py",
+        "fanicsite_user_onboarding_ex_get_required_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        lambda _username: {
+            "username": "alice",
+            "display_name": "AliceArtist",
+            "email": "alice@example.com",
+            "is_over_18": None,
+            "age_gate_completed": False,
+            "role": "user",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
+
     captured: dict[str, str] = {}
 
     def fake_render_html_template(
@@ -647,8 +834,9 @@ def test_profile_get_shows_onboarding_when_age_missing_even_if_completed(
         template_name: str,
         replacements: dict[str, str],
     ) -> ResponseLike:
-        _ = (request, template_name)
-        captured["onboarding_hidden"] = replacements["__PROFILE_ONBOARDING_HIDDEN_ATTR__"]
+        _ = request
+        captured["template"] = template_name
+        captured["display_name"] = replacements["__ONBOARDING_DISPLAY_NAME_VALUE__"]
         response.status_code = 200
         response.content_type = "text/html; charset=utf-8"
         response.set_data("ok")
@@ -656,9 +844,10 @@ def test_profile_get_shows_onboarding_when_age_missing_even_if_completed(
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/user/profile", args={"msg": "onboarding-required"})
+    request = dummy_request(path="/user/onboarding", args={"msg": "onboarding-required"})
     response = dummy_response()
     result = module.main(request, response)
 
     assert result.status_code == 200
-    assert captured["onboarding_hidden"] == ""
+    assert captured["template"] == "onboarding.html"
+    assert captured["display_name"] == "AliceArtist"
