@@ -976,7 +976,11 @@ def begin_comic_ingest_session(
                 if queued:
                     _COMIC_INGEST_WAITING -= 1
                 timeout_retry_after = 1
-                return False, timeout_retry_after, queue_position if queue_position else 1
+                return (
+                    False,
+                    timeout_retry_after,
+                    queue_position if queue_position else 1,
+                )
 
             _COMIC_INGEST_CONDITION.wait(timeout=remaining)
 
