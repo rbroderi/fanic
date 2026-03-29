@@ -121,7 +121,4 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if user_requires_onboarding(username):
         return _redirect(response, "/user/profile?msg=onboarding-required")
 
-    next_url = oauth_state.get("next_url", "/").strip()
-    if not next_url.startswith("/") or next_url.startswith("//"):
-        next_url = "/"
-    return _redirect(response, next_url)
+    return _redirect(response, "/user/profile")

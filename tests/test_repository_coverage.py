@@ -245,6 +245,34 @@ def test_update_user_onboarding_only_applies_once(
     assert user_row["age_gate_completed"] is True
 
 
+def test_update_user_onboarding_allows_recovery_when_age_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+
+    repository.create_user(
+        "alice",
+        display_name="AliceStart",
+        email="alice@example.com",
+        is_over_18=None,
+        age_gate_completed=True,
+    )
+
+    recovered = repository.update_user_onboarding(
+        "alice",
+        display_name="AliceRecovered",
+        is_over_18=False,
+    )
+
+    assert recovered is True
+    user_row = repository.get_local_user("alice")
+    assert user_row is not None
+    assert user_row["display_name"] == "AliceRecovered"
+    assert user_row["is_over_18"] is False
+    assert user_row["age_gate_completed"] is True
+
+
 def test_work_crud_tags_pages_comments_kudos_and_versions(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

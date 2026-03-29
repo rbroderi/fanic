@@ -18,6 +18,7 @@ from fanic.repository import list_work_comments
 from fanic.repository import list_works_by_uploader
 from fanic.repository import user_prefers_explicit
 from fanic.repository import user_prefers_mature
+from fanic.repository import user_requires_onboarding
 from fanic.repository import work_kudos_count
 from fanic.settings import get_settings
 
@@ -228,15 +229,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         local_user = get_local_user(username)
         display_name = username
         is_over_18: bool | None = None
-        age_gate_completed = False
         if local_user is not None:
             display_name = local_user["display_name"]
             is_over_18 = local_user["is_over_18"]
-            age_gate_completed = local_user["age_gate_completed"]
 
         over_18_yes_selected = "selected" if is_over_18 is True else ""
         over_18_no_selected = "selected" if is_over_18 is False else ""
-        onboarding_hidden_attr = "hidden" if age_gate_completed else ""
+        requires_onboarding = user_requires_onboarding(username)
+        onboarding_hidden_attr = "" if requires_onboarding else "hidden"
         replacements = {
             "__PROFILE_PAGE_TITLE__": "FANIC Profile",
             "__PROFILE_CARD_TITLE__": "Your Profile",
