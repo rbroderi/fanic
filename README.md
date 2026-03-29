@@ -243,7 +243,6 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `FANIC_ADMIN_USERNAME` | `admin` | Admin account username |
 | `FANIC_ADMIN_PASSWORD_HASH` | *(sha256 of "admin")* | Hash in `sha256$…` or `pbkdf2_sha256$…` format |
 | `FANIC_AUTH_MAX_FAILURES` | `5` | Failed attempts before lockout |
 | `FANIC_AUTH_WINDOW_SECONDS` | `300` | Lockout attempt window |

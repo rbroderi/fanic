@@ -338,8 +338,8 @@ def test_comic_ingest_queue_helpers(
 
     monkeypatch.setattr(module, "COMIC_INGEST_MAX_CONCURRENT", 1)
     monkeypatch.setattr(module, "COMIC_INGEST_QUEUE_WAIT_SECONDS", 0)
-    monkeypatch.setattr(module, "_COMIC_INGEST_ACTIVE", 0)
-    monkeypatch.setattr(module, "_COMIC_INGEST_WAITING", 0)
+    monkeypatch.setattr(module._comic_ingest_state, "active", 0)
+    monkeypatch.setattr(module._comic_ingest_state, "waiting", 0)
 
     seen_positions: list[int] = []
 

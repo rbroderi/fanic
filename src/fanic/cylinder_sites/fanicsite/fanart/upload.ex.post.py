@@ -34,7 +34,7 @@ def _has_selected_file(upload: object | None) -> bool:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    if request.path != "/fanart/upload":
+    if request.path not in {"/fanart/upload", "/fanart/upload/"}:
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):

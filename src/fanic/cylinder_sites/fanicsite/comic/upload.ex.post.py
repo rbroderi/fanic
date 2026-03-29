@@ -1,6 +1,9 @@
 import json
+import shutil
+import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 
 from fanic.cylinder_sites.common import MAX_CBZ_UPLOAD_BYTES
 from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
@@ -144,9 +147,131 @@ def _render_editor_result(
     )
 
 
+def _run_async_cbz_ingest(
+    *,
+    username: str,
+    upload_token: str,
+    cbz_path: Path,
+    metadata_override_path: Path | None,
+    cleanup_dir: Path,
+) -> None:
+    started_comic_ingest_session = False
+
+    def _set_progress(
+        *,
+        stage: str,
+        message: str,
+        current: int = 0,
+        total: int = 0,
+        done: bool = False,
+        ok: bool = False,
+        work_id: str = "",
+        redirect_to: str = "",
+    ) -> None:
+        if not upload_token:
+            return
+        set_progress(
+            upload_token,
+            stage=stage,
+            message=message,
+            current=current,
+            total=total,
+            done=done,
+            ok=ok,
+            work_id=work_id,
+            redirect_to=redirect_to,
+        )
+
+    def on_queued(queue_position: int) -> None:
+        _set_progress(
+            stage="queued",
+            message=f"Waiting in comic ingest queue (position {queue_position})",
+            done=False,
+            ok=False,
+        )
+
+    try:
+        queue_allowed, _, queue_position = begin_comic_ingest_session(
+            on_queued=on_queued,
+        )
+        if not queue_allowed:
+            timeout_message = (
+                f"Comic ingest queue timeout at position {queue_position}. Please retry."
+                if queue_position > 0
+                else "Comic ingest queue is full"
+            )
+            _set_progress(
+                stage="throttled",
+                message=timeout_message,
+                done=True,
+                ok=False,
+            )
+            return
+
+        started_comic_ingest_session = True
+        _set_progress(
+            stage="starting",
+            message="Starting import",
+            done=False,
+            ok=False,
+        )
+
+        result = ingest_cbz(
+            cbz_path,
+            metadata_override_path=metadata_override_path,
+            uploader_username=username,
+            progress_hook=(
+                lambda stage, message, current, total: (
+                    _set_progress(
+                        stage=stage,
+                        message=message,
+                        current=current,
+                        total=total,
+                        done=False,
+                        ok=False,
+                    )
+                    if upload_token
+                    else None
+                )
+            ),
+        )
+
+        work_id = str(result.get("work_id", ""))
+        _set_progress(
+            stage="done",
+            message="Import complete",
+            done=True,
+            ok=True,
+            work_id=work_id,
+            redirect_to=f"/comic/{work_id}" if work_id else "",
+        )
+    except ModerationBlockedError as exc:
+        moderation = exc.moderation
+        source_member = str(moderation.get("source_member", "") if moderation.get("source_member", "") else "")
+        source_suffix = f" ({source_member})" if source_member else ""
+        _set_progress(
+            stage="blocked",
+            message=f"CBZ import blocked by moderation policy{source_suffix}.",
+            done=True,
+            ok=False,
+        )
+    except Exception:
+        _set_progress(
+            stage="failed",
+            message="Import failed",
+            done=True,
+            ok=False,
+        )
+    finally:
+        if started_comic_ingest_session:
+            end_comic_ingest_session()
+        end_upload_session(username)
+        shutil.rmtree(cleanup_dir, ignore_errors=True)
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     _ = request_id(request, response)
-    if request.path != "/comic/upload":
+    if request.path not in {"/comic/upload", "/comic/upload/"}:
         return text_error(response, "Not found", 404)
 
     if not enforce_https_termination(request, response):
@@ -203,46 +328,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 upload_status_kind="error",
             )
 
-        def on_queued(queue_position: int) -> None:
-            if not upload_token:
-                return
-            set_progress(
-                upload_token,
-                stage="queued",
-                message=f"Waiting in comic ingest queue (position {queue_position})",
-                done=False,
-                ok=False,
-            )
-
-        started_comic_ingest_session = False
-        queue_allowed, _, queue_position = begin_comic_ingest_session(
-            on_queued=on_queued,
-        )
-        if not queue_allowed:
-            if upload_token:
-                set_progress(
-                    upload_token,
-                    stage="throttled",
-                    message=(
-                        f"Comic ingest queue timeout at position {queue_position}. Please retry."
-                        if queue_position > 0
-                        else "Comic ingest queue is full"
-                    ),
-                    done=True,
-                    ok=False,
-                )
-            return render_upload_page(
-                request,
-                response,
-                upload_status_text=(
-                    f"Comic ingest queue timed out at position {queue_position}. Please retry shortly."
-                    if queue_position > 0
-                    else "Comic ingest queue is full. Please retry shortly."
-                ),
-                upload_status_kind="error",
-            )
-
-        started_comic_ingest_session = True
         started_upload_session = False
         allowed, limit_code, retry_after = begin_upload_session(username)
         if not allowed:
@@ -266,143 +351,69 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 upload_status_kind="error",
             )
 
+        task_dir: Path | None = None
         try:
             started_upload_session = True
-            if upload_token:
-                set_progress(
-                    upload_token,
-                    stage="starting",
-                    message="Starting import",
-                )
-
             metadata = _collect_metadata_from_form(request)
-            override_path: Path | None = None
-            with TemporaryDirectory() as temp_dir:
-                cbz_path = Path(temp_dir) / Path(cbz_upload.filename if cbz_upload.filename else "upload.cbz").name
-                cbz_upload.save(cbz_path)
-                cbz_size_error = validate_saved_upload_size(
-                    cbz_path,
-                    MAX_CBZ_UPLOAD_BYTES,
-                    "CBZ upload",
+            task_dir = Path(mkdtemp(prefix="fanic-comic-ingest-"))
+            cbz_path = task_dir / Path(cbz_upload.filename if cbz_upload.filename else "upload.cbz").name
+            cbz_upload.save(cbz_path)
+            cbz_size_error = validate_saved_upload_size(
+                cbz_path,
+                MAX_CBZ_UPLOAD_BYTES,
+                "CBZ upload",
+            )
+            if cbz_size_error:
+                return render_upload_page(
+                    request,
+                    response,
+                    upload_status_text=cbz_size_error,
+                    upload_status_kind="error",
                 )
-                if cbz_size_error:
-                    return render_upload_page(
-                        request,
-                        response,
-                        upload_status_text=cbz_size_error,
-                        upload_status_kind="error",
-                    )
-                if metadata:
-                    override_path = Path(temp_dir) / "metadata.json"
-                    _ = override_path.write_text(
-                        json.dumps(metadata, ensure_ascii=True),
-                        encoding="utf-8",
-                    )
 
-                result = ingest_cbz(
-                    cbz_path,
-                    metadata_override_path=override_path,
-                    uploader_username=username,
-                    progress_hook=(
-                        (
-                            lambda stage, message, current, total: set_progress(
-                                upload_token,
-                                stage=stage,
-                                message=message,
-                                current=current,
-                                total=total,
-                                done=False,
-                                ok=False,
-                            )
-                        )
-                        if upload_token
-                        else None
-                    ),
+            override_path: Path | None = None
+            if metadata:
+                override_path = task_dir / "metadata.json"
+                _ = override_path.write_text(
+                    json.dumps(metadata, ensure_ascii=True),
+                    encoding="utf-8",
                 )
 
             if upload_token:
                 set_progress(
                     upload_token,
-                    stage="done",
-                    message="Import complete",
-                    done=True,
-                    ok=True,
+                    stage="queued",
+                    message="Upload received. Waiting in comic ingest queue.",
+                    done=False,
+                    ok=False,
                 )
 
-            work_id = str(result.get("work_id", ""))
-            fetched_work = get_work(work_id)
-            work = fetched_work if fetched_work else {}
-            editor_state = {
-                "editor_work_id": work_id,
-                "editor_title": str(work.get("title", "") if work.get("title", "") else ""),
-                "editor_summary": str(work.get("summary", "") if work.get("summary", "") else ""),
-                "editor_rating": str(
-                    work.get("rating", "Not Rated") if work.get("rating", "Not Rated") else "Not Rated"
-                ),
-                "editor_status": str(
-                    work.get("status", "in_progress") if work.get("status", "in_progress") else "in_progress"
-                ),
-                "editor_language": str(work.get("language", "en") if work.get("language", "en") else "en"),
-            }
+            worker = threading.Thread(
+                target=_run_async_cbz_ingest,
+                kwargs={
+                    "username": username,
+                    "upload_token": upload_token,
+                    "cbz_path": cbz_path,
+                    "metadata_override_path": override_path,
+                    "cleanup_dir": task_dir,
+                },
+                name="fanic-comic-ingest",
+                daemon=True,
+            )
+            worker.start()
 
-            return _render_editor_result(
+            return render_upload_page(
                 request,
                 response,
-                editor_state,
-                upload_status_text="CBZ imported into editor draft. Review pages, reorder, and finalize using the editor workflow.",
+                upload_token=upload_token,
+                upload_status_text="Upload accepted. Ingest is running in the background.",
                 upload_status_kind="success",
                 result_payload={
                     "ok": True,
                     "mode": "editor",
                     "uploaded_by": username,
-                    "result": result,
-                },
-            )
-        except ModerationBlockedError as exc:
-            if upload_token:
-                set_progress(
-                    upload_token,
-                    stage="blocked",
-                    message="Blocked by moderation policy",
-                    done=True,
-                    ok=False,
-                )
-            moderation = exc.moderation
-            reasons_obj = moderation.get("reasons")
-            reasons: list[str] = []
-            if isinstance(reasons_obj, list):
-                reasons = [str(reason) for reason in reasons_obj]
-
-            source_member = str(moderation.get("source_member", "") if moderation.get("source_member", "") else "")
-            source_suffix = f" ({source_member})" if source_member else ""
-            return render_upload_page(
-                request,
-                response,
-                upload_status_text=(f"CBZ import blocked by moderation policy{source_suffix}."),
-                upload_status_kind="error",
-                result_payload={
-                    "ok": False,
-                    "mode": "editor",
-                    "blocked": True,
-                    "explicit_threshold": get_explicit_threshold(),
-                    "error": "moderation_blocked",
-                    "message": admin_aware_detail(
-                        request,
-                        public_detail="Blocked by moderation policy",
-                        exc=exc,
-                    ),
-                    "moderation": {
-                        "allow": bool(moderation.get("allow", False)),
-                        "style": str(moderation.get("style", "unknown")),
-                        "style_debug": moderation.get("style_debug", {}),
-                        "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(
-                            moderation.get("nsfw_score", 0.0) if moderation.get("nsfw_score", 0.0) else 0.0
-                        ),
-                        "nsfw_confidences": moderation.get("nsfw_confidences", {}),
-                        "reasons": reasons,
-                        "source_member": source_member,
-                    },
+                    "accepted": True,
+                    "upload_token": upload_token,
                 },
             )
         except Exception as exc:
@@ -416,7 +427,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 set_progress(
                     upload_token,
                     stage="failed",
-                    message="Import failed",
+                    message="Import request failed",
                     done=True,
                     ok=False,
                 )
@@ -431,10 +442,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 upload_status_kind="error",
             )
         finally:
-            if started_upload_session:
+            if started_upload_session and task_dir is None:
                 end_upload_session(username)
-            if started_comic_ingest_session:
-                end_comic_ingest_session()
 
     if action == "editor-add-page":
         editor_state = _editor_state_from_form(request)

@@ -9,12 +9,10 @@ if TYPE_CHECKING:
 else:
     type ConvertibleToInt = int | str | bytes
 
-from fanic.cylinder_sites.common import STATIC_ROOT
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import apply_security_markup
 from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import user_menu_replacements
+from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
 from fanic.cylinder_sites.editor_gallery import render_editor_page_gallery_html
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
@@ -72,7 +70,6 @@ def render_upload_page(
         resolved_form_action = "/comic/upload"
     status_text = upload_status_text if upload_status_text else ingest_status
     status_kind = upload_status_kind if upload_status_kind else ingest_status_kind
-    upload_html = (STATIC_ROOT / "comic-upload.html").read_text(encoding="utf-8")
 
     replacements = {
         "__LOGIN_REQUIRED_HIDDEN_ATTR__": "hidden" if logged_in else "",
@@ -143,7 +140,6 @@ def render_upload_page(
         ),
     }
     replacements.update(render_common_tag_datalist_replacements())
-    replacements.update(user_menu_replacements(request))
 
     if result_payload is not None:
         replacements["__INGEST_RESULT_HIDDEN_ATTR__"] = ""
@@ -152,12 +148,9 @@ def render_upload_page(
         replacements["__INGEST_RESULT_HIDDEN_ATTR__"] = "hidden"
         replacements["__INGEST_RESULT__"] = ""
 
-    for marker, value in replacements.items():
-        upload_html = upload_html.replace(marker, value)
-
-    upload_html = apply_security_markup(request, response, upload_html)
-
-    response.status_code = 200
-    response.content_type = "text/html; charset=utf-8"
-    response.set_data(upload_html)
-    return response
+    return render_html_template(
+        request,
+        response,
+        "comic-upload.html",
+        replacements,
+    )

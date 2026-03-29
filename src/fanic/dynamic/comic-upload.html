@@ -42,6 +42,13 @@
             <p id="uploadProgressText" class="profile-meta">Starting upload...</p>
           </div>
 
+          <section id="ingestHistorySection" class="card info-card" hidden>
+            <h4>Recent Ingest Jobs</h4>
+            <p class="profile-meta">Recent upload tokens on this browser. Status updates continue after page reload.</p>
+            <ul id="ingestHistoryList"></ul>
+            <button id="clearIngestHistoryButton" type="button" class="button-muted">Clear history</button>
+          </section>
+
           <section id="metadataFormCard" class="card info-card" __METADATA_FORM_HIDDEN_ATTR__>
             <h4>Metadata Entry</h4>
             <label for="metaTitle">Title</label>

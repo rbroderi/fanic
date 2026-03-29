@@ -92,7 +92,6 @@ ALLOWED_PAGE_CONTENT_TYPES = set(
         },
     )
 )
-ADMIN_USERNAME = _SETTINGS.admin_username
 ADMIN_PASSWORD_HASH = _SETTINGS.admin_password_hash
 AUTH_MAX_FAILURES = _SETTINGS.auth_max_failures
 AUTH_WINDOW_SECONDS = _SETTINGS.auth_window_seconds
@@ -124,10 +123,22 @@ _POST_RATE_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_LOCK = threading.Lock()
 _UPLOAD_ATTEMPT_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_IN_FLIGHT: dict[str, int] = {}
-_COMIC_INGEST_LOCK = threading.Lock()
-_COMIC_INGEST_CONDITION = threading.Condition(_COMIC_INGEST_LOCK)
-_COMIC_INGEST_ACTIVE = 0
-_COMIC_INGEST_WAITING = 0
+
+
+class _ComicIngestQueueState:
+    lock: threading.Lock
+    condition: threading.Condition
+    active: int
+    waiting: int
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.condition = threading.Condition(self.lock)
+        self.active = 0
+        self.waiting = 0
+
+
+_comic_ingest_state = _ComicIngestQueueState()
 _REQUEST_ID_ATTR = "_fanic_request_id"
 
 _SENSITIVE_FIELD_NAMES = {
@@ -952,18 +963,17 @@ def begin_comic_ingest_session(
     timeout_seconds = timeout_seconds if timeout_seconds >= 0 else 0
     deadline = time.time() + timeout_seconds
 
-    global _COMIC_INGEST_ACTIVE
-    global _COMIC_INGEST_WAITING
-    with _COMIC_INGEST_CONDITION:
+    queue_state = _comic_ingest_state
+    with queue_state.condition:
         queued = False
         queue_position = 0
-        while _COMIC_INGEST_ACTIVE >= COMIC_INGEST_MAX_CONCURRENT:
+        while queue_state.active >= COMIC_INGEST_MAX_CONCURRENT:
             if not queued:
-                _COMIC_INGEST_WAITING += 1
+                queue_state.waiting += 1
                 queued = True
-                queue_position = _COMIC_INGEST_WAITING
+                queue_position = queue_state.waiting
             else:
-                queue_position = _COMIC_INGEST_WAITING
+                queue_position = queue_state.waiting
 
             if on_queued is not None and queue_position > 0:
                 try:
@@ -974,7 +984,7 @@ def begin_comic_ingest_session(
             remaining = deadline - time.time()
             if remaining <= 0:
                 if queued:
-                    _COMIC_INGEST_WAITING -= 1
+                    queue_state.waiting -= 1
                 timeout_retry_after = 1
                 return (
                     False,
@@ -982,20 +992,20 @@ def begin_comic_ingest_session(
                     queue_position if queue_position else 1,
                 )
 
-            _COMIC_INGEST_CONDITION.wait(timeout=remaining)
+            queue_state.condition.wait(timeout=remaining)
 
         if queued:
-            _COMIC_INGEST_WAITING -= 1
-        _COMIC_INGEST_ACTIVE += 1
+            queue_state.waiting -= 1
+        queue_state.active += 1
     return True, 0, queue_position
 
 
 def end_comic_ingest_session() -> None:
-    global _COMIC_INGEST_ACTIVE
-    with _COMIC_INGEST_CONDITION:
-        if _COMIC_INGEST_ACTIVE > 0:
-            _COMIC_INGEST_ACTIVE -= 1
-        _COMIC_INGEST_CONDITION.notify()
+    queue_state = _comic_ingest_state
+    with queue_state.condition:
+        if queue_state.active > 0:
+            queue_state.active -= 1
+        queue_state.condition.notify()
 
 
 def check_post_rate_limit(request: RequestLike) -> int:
