@@ -1,15 +1,13 @@
-from fanic.cylinder_sites.common import (
-    RequestLike,
-    ResponseLike,
-    current_user,
-    json_response,
-    route_tail,
-)
+from fanic.cylinder_sites.common import RequestLike
+from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import json_response
+from fanic.cylinder_sites.common import route_tail
 from fanic.ingest_progress import get_progress
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["api", "ingest"])
+    tail = route_tail(request, ["api", "comic-ingest"])
     if tail is None:
         return json_response(response, {"detail": "Not found"}, 404)
 

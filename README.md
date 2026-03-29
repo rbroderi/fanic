@@ -80,12 +80,16 @@ FANIC uses **file-based routing** via Cylinder. Each route handler lives in a fi
 ```
 src/fanic/cylinder_sites/fanicsite/
 ├── ex.get.py                          → GET  /
-├── works.ex.get.py                    → GET  /works/{work_id}
-├── works.ex.post.py                   → POST /works/{work_id}
+├── comic.ex.get.py                    → GET  /comic/{work_id}
+├── comic.ex.post.py                   → POST /comic/{work_id}
+├── comic/
+│   ├── upload.ex.get.py               → GET  /comic/upload
+│   └── upload.ex.post.py              → POST /comic/upload
 ├── fanart.ex.get.py                   → GET  /fanart
 ├── fanart.ex.post.py                  → POST /fanart
-├── ingest.ex.get.py                   → GET  /ingest
-├── ingest.ex.post.py                  → POST /ingest
+├── fanart/
+│   ├── upload.ex.get.py               → GET  /fanart/upload
+│   └── upload.ex.post.py              → POST /fanart/upload
 ├── dmca.ex.get.py                     → GET  /dmca
 ├── dmca.ex.post.py                    → POST /dmca
 ├── feedback.ex.get.py                 → GET  /feedback
@@ -93,7 +97,6 @@ src/fanic/cylinder_sites/fanicsite/
 ├── faq.ex.get.py                      → GET  /faq
 ├── terms.ex.get.py                    → GET  /terms
 ├── cbz-format.ex.get.py              → GET  /cbz-format
-├── update.ex.get.py                   → GET  /update
 ├── account/
 │   ├── login.ex.get.py                → GET  /account/login
 │   ├── login.ex.post.py               → POST /account/login
@@ -177,33 +180,33 @@ When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite 
 |--------|----------|-------------|
 | `GET` | `/api/health` | Service + database health check |
 
-### Works
+### Comic
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/works` | List works (filters: `q`, `fandom`, `tag`, `rating`, `status`) |
-| `GET` | `/api/works/{work_id}` | Work detail |
-| `GET` | `/api/works/{work_id}/manifest` | Page manifest for the reader |
-| `GET` | `/api/works/{work_id}/versions` | List work versions |
-| `GET` | `/api/works/{work_id}/versions/{version_id}` | Version detail |
-| `GET` | `/api/works/{work_id}/download` | Download original CBZ |
-| `GET` | `/api/works/{work_id}/pages/{page_index}/image` | Full-size page image |
-| `GET` | `/api/works/{work_id}/pages/{page_index}/thumb` | Page thumbnail |
-| `GET` | `/api/works/{work_id}/progress?user_id=` | Reading progress |
-| `POST` | `/api/works/{work_id}/progress` | Save reading progress |
-| `POST` | `/api/works/{work_id}/bookmark` | Create/update bookmark |
+| `GET` | `/api/comic` | List works (filters: `q`, `fandom`, `tag`, `rating`, `status`) |
+| `GET` | `/api/comic/{work_id}` | Work detail |
+| `GET` | `/api/comic/{work_id}/manifest` | Page manifest for the reader |
+| `GET` | `/api/comic/{work_id}/versions` | List work versions |
+| `GET` | `/api/comic/{work_id}/versions/{version_id}` | Version detail |
+| `GET` | `/api/comic/{work_id}/download` | Download original CBZ |
+| `GET` | `/api/comic/{work_id}/pages/{page_index}/image` | Full-size page image |
+| `GET` | `/api/comic/{work_id}/pages/{page_index}/thumb` | Page thumbnail |
+| `GET` | `/api/comic/{work_id}/progress?user_id=` | Reading progress |
+| `POST` | `/api/comic/{work_id}/progress` | Save reading progress |
+| `POST` | `/api/comic/{work_id}/bookmark` | Create/update bookmark |
 
-### Ingest
+### Comic Ingest
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/ingest` | Upload CBZ + metadata (returns moderation result) |
-| `POST` | `/api/ingest/metadata` | Extract metadata from CBZ without full ingest |
-| `GET` | `/api/ingest/progress?token=` | Poll ingest progress |
+| `POST` | `/api/comic-ingest` | Upload CBZ + metadata (returns moderation result) |
+| `POST` | `/api/comic-ingest/metadata` | Extract metadata from CBZ without full ingest |
+| `GET` | `/api/comic-ingest/progress?token=` | Poll ingest progress |
 
 ## Windows Nginx Setup (Scripted)
 
-Use the included script to install nginx on Windows, serve `/static/*`, `/works/*`, and `/fanart/*` from local files, and proxy all other routes to the WSGI app.
+Use the included script to install nginx on Windows, serve `/static/*` and fanart media from local files, and proxy all other routes to the WSGI app.
 
 ```powershell
 just setup-nginx-windows

@@ -57,6 +57,8 @@ auth_lockout_seconds = 900
 upload_rate_window_seconds = 60
 upload_rate_max_requests = 20
 upload_max_concurrent_per_user = 1
+comic_ingest_max_concurrent = 3
+comic_ingest_queue_wait_seconds = 180
 profile_history_limit = 100
 
 max_cbz_upload_bytes = "256 MiB"

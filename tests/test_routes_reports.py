@@ -80,7 +80,7 @@ def test_reports_route_renders_report_rows_for_admin(
                 "reason": "Illegal content",
                 "reporter_name": "Reporter",
                 "reporter_email": "reporter@example.com",
-                "claimed_url": "https://example.test/works/work-1",
+                "claimed_url": "https://example.test/comic/work-1",
                 "evidence_url": "",
                 "details": "This appears illegal.",
                 "reporter_username": "alice",

@@ -382,7 +382,7 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
         work_id="work-1",
         kind="comment",
         message="bob commented on your work.",
-        href="/works/work-1",
+        href="/comic/work-1",
     )
     assert notification_id > 0
     assert repository.count_unread_notifications("alice") == 1

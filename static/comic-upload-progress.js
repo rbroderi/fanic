@@ -69,7 +69,7 @@
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
       return window.crypto.randomUUID();
     }
-    return `ingest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return `comic-ingest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   function startProgressPolling(token) {
@@ -79,7 +79,7 @@
     }
 
     const poll = () => {
-      const url = `/api/ingest/progress?token=${encodeURIComponent(token)}`;
+      const url = `/api/comic-ingest/progress?token=${encodeURIComponent(token)}`;
       window
         .fetch(url, { method: "GET", cache: "no-store" })
         .then((response) => {
@@ -96,7 +96,9 @@
           const progress = data.progress;
           const current = Number(progress.current || 0);
           const total = Number(progress.total || 0);
+          const stage = String(progress.stage || "").toLowerCase();
           const message = String(progress.message || "Processing...");
+          const displayMessage = stage === "queued" ? `In Queue: ${message}` : message;
           const elapsedSeconds = Math.floor(
             (Date.now() - processingStartedAt) / 1000,
           );
@@ -108,7 +110,7 @@
             progressBar.removeAttribute("value");
           }
 
-          progressText.textContent = `${message} (${elapsedSeconds}s)`;
+          progressText.textContent = `${displayMessage} (${elapsedSeconds}s)`;
 
           if (progress.done) {
             stopProgressPolling();

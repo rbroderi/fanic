@@ -7,8 +7,10 @@ from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import admin_aware_detail
+from fanic.cylinder_sites.common import begin_comic_ingest_session
 from fanic.cylinder_sites.common import begin_upload_session
 from fanic.cylinder_sites.common import current_user
+from fanic.cylinder_sites.common import end_comic_ingest_session
 from fanic.cylinder_sites.common import end_upload_session
 from fanic.cylinder_sites.common import enforce_https_termination
 from fanic.cylinder_sites.common import log_exception
@@ -201,6 +203,46 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 upload_status_kind="error",
             )
 
+        def on_queued(queue_position: int) -> None:
+            if not upload_token:
+                return
+            set_progress(
+                upload_token,
+                stage="queued",
+                message=f"Waiting in comic ingest queue (position {queue_position})",
+                done=False,
+                ok=False,
+            )
+
+        started_comic_ingest_session = False
+        queue_allowed, _, queue_position = begin_comic_ingest_session(
+            on_queued=on_queued,
+        )
+        if not queue_allowed:
+            if upload_token:
+                set_progress(
+                    upload_token,
+                    stage="throttled",
+                    message=(
+                        f"Comic ingest queue timeout at position {queue_position}. Please retry."
+                        if queue_position > 0
+                        else "Comic ingest queue is full"
+                    ),
+                    done=True,
+                    ok=False,
+                )
+            return render_upload_page(
+                request,
+                response,
+                upload_status_text=(
+                    f"Comic ingest queue timed out at position {queue_position}. Please retry shortly."
+                    if queue_position > 0
+                    else "Comic ingest queue is full. Please retry shortly."
+                ),
+                upload_status_kind="error",
+            )
+
+        started_comic_ingest_session = True
         started_upload_session = False
         allowed, limit_code, retry_after = begin_upload_session(username)
         if not allowed:
@@ -391,6 +433,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         finally:
             if started_upload_session:
                 end_upload_session(username)
+            if started_comic_ingest_session:
+                end_comic_ingest_session()
 
     if action == "editor-add-page":
         editor_state = _editor_state_from_form(request)

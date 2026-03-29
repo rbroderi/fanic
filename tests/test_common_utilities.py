@@ -102,10 +102,10 @@ def test_route_helpers_and_user_menu(
         _ = req
         return None
 
-    request = dummy_request(path="/works/abc", args={})
-    assert module.path_parts(request) == ["works", "abc"]
-    assert module.route_tail(request, ["works"]) == ["abc"]
-    assert module.route_tail(request, ["works", "abc", "extra"]) is None
+    request = dummy_request(path="/comic/abc", args={})
+    assert module.path_parts(request) == ["comic", "abc"]
+    assert module.route_tail(request, ["comic"]) == ["abc"]
+    assert module.route_tail(request, ["comic", "abc", "extra"]) is None
     assert module.route_tail(request, ["reader"]) is None
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_in)
@@ -328,3 +328,47 @@ def test_log_path_resolution_uses_log_suffix(
 
     with_explicit_suffix = module._resolve_log_path("logs/custom.txt")
     assert with_explicit_suffix.suffix == ".txt"
+
+
+def test_comic_ingest_queue_helpers(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_comic_ingest_queue_test")
+
+    monkeypatch.setattr(module, "COMIC_INGEST_MAX_CONCURRENT", 1)
+    monkeypatch.setattr(module, "COMIC_INGEST_QUEUE_WAIT_SECONDS", 0)
+    monkeypatch.setattr(module, "_COMIC_INGEST_ACTIVE", 0)
+    monkeypatch.setattr(module, "_COMIC_INGEST_WAITING", 0)
+
+    seen_positions: list[int] = []
+
+    def capture_queue_position(position: int) -> None:
+        seen_positions.append(position)
+
+    allowed_first, retry_after_first, queue_position_first = module.begin_comic_ingest_session(
+        wait_timeout_seconds=0,
+    )
+    assert allowed_first is True
+    assert retry_after_first == 0
+    assert queue_position_first == 0
+
+    allowed_second, retry_after_second, queue_position_second = module.begin_comic_ingest_session(
+        wait_timeout_seconds=0,
+        on_queued=capture_queue_position,
+    )
+    assert allowed_second is False
+    assert retry_after_second == 1
+    assert queue_position_second == 1
+    assert seen_positions == [1]
+
+    module.end_comic_ingest_session()
+
+    allowed_third, retry_after_third, queue_position_third = module.begin_comic_ingest_session(
+        wait_timeout_seconds=0,
+    )
+    assert allowed_third is True
+    assert retry_after_third == 0
+    assert queue_position_third == 0
+
+    module.end_comic_ingest_session()

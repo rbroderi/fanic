@@ -100,6 +100,8 @@ AUTH_LOCKOUT_SECONDS = _SETTINGS.auth_lockout_seconds
 UPLOAD_RATE_WINDOW_SECONDS = int(getattr(_SETTINGS, "upload_rate_window_seconds", 60))
 UPLOAD_RATE_MAX_REQUESTS = int(getattr(_SETTINGS, "upload_rate_max_requests", 20))
 UPLOAD_MAX_CONCURRENT_PER_USER = int(getattr(_SETTINGS, "upload_max_concurrent_per_user", 2))
+COMIC_INGEST_MAX_CONCURRENT = int(getattr(_SETTINGS, "comic_ingest_max_concurrent", 3))
+COMIC_INGEST_QUEUE_WAIT_SECONDS = int(getattr(_SETTINGS, "comic_ingest_queue_wait_seconds", 180))
 
 # Maximum length for user-supplied text form fields.
 MAX_SHORT_FIELD_LENGTH = 512
@@ -122,6 +124,10 @@ _POST_RATE_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_LOCK = threading.Lock()
 _UPLOAD_ATTEMPT_TIMESTAMPS: dict[str, list[float]] = {}
 _UPLOAD_IN_FLIGHT: dict[str, int] = {}
+_COMIC_INGEST_LOCK = threading.Lock()
+_COMIC_INGEST_CONDITION = threading.Condition(_COMIC_INGEST_LOCK)
+_COMIC_INGEST_ACTIVE = 0
+_COMIC_INGEST_WAITING = 0
 _REQUEST_ID_ATTR = "_fanic_request_id"
 
 _SENSITIVE_FIELD_NAMES = {
@@ -932,6 +938,60 @@ def end_upload_session(username: str) -> None:
                 _UPLOAD_IN_FLIGHT.pop(normalized_username)
             return
         _UPLOAD_IN_FLIGHT[normalized_username] = current_in_flight - 1
+
+
+def begin_comic_ingest_session(
+    *,
+    wait_timeout_seconds: int | None = None,
+    on_queued: Callable[[int], None] | None = None,
+) -> tuple[bool, int, int]:
+    if COMIC_INGEST_MAX_CONCURRENT <= 0:
+        return True, 0, 0
+
+    timeout_seconds = wait_timeout_seconds if wait_timeout_seconds is not None else COMIC_INGEST_QUEUE_WAIT_SECONDS
+    timeout_seconds = timeout_seconds if timeout_seconds >= 0 else 0
+    deadline = time.time() + timeout_seconds
+
+    global _COMIC_INGEST_ACTIVE
+    global _COMIC_INGEST_WAITING
+    with _COMIC_INGEST_CONDITION:
+        queued = False
+        queue_position = 0
+        while _COMIC_INGEST_ACTIVE >= COMIC_INGEST_MAX_CONCURRENT:
+            if not queued:
+                _COMIC_INGEST_WAITING += 1
+                queued = True
+                queue_position = _COMIC_INGEST_WAITING
+            else:
+                queue_position = _COMIC_INGEST_WAITING
+
+            if on_queued is not None and queue_position > 0:
+                try:
+                    on_queued(queue_position)
+                except Exception:
+                    pass
+
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                if queued:
+                    _COMIC_INGEST_WAITING -= 1
+                timeout_retry_after = 1
+                return False, timeout_retry_after, queue_position if queue_position else 1
+
+            _COMIC_INGEST_CONDITION.wait(timeout=remaining)
+
+        if queued:
+            _COMIC_INGEST_WAITING -= 1
+        _COMIC_INGEST_ACTIVE += 1
+    return True, 0, queue_position
+
+
+def end_comic_ingest_session() -> None:
+    global _COMIC_INGEST_ACTIVE
+    with _COMIC_INGEST_CONDITION:
+        if _COMIC_INGEST_ACTIVE > 0:
+            _COMIC_INGEST_ACTIVE -= 1
+        _COMIC_INGEST_CONDITION.notify()
 
 
 def check_post_rate_limit(request: RequestLike) -> int:
