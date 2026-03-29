@@ -79,6 +79,7 @@ class FanicSettings(BaseSettings):
         env_file=".env",
         populate_by_name=True,
         toml_file=_SETTINGS_TOML_PATH,
+        validate_default=True,
     )
 
     @classmethod
@@ -114,23 +115,24 @@ class FanicSettings(BaseSettings):
     media_base_url: str
     openclip_cache_dir: str
 
-    # Session, invite gate, and local admin bootstrap
-    admin_password_hash: str
-    alpha_invite_codes_csv: str
+    # File-backed credentials (leave empty here; loaded via FANIC_*_FILE or /etc/fanic/credentials/<name>)
+    alpha_invite_codes_csv: str = ""
+    session_secret: str = ""
+    auth0_audience: str = ""
+    auth0_client_id: str = ""
+    auth0_client_secret: str = ""
+    auth0_domain: str = ""
+
+    # Session and invite gate behavior
     alpha_invite_cookie_max_age: int
     alpha_invite_gate_enabled: bool
     session_cookie_samesite: str
     session_max_age: int
     session_secure: bool
-    session_secret: str
 
     # External auth provider settings
-    auth0_audience: str
     auth0_callback_url: str
-    auth0_client_id: str
-    auth0_client_secret: str
     auth0_connection: str
-    auth0_domain: str
     auth0_enabled: bool
     auth0_logout_return_url: str
     auth0_superadmin_email: str
@@ -193,32 +195,32 @@ class FanicSettings(BaseSettings):
     @field_validator("session_secret", mode="before")
     @classmethod
     def _session_secret_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_SESSION_SECRET_FILE")
-
-    @field_validator("admin_password_hash", mode="before")
-    @classmethod
-    def _admin_password_hash_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_ADMIN_PASSWORD_HASH_FILE")
+        return _resolve_value_from_file(value, "FANIC_SESSION_SECRET_FILE", "session_secret")
 
     @field_validator("auth0_client_secret", mode="before")
     @classmethod
     def _auth0_client_secret_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_SECRET_FILE")
+        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_SECRET_FILE", "auth0_client_secret")
 
     @field_validator("auth0_domain", mode="before")
     @classmethod
     def _auth0_domain_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_AUTH0_DOMAIN_FILE")
+        return _resolve_value_from_file(value, "FANIC_AUTH0_DOMAIN_FILE", "auth0_domain")
 
     @field_validator("auth0_client_id", mode="before")
     @classmethod
     def _auth0_client_id_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_ID_FILE")
+        return _resolve_value_from_file(value, "FANIC_AUTH0_CLIENT_ID_FILE", "auth0_client_id")
+
+    @field_validator("auth0_audience", mode="before")
+    @classmethod
+    def _auth0_audience_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_AUTH0_AUDIENCE_FILE", "auth0_audience")
 
     @field_validator("alpha_invite_codes_csv", mode="before")
     @classmethod
     def _alpha_invite_codes_from_file(cls, value: Any) -> Any:
-        return _resolve_value_from_file(value, "FANIC_ALPHA_INVITE_CODES_CSV_FILE")
+        return _resolve_value_from_file(value, "FANIC_ALPHA_INVITE_CODES_CSV_FILE", "alpha_invite_codes_csv")
 
     @field_validator(
         "max_cbz_upload_bytes",
@@ -290,13 +292,6 @@ class FanicSettings(BaseSettings):
             raise RuntimeError(
                 "FANIC_SESSION_SECRET must be set to a strong random value "
                 "in production (e.g. python -c 'import secrets; print(secrets.token_hex(32))')."
-            )
-
-        if self.admin_password_hash.startswith("sha256$"):
-            warnings.warn(
-                "FANIC_ADMIN_PASSWORD_HASH uses bare SHA256 which is unsuitable for "
-                "production. Generate a strong hash with: fanic hash-admin-password",
-                stacklevel=1,
             )
 
         if not self.data_dir:
@@ -406,17 +401,34 @@ def parse_byte_size(value: str | int) -> int:
     return unit.to_bytes(number)
 
 
-def _resolve_value_from_file(value: Any, file_env_var_name: str) -> Any:
-    file_path_raw = os.getenv(file_env_var_name, "").strip()
-    if not file_path_raw:
+def _resolve_value_from_file(
+    value: Any,
+    file_env_var_name: str,
+    default_credentials_name: str | None = None,
+) -> Any:
+    if isinstance(value, str) and value.strip():
         return value
 
-    file_path = Path(file_path_raw).expanduser()
-    try:
-        loaded = file_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ValueError(f"Unable to read {file_env_var_name} file at '{file_path}'") from exc
-    return loaded.strip()
+    file_path_raw = os.getenv(file_env_var_name, "").strip()
+    if file_path_raw:
+        file_path = Path(file_path_raw).expanduser()
+        try:
+            return file_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"Unable to read {file_env_var_name} file at '{file_path}'") from exc
+
+    if default_credentials_name:
+        default_path = Path(f"/etc/fanic/credentials/{default_credentials_name}")
+    else:
+        default_path = None
+
+    if default_path is not None and default_path.is_file():
+        try:
+            return default_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"Unable to read credentials file at '{default_path}'") from exc
+
+    return value
 
 
 @lru_cache(maxsize=1)

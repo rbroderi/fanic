@@ -1,10 +1,7 @@
 import argparse
 import atexit
 import functools
-import getpass
-import hashlib
 import logging
-import secrets
 import signal
 from collections.abc import Callable
 from datetime import datetime
@@ -92,29 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     runserver.set_defaults(command="serve")
 
-    hash_password = subcommands.add_parser(
-        "hash-admin-password",
-        help="Generate a pbkdf2_sha256 hash for FANIC_ADMIN_PASSWORD_HASH",
-    )
-    hash_password.add_argument(
-        "--password",
-        default=None,
-        help="Password to hash (omit to be prompted securely)",
-    )
-    hash_password.add_argument(
-        "--rounds",
-        default=390000,
-        type=int,
-        help="PBKDF2 iteration count",
-    )
-    hash_password.add_argument(
-        "--salt-bytes",
-        default=16,
-        type=int,
-        help="Random salt size in bytes",
-    )
-    hash_password.set_defaults(command="hash-admin-password")
-
     backup_data = subcommands.add_parser(
         "backup-data",
         help="Create a ZIP backup of fanic.db, cbz/, and works/",
@@ -163,17 +137,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _pbkdf2_admin_password_hash(password: str, rounds: int, salt_bytes: int) -> str:
-    salt = secrets.token_hex(salt_bytes)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        rounds,
-    ).hex()
-    return f"pbkdf2_sha256${rounds}${salt}${digest}"
-
-
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -215,24 +178,6 @@ def main() -> int:
                 unix_socket=args.unix_socket,
                 unix_socket_perms=str(args.unix_socket_perms),
             )
-        case "hash-admin-password":
-            password = str(args.password) if args.password is not None else getpass.getpass("Admin password: ")
-            if not password:
-                print("Password must not be empty")
-                return ERROR
-
-            rounds = int(args.rounds)
-            salt_bytes = int(args.salt_bytes)
-            if rounds < 10000:
-                print("rounds must be at least 10000")
-                return ERROR
-            if salt_bytes < 8:
-                print("salt-bytes must be at least 8")
-                return ERROR
-
-            hashed = _pbkdf2_admin_password_hash(password, rounds, salt_bytes)
-            print(f"FANIC_ADMIN_PASSWORD_HASH={hashed}")
-            return OK
         case "backup-data":
             from fanic.db import create_runtime_backup as create_runtime_backup
 
