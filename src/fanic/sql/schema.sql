@@ -120,6 +120,8 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
     email TEXT,
+    is_over_18 INTEGER,
+    age_gate_completed INTEGER NOT NULL DEFAULT 1,
     active INTEGER NOT NULL DEFAULT 1,
     role TEXT NOT NULL DEFAULT 'user',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -216,5 +218,11 @@ CREATE INDEX IF NOT EXISTS idx_user_bookmarks_username_updated_at ON user_bookma
 CREATE INDEX IF NOT EXISTS idx_notifications_username_created_at ON notifications(username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_username_is_read ON notifications(username, is_read);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
+ON users(lower(display_name))
+WHERE trim(display_name) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+ON users(lower(email))
+WHERE email IS NOT NULL AND trim(email) <> '';
 CREATE INDEX IF NOT EXISTS idx_auth_identities_username ON auth_identities(username);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_email ON auth_identities(email);

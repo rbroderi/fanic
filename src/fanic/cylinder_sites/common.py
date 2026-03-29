@@ -25,6 +25,7 @@ from authlib.jose.errors import JoseError
 from fanic.cylinder_sites.site_layout import site_header_parts_for_template
 from fanic.ingest import ingest_cbz
 from fanic.repository import UserRole
+from fanic.repository import get_local_user
 from fanic.repository import get_user_role
 from fanic.repository import get_user_theme_preference
 from fanic.settings import STATIC_ASSETS_DIR
@@ -167,7 +168,7 @@ SITE_HEAD_ASSETS_HTML = (
     '    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />\n'
     '    <link rel="stylesheet" href="/static/styles.css" />'
 )
-SITE_COMMON_SCRIPTS_HTML = '<script src="/static/user-menu.js"></script>'
+SITE_COMMON_SCRIPTS_HTML = '<script src="/static/user-menu.js?v=20260329-logged-out-page"></script>'
 
 THEME_VAR_ALLOWLIST = {
     "bg",
@@ -1051,6 +1052,13 @@ def clear_login_cookie(response: ResponseLike) -> None:
 def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     username = current_user(request)
     logged_in = username is not None
+    display_name = ""
+    if logged_in and username:
+        try:
+            local_user = get_local_user(username)
+            display_name = local_user["display_name"] if local_user is not None else username
+        except Exception:
+            display_name = username
     role = current_user_role(request)
     is_admin = role in {"superadmin", "admin"}
     reports_current_attr = ' aria-current="page"' if request.path == "/admin/reports" else ""
@@ -1066,15 +1074,13 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     logout_hidden_attr = "" if logged_in else "hidden"
     user_menu_panel_content = (
         f'<p id="userMenuStatus" class="user-menu-status">'
-        f"{'Logged in as ' + escape(username) + '.' if logged_in and username else 'Not logged in.'}"
+        f"{'Logged in as ' + escape(display_name) + '.' if logged_in and username else 'Not logged in.'}"
         "</p>"
         f'<a id="userMenuLogin" class="user-menu-link" href="/account/login" {login_hidden_attr}>Login</a>'
         f'<a id="userMenuSignup" class="user-menu-link" href="https://fanic.media/account/auth0/signup" {login_hidden_attr}>Create an account</a>'
         f'<a id="userMenuProfile" class="user-menu-link" href="/user/profile" {profile_hidden_attr}>Profile</a>'
         "__USER_MENU_UPLOAD_LINK__"
-        f'<form id="userMenuLogoutForm" class="auth-inline" method="post" action="/account/logout" {logout_hidden_attr}>'
-        '<button id="userMenuLogout" type="submit" class="user-menu-logout">Logout</button>'
-        "</form>"
+        f'<a id="userMenuLogout" class="user-menu-link user-menu-logout" href="/account/logout" {logout_hidden_attr}>Logout</a>'
     )
     user_menu_html = (
         '<div class="user-menu">'
@@ -1090,7 +1096,7 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         "</div>"
     )
     return {
-        "__USER_MENU_STATUS__": f"Logged in as {escape(username)}." if logged_in and username else "Not logged in.",
+        "__USER_MENU_STATUS__": f"Logged in as {escape(display_name)}." if logged_in and username else "Not logged in.",
         "__USER_MENU_LOGIN_HIDDEN_ATTR__": login_hidden_attr,
         "__USER_MENU_PROFILE_HIDDEN_ATTR__": profile_hidden_attr,
         "__USER_MENU_LOGOUT_HIDDEN_ATTR__": logout_hidden_attr,
@@ -1258,6 +1264,9 @@ def render_html_template(
 
     response.status_code = 200
     response.content_type = "text/html; charset=utf-8"
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     response.set_data(html)
     return response
 

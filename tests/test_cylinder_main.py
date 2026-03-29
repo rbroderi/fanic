@@ -137,6 +137,7 @@ def test_create_app_blocks_non_admin_under_admin_paths(
     monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
     monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_alice)
     monkeypatch.setattr(cylinder_main, "get_user_role", _role_user)
+    monkeypatch.setattr(cylinder_main, "user_is_under_18", lambda _username: False)
 
     class _Settings:
         require_https_effective: bool = False
@@ -208,6 +209,7 @@ def test_create_app_allows_admin_under_admin_paths(
     monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
     monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_admin)
     monkeypatch.setattr(cylinder_main, "get_user_role", _role_admin)
+    monkeypatch.setattr(cylinder_main, "user_is_under_18", lambda _username: False)
 
     class _Settings:
         require_https_effective: bool = False
@@ -331,6 +333,7 @@ def test_create_app_alpha_invite_gate_blocks_without_cookie(
         "_build_cylinder_log_handler",
         lambda: logging.NullHandler(),
     )
+    monkeypatch.setattr(cylinder_main, "user_is_under_18", lambda _username: False)
 
     app = cylinder_main.create_app()
 
@@ -357,6 +360,144 @@ def test_create_app_alpha_invite_gate_blocks_without_cookie(
 
     assert captured_status["value"] == "200 OK"
     assert b"Private Alpha" in response_chunks[0]
+
+
+def test_create_app_redirects_underage_user_to_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_status: dict[str, str] = {}
+    captured_headers: dict[str, str] = {}
+
+    def fake_startup() -> None:
+        return None
+
+    def fake_get_app(
+        app_map_fn: Callable[[], tuple[str, str, dict[str, object]]],
+        log_level: int,
+        log_handler: logging.Handler,
+    ) -> WSGIApplication:
+        _ = (app_map_fn, log_level, log_handler)
+
+        def fake_wsgi_app(
+            environ: dict[str, object],
+            start_response: Callable[..., object],
+        ) -> list[bytes]:
+            _ = environ
+            start_response("200 OK", [("Content-Type", "text/plain")])
+            return [b"ok"]
+
+        return fake_wsgi_app
+
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = False
+        log_path_template: str = "logs/test.log"
+
+    monkeypatch.setattr(cylinder_main, "startup", fake_startup)
+    monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
+    monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_alice)
+    monkeypatch.setattr(cylinder_main, "user_is_under_18", lambda _username: True)
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
+
+    app = cylinder_main.create_app()
+
+    def fake_start_response(
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None] | None = None,
+    ) -> Callable[[bytes], object]:
+        _ = exc_info
+        captured_status["value"] = status
+        captured_headers.update(dict(headers))
+        return _write_response_chunk
+
+    response_chunks = list(
+        app(
+            {
+                "PATH_INFO": "/works/work-1",
+                "REQUEST_METHOD": "GET",
+                "HTTP_COOKIE": f"{SESSION_COOKIE_NAME}=session-token",
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    assert captured_status["value"] == "303 See Other"
+    assert captured_headers["Location"] == "/user/profile?msg=underage-restricted"
+    assert response_chunks == [b"See Other"]
+
+
+def test_create_app_allows_underage_user_profile_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_status: dict[str, str] = {}
+
+    def fake_startup() -> None:
+        return None
+
+    def fake_get_app(
+        app_map_fn: Callable[[], tuple[str, str, dict[str, object]]],
+        log_level: int,
+        log_handler: logging.Handler,
+    ) -> WSGIApplication:
+        _ = (app_map_fn, log_level, log_handler)
+
+        def fake_wsgi_app(
+            environ: dict[str, object],
+            start_response: Callable[..., object],
+        ) -> list[bytes]:
+            _ = environ
+            start_response("200 OK", [("Content-Type", "text/plain")])
+            return [b"ok"]
+
+        return fake_wsgi_app
+
+    class _Settings:
+        require_https_effective: bool = False
+        alpha_invite_gate_enabled: bool = False
+        log_path_template: str = "logs/test.log"
+
+    monkeypatch.setattr(cylinder_main, "startup", fake_startup)
+    monkeypatch.setattr("fanic.cylinder_main.cylinder.get_app", fake_get_app)
+    monkeypatch.setattr(cylinder_main, "decode_session", _decode_session_alice)
+    monkeypatch.setattr(cylinder_main, "user_is_under_18", lambda _username: True)
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(
+        cylinder_main,
+        "_build_cylinder_log_handler",
+        lambda: logging.NullHandler(),
+    )
+
+    app = cylinder_main.create_app()
+
+    def fake_start_response(
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None] | None = None,
+    ) -> Callable[[bytes], object]:
+        _ = exc_info
+        _ = headers
+        captured_status["value"] = status
+        return _write_response_chunk
+
+    response_chunks = list(
+        app(
+            {
+                "PATH_INFO": "/user/profile",
+                "REQUEST_METHOD": "GET",
+                "HTTP_COOKIE": f"{SESSION_COOKIE_NAME}=session-token",
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    assert captured_status["value"] == "200 OK"
+    assert response_chunks == [b"ok"]
 
 
 def test_create_app_alpha_invite_gate_accepts_code_and_allows_access(

@@ -48,6 +48,35 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     if not _table_exists(connection, "users"):
         return
 
+    user_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info('users')").fetchall()}
+    if "is_over_18" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN is_over_18 INTEGER")
+    if "age_gate_completed" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN age_gate_completed INTEGER NOT NULL DEFAULT 1")
+    connection.execute("UPDATE users SET age_gate_completed = 1 WHERE age_gate_completed IS NULL")
+    try:
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
+            ON users(lower(display_name))
+            WHERE trim(display_name) <> ''
+            """
+        )
+    except sqlite3.IntegrityError:
+        # Keep startup working for legacy databases that already contain duplicates.
+        pass
+    try:
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+            ON users(lower(email))
+            WHERE email IS NOT NULL AND trim(email) <> ''
+            """
+        )
+    except sqlite3.IntegrityError:
+        # Keep startup working for legacy databases that already contain duplicates.
+        pass
+
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS auth_identities (

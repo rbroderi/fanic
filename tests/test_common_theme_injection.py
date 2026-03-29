@@ -49,6 +49,9 @@ def test_render_html_template_injects_custom_theme_style(
 
     html = result.data.decode("utf-8")
     assert result.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.headers["Expires"] == "0"
     assert "customThemeOverrides" in html
     assert "--accent: #268bd2;" in html
     assert "--accent: #b58900;" in html

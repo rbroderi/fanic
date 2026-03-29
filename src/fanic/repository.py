@@ -1,5 +1,8 @@
 import json
+import re
 import shutil
+import sqlite3
+import uuid
 from collections.abc import Mapping
 from datetime import datetime
 from datetime import timezone
@@ -29,6 +32,7 @@ TAG_FIELD_TO_TYPE = {
 UserRole = Literal["superadmin", "admin", "user", "guest"]
 PRIVILEGED_USER_ROLES: set[UserRole] = {"superadmin", "admin"}
 MANAGED_USER_ROLES: set[UserRole] = {"superadmin", "admin", "user"}
+DISPLAY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+$")
 
 
 class WorkComment(TypedDict):
@@ -72,6 +76,8 @@ class LocalUserRow(TypedDict):
     username: str
     display_name: str
     email: str | None
+    is_over_18: bool | None
+    age_gate_completed: bool
     role: UserRole
     active: bool
     created_at: str
@@ -158,6 +164,19 @@ def _validate_managed_role(role: UserRole) -> UserRole:
     return normalized_role
 
 
+def _validate_display_name(display_name: str) -> str:
+    normalized_display_name = display_name.strip()
+    if not normalized_display_name:
+        raise ValueError("display_name must not be empty")
+    if not DISPLAY_NAME_PATTERN.fullmatch(normalized_display_name):
+        raise ValueError("display_name must contain only letters and numbers")
+    return normalized_display_name
+
+
+def _sanitize_display_name(display_name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", display_name.strip())
+
+
 def upsert_user(
     user_id: str,
     username: str,
@@ -166,28 +185,43 @@ def upsert_user(
     email: str | None,
     active: bool,
     role: UserRole,
+    is_over_18: bool | None = None,
+    age_gate_completed: bool = True,
 ) -> None:
     normalized_role = _validate_managed_role(role)
-    normalized_email = email.strip() if isinstance(email, str) else ""
+    normalized_username = username.strip()
+    normalized_display_name = _validate_display_name(display_name)
+    normalized_email = email.strip().lower() if isinstance(email, str) else ""
     stored_email = normalized_email if normalized_email else None
+    if _display_name_in_use_by_other_username(
+        normalized_display_name,
+        normalized_username,
+    ):
+        raise sqlite3.IntegrityError("display_name already exists")
+    if stored_email and _email_in_use_by_other_username(stored_email, normalized_username):
+        raise sqlite3.IntegrityError("email already exists")
 
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO users (id, username, display_name, email, active, role)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, username, display_name, email, is_over_18, age_gate_completed, active, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 username = excluded.username,
                 display_name = excluded.display_name,
                 email = excluded.email,
+                is_over_18 = excluded.is_over_18,
+                age_gate_completed = excluded.age_gate_completed,
                 active = excluded.active,
                 role = excluded.role
             """,
             (
                 user_id,
                 username,
-                display_name,
+                normalized_display_name,
                 stored_email,
+                None if is_over_18 is None else (1 if is_over_18 else 0),
+                1 if age_gate_completed else 0,
                 1 if active else 0,
                 normalized_role,
             ),
@@ -198,10 +232,14 @@ def ensure_local_user(username: str, *, role: UserRole = "user") -> None:
     normalized_username = username.strip()
     if not normalized_username:
         return
+    resolved_display_name = _next_available_display_name(
+        normalized_username,
+        normalized_username,
+    )
     upsert_user(
         normalized_username,
         normalized_username,
-        display_name=normalized_username,
+        display_name=resolved_display_name,
         email=None,
         active=True,
         role=role,
@@ -213,6 +251,8 @@ def create_user(
     *,
     display_name: str,
     email: str | None = None,
+    is_over_18: bool | None = None,
+    age_gate_completed: bool = True,
     role: UserRole = "user",
     active: bool = True,
 ) -> None:
@@ -220,25 +260,29 @@ def create_user(
     if not normalized_username:
         raise ValueError("username must not be empty")
 
-    normalized_display_name = display_name.strip()
-    if not normalized_display_name:
-        raise ValueError("display_name must not be empty")
+    normalized_display_name = _validate_display_name(display_name)
 
     normalized_role = _validate_managed_role(role)
-    normalized_email = email.strip() if isinstance(email, str) else ""
+    normalized_email = email.strip().lower() if isinstance(email, str) else ""
     stored_email = normalized_email if normalized_email else None
+    if _display_name_in_use_by_other_username(normalized_display_name, normalized_username):
+        raise sqlite3.IntegrityError("display_name already exists")
+    if stored_email and _email_in_use_by_other_username(stored_email, normalized_username):
+        raise sqlite3.IntegrityError("email already exists")
 
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO users (id, username, display_name, email, active, role)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, username, display_name, email, is_over_18, age_gate_completed, active, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 normalized_username,
                 normalized_username,
                 normalized_display_name,
                 stored_email,
+                None if is_over_18 is None else (1 if is_over_18 else 0),
+                1 if age_gate_completed else 0,
                 1 if active else 0,
                 normalized_role,
             ),
@@ -298,7 +342,7 @@ def get_local_user(username: str) -> LocalUserRow | None:
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT username, display_name, email, role, active, created_at
+            SELECT username, display_name, email, is_over_18, age_gate_completed, role, active, created_at
             FROM users
             WHERE username = ?
             """,
@@ -312,6 +356,8 @@ def get_local_user(username: str) -> LocalUserRow | None:
         "username": str(row["username"]),
         "display_name": str(row["display_name"]),
         "email": str(row["email"]) if row["email"] is not None else None,
+        "is_over_18": None if row["is_over_18"] is None else bool(int(row["is_over_18"])),
+        "age_gate_completed": bool(int(row["age_gate_completed"])),
         "role": _normalize_user_role(row["role"]),
         "active": bool(int(row["active"])),
         "created_at": str(row["created_at"]),
@@ -327,6 +373,58 @@ def _username_exists(username: str) -> bool:
     return row is not None
 
 
+def _email_in_use_by_other_username(email: str, username: str) -> bool:
+    normalized_email = email.strip().lower()
+    normalized_username = username.strip()
+    if not normalized_email or not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM users
+            WHERE lower(COALESCE(email, '')) = ?
+              AND username <> ?
+            LIMIT 1
+            """,
+            (normalized_email, normalized_username),
+        ).fetchone()
+    return row is not None
+
+
+def _display_name_in_use_by_other_username(display_name: str, username: str) -> bool:
+    normalized_display_name = display_name.strip().lower()
+    normalized_username = username.strip()
+    if not normalized_display_name or not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM users
+            WHERE lower(display_name) = ?
+              AND username <> ?
+            LIMIT 1
+            """,
+            (normalized_display_name, normalized_username),
+        ).fetchone()
+    return row is not None
+
+
+def _next_available_display_name(seed: str, username: str) -> str:
+    base = _sanitize_display_name(seed)
+    if not base:
+        base = "User"
+    candidate = base
+    counter = 2
+    while _display_name_in_use_by_other_username(candidate, username):
+        candidate = f"{base}{counter}"
+        counter += 1
+    return candidate
+
+
 def _local_user_by_email(email: str) -> LocalUserRow | None:
     normalized_email = email.strip().lower()
     if not normalized_email:
@@ -334,7 +432,7 @@ def _local_user_by_email(email: str) -> LocalUserRow | None:
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT username, display_name, email, role, active, created_at
+            SELECT username, display_name, email, is_over_18, age_gate_completed, role, active, created_at
             FROM users
             WHERE lower(COALESCE(email, '')) = ?
             ORDER BY
@@ -355,6 +453,8 @@ def _local_user_by_email(email: str) -> LocalUserRow | None:
         "username": str(row["username"]),
         "display_name": str(row["display_name"]),
         "email": str(row["email"]) if row["email"] is not None else None,
+        "is_over_18": None if row["is_over_18"] is None else bool(int(row["is_over_18"])),
+        "age_gate_completed": bool(int(row["age_gate_completed"])),
         "role": _normalize_user_role(row["role"]),
         "active": bool(int(row["active"])),
         "created_at": str(row["created_at"]),
@@ -455,8 +555,15 @@ def get_or_create_user_for_auth0_identity(
             desired_role: UserRole = (
                 "superadmin" if normalized_email and normalized_email == superadmin_email else existing_user["role"]
             )
-            resolved_display_name = display_name.strip() if display_name.strip() else existing_user["display_name"]
-            resolved_email = normalized_email if normalized_email else existing_user["email"]
+            preferred_display_name = display_name.strip() if display_name.strip() else existing_user["display_name"]
+            resolved_display_name = _next_available_display_name(
+                preferred_display_name,
+                username,
+            )
+            candidate_email = normalized_email if normalized_email else existing_user["email"]
+            resolved_email = candidate_email
+            if isinstance(candidate_email, str) and _email_in_use_by_other_username(candidate_email, username):
+                resolved_email = existing_user["email"]
             upsert_user(
                 username,
                 username,
@@ -478,7 +585,11 @@ def get_or_create_user_for_auth0_identity(
     if local_user is not None:
         username = local_user["username"]
         desired_role = "superadmin" if normalized_email == superadmin_email else local_user["role"]
-        resolved_display_name = display_name.strip() if display_name.strip() else local_user["display_name"]
+        preferred_display_name = display_name.strip() if display_name.strip() else local_user["display_name"]
+        resolved_display_name = _next_available_display_name(
+            preferred_display_name,
+            username,
+        )
         resolved_email = normalized_email if normalized_email else local_user["email"]
         upsert_user(
             username,
@@ -497,16 +608,17 @@ def get_or_create_user_for_auth0_identity(
         )
         return username
 
-    username_seed = normalized_email.split("@", 1)[0] if normalized_email else display_name
-    resolved_seed = username_seed if username_seed else "user"
-    username = _next_available_username(resolved_seed)
+    username = str(uuid.uuid4())
     desired_role = "superadmin" if normalized_email == superadmin_email else "user"
-    final_display_name = display_name.strip() if display_name.strip() else username
+    preferred_display_name = display_name.strip() if display_name.strip() else username
+    final_display_name = _next_available_display_name(preferred_display_name, username)
     stored_email = normalized_email if normalized_email else None
     create_user(
         username,
         display_name=final_display_name,
         email=stored_email,
+        is_over_18=None,
+        age_gate_completed=False,
         role=desired_role,
         active=True,
     )
@@ -528,7 +640,7 @@ def count_local_users() -> int:
 
 def list_local_users(*, offset: int = 0, limit: int = 0) -> list[LocalUserRow]:
     sql = """
-        SELECT username, display_name, email, role, active, created_at
+        SELECT username, display_name, email, is_over_18, age_gate_completed, role, active, created_at
         FROM users
         ORDER BY
             CASE role
@@ -552,12 +664,89 @@ def list_local_users(*, offset: int = 0, limit: int = 0) -> list[LocalUserRow]:
             "username": str(row["username"]),
             "display_name": str(row["display_name"]),
             "email": str(row["email"]) if row["email"] is not None else None,
+            "is_over_18": None if row["is_over_18"] is None else bool(int(row["is_over_18"])),
+            "age_gate_completed": bool(int(row["age_gate_completed"])),
             "role": _normalize_user_role(row["role"]),
             "active": bool(int(row["active"])),
             "created_at": str(row["created_at"]),
         }
         for row in rows
     ]
+
+
+def update_user_onboarding(
+    username: str,
+    *,
+    display_name: str,
+    is_over_18: bool,
+) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+
+    normalized_display_name = _validate_display_name(display_name)
+
+    if _display_name_in_use_by_other_username(normalized_display_name, normalized_username):
+        raise sqlite3.IntegrityError("display_name already exists")
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE users
+            SET display_name = ?,
+                is_over_18 = ?,
+                age_gate_completed = 1
+            WHERE username = ?
+                            AND age_gate_completed = 0
+            """,
+            (
+                normalized_display_name,
+                1 if is_over_18 else 0,
+                normalized_username,
+            ),
+        )
+    return cursor.rowcount > 0
+
+
+def user_requires_onboarding(username: str) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT age_gate_completed, is_over_18
+            FROM users
+            WHERE username = ?
+            """,
+            (normalized_username,),
+        ).fetchone()
+
+    if row is None:
+        return False
+    if not bool(int(row["age_gate_completed"])):
+        return True
+    return row["is_over_18"] is None
+
+
+def user_is_under_18(username: str) -> bool:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT is_over_18 FROM users WHERE username = ?",
+            (normalized_username,),
+        ).fetchone()
+
+    if row is None:
+        return False
+    is_over_18_raw = row["is_over_18"]
+    if is_over_18_raw is None:
+        return False
+    return not bool(int(is_over_18_raw))
 
 
 def delete_user(username: str) -> bool:

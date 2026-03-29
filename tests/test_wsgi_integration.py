@@ -3,6 +3,9 @@ from types import TracebackType
 from typing import Any
 from wsgiref.types import StartResponse
 
+import pytest
+
+import fanic.cylinder_main as cylinder_main
 from fanic.cylinder_main import create_app
 
 type WsgiExcInfo = tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
@@ -64,12 +67,24 @@ def _call_app(path: str) -> tuple[int, bytes]:
 
 
 def test_wsgi_home_page_responds_ok() -> None:
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(cylinder_main, "initialize_moderation_models", lambda: {})
+    monkeypatch.setattr(cylinder_main, "_alpha_invite_gate_middleware", lambda app: app)
+
     status_code, body = _call_app("/")
     assert status_code == 200
     assert b"FANIC" in body
 
+    monkeypatch.undo()
+
 
 def test_wsgi_missing_work_returns_404() -> None:
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(cylinder_main, "initialize_moderation_models", lambda: {})
+    monkeypatch.setattr(cylinder_main, "_alpha_invite_gate_middleware", lambda app: app)
+
     status_code, body = _call_app("/works/does-not-exist")
     assert status_code == 404
     assert b"Work not found" in body or b"Not found" in body
+
+    monkeypatch.undo()

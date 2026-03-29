@@ -16,19 +16,17 @@
       </section>
 
       <section class="card info-card">
-        <form id="loginForm" class="auth-form" method="post" action="/account/login">
-          <div id="loginCredentials" __LOGIN_CREDENTIALS_HIDDEN_ATTR__>
-            <div class="auth-row">
-              <button id="loginBtn" type="submit" __LOGIN_BUTTON_HIDDEN_ATTR__>Continue with email</button>
-            </div>
-            <div class="auth-row">
-              <a class="button-like button-muted" href="/account/auth0/signup" __LOGIN_BUTTON_HIDDEN_ATTR__>Create account</a>
-            </div>
+        <div id="loginCredentials" class="auth-form" __LOGIN_CREDENTIALS_HIDDEN_ATTR__>
+          <div class="auth-row">
+            <a id="loginBtn" class="button-like" href="/account/auth0/login" __LOGIN_BUTTON_HIDDEN_ATTR__>Continue with email</a>
           </div>
-        </form>
-        <form id="logoutForm" class="auth-inline" method="post" action="/account/logout" __LOGOUT_HIDDEN_ATTR__>
-          <button id="logoutBtn" type="submit" class="button-muted">Logout</button>
-        </form>
+          <div class="auth-row">
+            <a class="button-like button-muted" href="/account/auth0/signup" __LOGIN_BUTTON_HIDDEN_ATTR__>Create account</a>
+          </div>
+        </div>
+        <div class="auth-inline" __LOGOUT_HIDDEN_ATTR__>
+          <a id="logoutBtn" class="button-like button-muted" href="/account/logout">Logout</a>
+        </div>
         <p id="loginMessage" class="auth-message __LOGIN_MESSAGE_CLASS__" __LOGIN_MESSAGE_HIDDEN_ATTR__>__LOGIN_MESSAGE__</p>
       </section>
     </main>

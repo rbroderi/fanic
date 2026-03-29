@@ -82,6 +82,10 @@ def test_ensure_runtime_schema_creates_auth_identity_table_and_indexes() -> None
         ).fetchone()
         assert identity_table is not None
 
+        users_index_names = {str(row[1]) for row in connection.execute("PRAGMA index_list('users')").fetchall()}
+        assert "idx_users_email_unique" in users_index_names
+        assert "idx_users_display_name_unique" in users_index_names
+
         index_names = {str(row[1]) for row in connection.execute("PRAGMA index_list('auth_identities')").fetchall()}
         assert "idx_auth_identities_username" in index_names
         assert "idx_auth_identities_email" in index_names

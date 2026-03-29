@@ -28,6 +28,24 @@
           </label>
         </section>
 
+        <form class="profile-preferences" method="post" action="/user/profile" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_ONBOARDING_HIDDEN_ATTR__>
+          <input type="hidden" name="profile_action" value="onboarding" />
+          <h3>Account Onboarding</h3>
+          <p class="profile-meta">Set your public display name and age status.</p>
+          <label for="profileDisplayName">Display name</label>
+          <input id="profileDisplayName" name="display_name" type="text" maxlength="40" pattern="[A-Za-z0-9]+" value="__PROFILE_DISPLAY_NAME_VALUE__" required />
+          <p class="profile-meta">Letters and numbers only, no spaces or punctuation.</p>
+          <p id="profileDisplayNameHint" class="status-text error" hidden></p>
+          <label for="profileAge">Are you 18 or older?</label>
+          <select id="profileAge" name="is_over_18" required>
+            <option value="">Choose one</option>
+            <option value="yes" __PROFILE_IS_OVER_18_YES_SELECTED_ATTR__>Yes</option>
+            <option value="no" __PROFILE_IS_OVER_18_NO_SELECTED_ATTR__>No</option>
+          </select>
+          <button type="submit">Save profile details</button>
+          <p class="status-text __PROFILE_ONBOARDING_STATUS_CLASS__" __PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__>__PROFILE_ONBOARDING_STATUS__</p>
+        </form>
+
         <form class="profile-preferences" method="post" action="/user/profile" enctype="multipart/form-data" __PROFILE_SETTINGS_HIDDEN_ATTR__ __PROFILE_PREFS_HIDDEN_ATTR__>
           <input type="hidden" name="profile_action" value="theme" />
           <h3>Custom Theme</h3>

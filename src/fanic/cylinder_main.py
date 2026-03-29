@@ -28,6 +28,7 @@ from fanic.cylinder_sites.common import decode_session
 from fanic.db import initialize_database
 from fanic.moderation import initialize_moderation_models
 from fanic.repository import get_user_role
+from fanic.repository import user_is_under_18
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
@@ -37,6 +38,11 @@ SITE_NAME: Final[str] = "fanicsite"
 ADMIN_ROLES: Final[set[str]] = {"superadmin", "admin"}
 ALPHA_INVITE_COOKIE_NAME: Final[str] = "fanic_alpha_access"
 ALPHA_INVITE_PATH: Final[str] = "/__alpha_invite"
+UNDERAGE_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "/user/profile",
+    "/account/logout",
+)
+UNDERAGE_ALLOWED_PREFIXES: Final[tuple[str, ...]] = ("/static/",)
 OK = 0
 
 OptExcInfo = tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
@@ -116,6 +122,54 @@ def _admin_path_guard(app: WSGIApplication) -> WSGIApplication:
     ) -> Iterable[bytes]:
         if _is_authorized_admin_request(environ):
             return app(environ, start_response)
+
+        body = b"Forbidden"
+        headers = [
+            ("Content-Type", "text/plain; charset=utf-8"),
+            ("Content-Length", str(len(body))),
+        ]
+        start_response("403 Forbidden", headers)
+        return [body]
+
+    return guarded_app
+
+
+def _is_allowed_underage_path(path: str) -> bool:
+    if path in UNDERAGE_ALLOWED_PATHS:
+        return True
+    return any(path.startswith(prefix) for prefix in UNDERAGE_ALLOWED_PREFIXES)
+
+
+def _underage_restriction_middleware(app: WSGIApplication) -> WSGIApplication:
+    def guarded_app(
+        environ: dict[str, object],
+        start_response: StartResponseProtocol,
+    ) -> Iterable[bytes]:
+        path = str(environ.get("PATH_INFO", "")).strip()
+        token = _cookie_value(environ, SESSION_COOKIE_NAME)
+        if not token:
+            return app(environ, start_response)
+
+        username = decode_session(token)
+        if not username:
+            return app(environ, start_response)
+
+        if not user_is_under_18(username):
+            return app(environ, start_response)
+
+        if _is_allowed_underage_path(path):
+            return app(environ, start_response)
+
+        method = str(environ.get("REQUEST_METHOD", "GET")).upper()
+        if method in {"GET", "HEAD"}:
+            body = b"See Other"
+            headers = [
+                ("Content-Type", "text/plain; charset=utf-8"),
+                ("Content-Length", str(len(body))),
+                ("Location", "/user/profile?msg=underage-restricted"),
+            ]
+            start_response("303 See Other", headers)
+            return [body]
 
         body = b"Forbidden"
         headers = [
@@ -321,7 +375,9 @@ def create_app() -> WSGIApplication:
             log_handler=log_handler,
         ),
     )
-    return _security_headers_middleware(_alpha_invite_gate_middleware(_admin_path_guard(raw_app)))
+    return _security_headers_middleware(
+        _alpha_invite_gate_middleware(_underage_restriction_middleware(_admin_path_guard(raw_app)))
+    )
 
 
 def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perms: str = "660") -> int:
