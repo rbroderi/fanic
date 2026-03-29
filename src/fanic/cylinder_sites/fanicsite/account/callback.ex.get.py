@@ -12,6 +12,7 @@ from fanic.cylinder_sites.common import log_exception
 from fanic.cylinder_sites.common import read_auth0_oauth_state
 from fanic.cylinder_sites.common import set_login_cookie
 from fanic.cylinder_sites.common import text_error
+from fanic.repository import get_auth_identity
 from fanic.repository import get_or_create_user_for_auth0_identity
 from fanic.repository import user_requires_onboarding
 from fanic.settings import get_settings
@@ -94,7 +95,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not name_obj:
         name_obj = email_obj if email_obj else "user"
     email = str(email_obj).strip() if isinstance(email_obj, str) else None
-    email_verified = bool(userinfo.get("email_verified", False))
+    email_verified_raw = userinfo.get("email_verified")
+    email_verified: bool | None = email_verified_raw if isinstance(email_verified_raw, bool) else None
     display_name = str(name_obj).strip()
 
     if not subject:
@@ -118,17 +120,25 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         clear_auth0_oauth_cookie(response)
         return _redirect(response, "/account/login?msg=auth-failed")
 
+    existing_identity = get_auth_identity("auth0", subject)
+    resolved_email_verified = email_verified
+    if resolved_email_verified is None:
+        resolved_email_verified = existing_identity["email_verified"] if existing_identity is not None else False
+
     username = get_or_create_user_for_auth0_identity(
         subject=subject,
         email=email,
-        email_verified=email_verified,
+        email_verified=resolved_email_verified,
         display_name=display_name,
     )
 
     clear_auth0_oauth_cookie(response)
     set_login_cookie(response, username)
 
+    if not resolved_email_verified:
+        return _redirect(response, "/account/verify-email?msg=verify-required")
+
     if user_requires_onboarding(username):
-        return _redirect(response, "/user/profile?msg=onboarding-required")
+        return _redirect(response, "/user/onboarding?msg=onboarding-required")
 
     return _redirect(response, "/user/profile")

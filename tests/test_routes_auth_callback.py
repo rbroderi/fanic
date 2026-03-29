@@ -192,3 +192,154 @@ def test_auth_callback_non_json_token_exchange_redirects_with_specific_message(
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/account/login?msg=auth-upstream-blocked"
+
+
+def test_auth_callback_redirects_to_onboarding_route_when_required(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/account/callback.ex.get.py",
+        "fanicsite_account_callback_ex_get_onboarding_redirect_test",
+    )
+
+    class FakeSettings:
+        auth0_configured: bool = True
+
+    class FakeConfig:
+        token_endpoint: str = "https://auth.example.com/oauth/token"
+        callback_url: str = "https://app.example.com/account/callback"
+        userinfo_endpoint: str = "https://auth.example.com/userinfo"
+
+    class FakeUserinfoResponse:
+        def json(self) -> dict[str, object]:
+            return {
+                "sub": "auth0|abc123",
+                "email": "person@example.com",
+                "email_verified": True,
+                "name": "Person Example",
+            }
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.token: dict[str, object] | None = None
+
+        def fetch_token(
+            self,
+            endpoint: str,
+            *,
+            code: str,
+            redirect_uri: str,
+            code_verifier: str,
+        ) -> dict[str, object]:
+            _ = (endpoint, code, redirect_uri, code_verifier)
+            return {"access_token": "token-123", "token_type": "Bearer"}
+
+        def get(self, endpoint: str) -> FakeUserinfoResponse:
+            _ = endpoint
+            assert self.token is not None
+            return FakeUserinfoResponse()
+
+    fake_client = FakeClient()
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda _r, _s: True)
+    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "auth0_config_from_settings", lambda _s: FakeConfig())
+    monkeypatch.setattr(module, "build_oauth_client", lambda _c: fake_client)
+    monkeypatch.setattr(
+        module,
+        "read_auth0_oauth_state",
+        lambda _r: {"state": "state-1", "code_verifier": "verifier-1", "next_url": "/"},
+    )
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _r: None)
+    monkeypatch.setattr(module, "set_login_cookie", lambda _r, _u: None)
+    monkeypatch.setattr(module, "user_requires_onboarding", lambda _u: True)
+    monkeypatch.setattr(
+        module,
+        "get_or_create_user_for_auth0_identity",
+        lambda **_kw: "internal-user-id",
+    )
+
+    request = dummy_request(path="/account/callback", args={"state": "state-1", "code": "code-1"})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/user/onboarding?msg=onboarding-required"
+
+
+def test_auth_callback_unverified_email_redirects_to_verify_email_landing(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/account/callback.ex.get.py",
+        "fanicsite_account_callback_ex_get_verify_email_landing_test",
+    )
+
+    class FakeSettings:
+        auth0_configured: bool = True
+
+    class FakeConfig:
+        token_endpoint: str = "https://auth.example.com/oauth/token"
+        callback_url: str = "https://app.example.com/account/callback"
+        userinfo_endpoint: str = "https://auth.example.com/userinfo"
+
+    class FakeUserinfoResponse:
+        def json(self) -> dict[str, object]:
+            return {
+                "sub": "auth0|abc123",
+                "email": "person@example.com",
+                "email_verified": False,
+                "name": "Person Example",
+            }
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.token: dict[str, object] | None = None
+
+        def fetch_token(
+            self,
+            endpoint: str,
+            *,
+            code: str,
+            redirect_uri: str,
+            code_verifier: str,
+        ) -> dict[str, object]:
+            _ = (endpoint, code, redirect_uri, code_verifier)
+            return {"access_token": "token-123", "token_type": "Bearer"}
+
+        def get(self, endpoint: str) -> FakeUserinfoResponse:
+            _ = endpoint
+            assert self.token is not None
+            return FakeUserinfoResponse()
+
+    fake_client = FakeClient()
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda _r, _s: True)
+    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "auth0_config_from_settings", lambda _s: FakeConfig())
+    monkeypatch.setattr(module, "build_oauth_client", lambda _c: fake_client)
+    monkeypatch.setattr(
+        module,
+        "read_auth0_oauth_state",
+        lambda _r: {"state": "state-1", "code_verifier": "verifier-1", "next_url": "/"},
+    )
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _r: None)
+    monkeypatch.setattr(module, "set_login_cookie", lambda _r, _u: None)
+    monkeypatch.setattr(
+        module,
+        "get_or_create_user_for_auth0_identity",
+        lambda **_kw: "internal-user-id",
+    )
+
+    request = dummy_request(path="/account/callback", args={"state": "state-1", "code": "code-1"})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/account/verify-email?msg=verify-required"
