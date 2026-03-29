@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "noEmitOnError": true,
+    "removeComments": false,
+    "skipLibCheck": true,
+    "sourceMap": false,
+    "rootDir": "frontend",
+    "outDir": "static"
+  },
+  "include": ["frontend/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -39,6 +39,22 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: frontend-prettier
+        name: frontend-prettier-write
+        entry: just frontend-format
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: frontend-eslint
+        name: frontend-eslint
+        entry: just frontend-lint
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: comicinfo-xsd
         name: comicinfo-xsd-v2-check
         entry: uvx --with xmlschema python scripts/validate_comicinfo_xsd.py

@@ -41,5 +41,10 @@ site/
 *.egg-info/
 pip-wheel-metadata/
 
+# Frontend TypeScript toolchain
+node_modules/
+static/*.js
+static/*.js.map
+
 # Notebook checkpoints
 .ipynb_checkpoints/
