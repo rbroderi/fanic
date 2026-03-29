@@ -411,7 +411,7 @@ def _version_page_files(
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     _ = request_id(request, response)
-    tail = route_tail(request, ["api", "works"])
+    tail = route_tail(request, ["api", "comic"])
     if tail is None:
         return json_response(response, {"detail": "Not found"}, 404)
 

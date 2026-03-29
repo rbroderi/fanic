@@ -91,7 +91,7 @@ def _normalize_chapter_members(value: object) -> dict[str, list[str]]:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["works"])
+    tail = route_tail(request, ["comic"])
     if tail is None or len(tail) != 2:
         return text_error(response, "Not found", 404)
 
@@ -122,7 +122,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     if action == "kudos":
         if not username:
-            return _redirect(response, f"/works/{work_id}?msg=login-required")
+            return _redirect(response, f"/comic/{work_id}?msg=login-required")
         inserted = add_work_kudo(work_id, username)
         if inserted:
             uploader_username = str(work.get("uploader_username") if work.get("uploader_username") else "")
@@ -134,20 +134,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     work_id=work_id,
                     kind="kudo",
                     message=f'{username} left kudos on your work "{work_title}".',
-                    href=f"/works/{work_id}",
+                    href=f"/comic/{work_id}",
                 )
         return _redirect(
             response,
-            f"/works/{work_id}?msg={'kudos-saved' if inserted else 'already-kudoed'}",
+            f"/comic/{work_id}?msg={'kudos-saved' if inserted else 'already-kudoed'}",
         )
 
     if action == "comments":
         if not username:
-            return _redirect(response, f"/works/{work_id}?msg=login-required")
+            return _redirect(response, f"/comic/{work_id}?msg=login-required")
 
         body = request.form.get("comment_body", "").strip()
         if not body:
-            return _redirect(response, f"/works/{work_id}?msg=comment-empty")
+            return _redirect(response, f"/comic/{work_id}?msg=comment-empty")
 
         chapter_raw = request.form.get("chapter_number", "").strip()
         chapter_number: int | None
@@ -155,10 +155,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             try:
                 chapter_number = int(chapter_raw)
             except ValueError:
-                return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
+                return _redirect(response, f"/comic/{work_id}?msg=chapter-invalid")
             max_chapter = _coerce_int(work.get("page_count"), 0)
             if chapter_number < 1 or chapter_number > max_chapter:
-                return _redirect(response, f"/works/{work_id}?msg=chapter-invalid")
+                return _redirect(response, f"/comic/{work_id}?msg=chapter-invalid")
         else:
             chapter_number = None
 
@@ -173,9 +173,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 work_id=work_id,
                 kind="comment",
                 message=f'{username} commented{chapter_text} on your work "{work_title}".',
-                href=f"/works/{work_id}",
+                href=f"/comic/{work_id}",
             )
-        return _redirect(response, f"/works/{work_id}?msg=comment-saved")
+        return _redirect(response, f"/comic/{work_id}?msg=comment-saved")
 
     if action != "edit":
         return text_error(response, "Not found", 404)
@@ -191,7 +191,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         raw_upload = request.files.get("page_image")
         page_upload = raw_upload if _has_selected_file(raw_upload) else None
         if page_upload is None:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-file-required")
 
         page_policy_error = validate_page_upload_policy(page_upload)
         if page_policy_error:
@@ -205,13 +205,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     else "page-add-failed"
                 )
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         started_upload_session = False
         allowed, limit_code, _ = begin_upload_session(username)
         if not allowed:
             msg = "page-add-rate-limited" if limit_code == "upload_rate_limited" else "page-add-busy"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         editor_metadata: dict[str, object] = {
             "title": str(work.get("title", "Untitled")),
@@ -239,7 +239,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "Page upload",
                 )
                 if page_size_error:
-                    return _redirect(response, f"/works/{work_id}/edit?msg=page-add-too-large")
+                    return _redirect(response, f"/comic/{work_id}/edit?msg=page-add-too-large")
                 result = ingest_editor_page(
                     image_path=page_path,
                     metadata=editor_metadata,
@@ -248,13 +248,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     insert_after_page_index=insert_after_page_index,
                 )
             msg = "page-added-rating-elevated" if bool(result.get("rating_auto_elevated")) else "page-added"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         except ValueError as exc:
             if "Blocked image" in str(exc):
-                return _redirect(response, f"/works/{work_id}/edit?msg=page-blocked")
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
+                return _redirect(response, f"/comic/{work_id}/edit?msg=page-blocked")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-add-failed")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-add-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-add-failed")
         finally:
             if started_upload_session:
                 end_upload_session(username)
@@ -263,7 +263,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         raw_upload = request.files.get("page_image")
         page_upload = raw_upload if _has_selected_file(raw_upload) else None
         if page_upload is None:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-file-required")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-file-required")
 
         page_policy_error = validate_page_upload_policy(page_upload)
         if page_policy_error:
@@ -277,12 +277,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     else "page-replace-failed"
                 )
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         started_upload_session = False
         allowed, limit_code, _ = begin_upload_session(username)
         if not allowed:
             msg = "page-replace-rate-limited" if limit_code == "upload_rate_limited" else "page-replace-busy"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         try:
             started_upload_session = True
@@ -298,7 +298,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 if page_size_error:
                     return _redirect(
                         response,
-                        f"/works/{work_id}/edit?msg=page-replace-too-large",
+                        f"/comic/{work_id}/edit?msg=page-replace-too-large",
                     )
                 result = editor_replace_page_image(
                     image_path=page_path,
@@ -307,13 +307,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     uploader_username=username,
                 )
             msg = "page-replaced-rating-elevated" if bool(result.get("rating_auto_elevated")) else "page-replaced"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         except ValueError as exc:
             if "Blocked image" in str(exc):
-                return _redirect(response, f"/works/{work_id}/edit?msg=page-blocked")
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
+                return _redirect(response, f"/comic/{work_id}/edit?msg=page-blocked")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-replace-failed")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-replace-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-replace-failed")
         finally:
             if started_upload_session:
                 end_upload_session(username)
@@ -326,9 +326,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 page_index=page_index,
                 uploader_username=username,
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-deleted")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-deleted")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-delete-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-delete-failed")
 
     if edit_action == "editor-move-page":
         try:
@@ -340,9 +340,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 to_index=to_index,
                 uploader_username=username,
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-moved")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-moved")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-move-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-move-failed")
 
     if edit_action == "editor-reorder-gallery":
         try:
@@ -365,9 +365,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 chapter_members=chapter_members,
                 uploader_username=username,
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-reordered")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-reordered")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=page-reorder-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=page-reorder-failed")
 
     if edit_action == "editor-add-chapter":
         try:
@@ -385,9 +385,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 end_page=end_page,
                 uploader_username=username,
             )
-            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-added")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=chapter-added")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-add-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=chapter-add-failed")
 
     if edit_action == "editor-update-chapter":
         try:
@@ -408,9 +408,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 uploader_username=username,
             )
             msg = "chapter-updated" if updated else "chapter-update-failed"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-update-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=chapter-update-failed")
 
     if edit_action == "editor-delete-chapter":
         try:
@@ -421,9 +421,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 uploader_username=username,
             )
             msg = "chapter-deleted" if deleted else "chapter-delete-failed"
-            return _redirect(response, f"/works/{work_id}/edit?msg={msg}")
+            return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         except Exception:
-            return _redirect(response, f"/works/{work_id}/edit?msg=chapter-delete-failed")
+            return _redirect(response, f"/comic/{work_id}/edit?msg=chapter-delete-failed")
 
     series_index_raw = request.form.get("series_index", "").strip()
     try:
@@ -456,7 +456,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     current_rating = work.get("rating", "Not Rated")
     requested_rating = metadata.get("rating", "Not Rated")
     if not is_admin and _is_explicit_rating(current_rating) and not _is_explicit_rating(requested_rating):
-        return _redirect(response, f"/works/{work_id}/edit?msg=explicit-rating-locked")
+        return _redirect(response, f"/comic/{work_id}/edit?msg=explicit-rating-locked")
 
     update_work_metadata(
         work_id,
@@ -470,4 +470,4 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         actor=username,
         details={"edited_by_admin": is_admin},
     )
-    return _redirect(response, f"/works/{work_id}/edit?msg=saved")
+    return _redirect(response, f"/comic/{work_id}/edit?msg=saved")

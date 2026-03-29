@@ -21,7 +21,7 @@ def test_non_admin_cannot_lower_explicit_rating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_edit_post_explicit_lock_test",
     )
 
@@ -89,7 +89,7 @@ def test_non_admin_cannot_lower_explicit_rating(
     )
 
     request = dummy_request(
-        path="/works/work-1/edit",
+        path="/comic/work-1/edit",
         method="POST",
         form={
             "title": "Locked Rating",
@@ -111,7 +111,7 @@ def test_non_admin_cannot_lower_explicit_rating(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/works/work-1/edit?msg=explicit-rating-locked"
+    assert result.headers["Location"] == "/comic/work-1/edit?msg=explicit-rating-locked"
     assert called["updated"] is False
     assert called["snapshotted"] is False
 
@@ -123,7 +123,7 @@ def test_admin_can_lower_explicit_rating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_edit_post_explicit_admin_test",
     )
 
@@ -196,7 +196,7 @@ def test_admin_can_lower_explicit_rating(
     )
 
     request = dummy_request(
-        path="/works/work-1/edit",
+        path="/comic/work-1/edit",
         method="POST",
         form={
             "title": "Editable",
@@ -218,7 +218,7 @@ def test_admin_can_lower_explicit_rating(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/works/work-1/edit?msg=saved"
+    assert result.headers["Location"] == "/comic/work-1/edit?msg=saved"
     assert captured["work_id"] == "work-1"
     assert captured["rating"] == "Mature"
     assert captured["edited_by_admin"] is True

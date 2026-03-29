@@ -55,12 +55,12 @@
         <p __EDIT_METADATA_HIDDEN_ATTR__>
           <a id="editMetadataLink" href="__EDIT_METADATA_HREF__">Edit metadata</a>
         </p>
-        <form method="post" action="/works/__WORK_ID__/delete" class="admin-delete-form" __ADMIN_DELETE_HIDDEN_ATTR__ onsubmit="return confirm('Delete this comic? This cannot be undone.');">
+        <form method="post" action="/comic/__WORK_ID__/delete" class="admin-delete-form" __ADMIN_DELETE_HIDDEN_ATTR__ onsubmit="return confirm('Delete this comic? This cannot be undone.');">
           <button type="submit" class="icon-delete-button" title="Delete comic" aria-label="Delete comic">
             <i class="fa-solid fa-trash" aria-hidden="true"></i>
           </button>
         </form>
-        <form method="post" action="/works/__WORK_ID__/kudos" class="kudos-form">
+        <form method="post" action="/comic/__WORK_ID__/kudos" class="kudos-form">
           <button type="submit" class="kudos-button" __KUDOS_DISABLED_ATTR__ aria-label="Leave kudos">
             <i class="fa-solid fa-heart" aria-hidden="true"></i>
             <span>Kudos</span>
@@ -78,7 +78,7 @@
 
         <section class="card info-card comments-shell">
           <h3>Leave a comment</h3>
-          <form method="post" action="/works/__WORK_ID__/comments" class="upload-form">
+          <form method="post" action="/comic/__WORK_ID__/comments" class="upload-form">
             <label for="chapterNumber">Chapter number (optional)</label>
             <input id="chapterNumber" name="chapter_number" type="number" min="1" step="1" />
             <label for="commentBody">Comment</label>
@@ -233,7 +233,7 @@
           payload.set("page_index", pageIndex);
           payload.set("message", messageInput.value.trim());
 
-          var result = await fetch("/api/works/" + encodeURIComponent(workId) + "/bookmark", {
+          var result = await fetch("/api/comic/" + encodeURIComponent(workId) + "/bookmark", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
             body: payload.toString(),

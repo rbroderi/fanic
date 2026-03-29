@@ -107,7 +107,7 @@ def _work_versions_list_html(
         actor = escape(str(version.get("actor", "")))
         page_count = escape(str(version.get("page_count", 0)))
         selected_attr = ' aria-current="page"' if version_id == selected_version_id else ""
-        version_href = f"/works/{escape(work_id)}/versions/{quote(version_id)}"
+        version_href = f"/comic/{escape(work_id)}/versions/{quote(version_id)}"
         if back_href:
             version_href += f"?back={quote(back_href, safe='')}"
         items.append(
@@ -283,7 +283,7 @@ def _status_for_work_message(msg: str) -> StatusMessage:
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["works"])
+    tail = route_tail(request, ["comic"])
     if tail is None:
         return text_error(response, "Not found", 404)
 
@@ -398,7 +398,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__EDITOR_CHAPTERS_HTML__": render_editor_chapters_html(
                     work_id,
                     gallery_chapters,
-                    form_action=f"/works/{work_id}/edit",
+                    form_action=f"/comic/{work_id}/edit",
                     action_field_name="edit_action",
                     update_action_value="editor-update-chapter",
                     delete_action_value="editor-delete-chapter",
@@ -429,7 +429,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
         versions = list_work_versions(work_id, limit=50)
         if not versions:
-            work_href = f"/works/{escape(work_id)}"
+            work_href = f"/comic/{escape(work_id)}"
             if back_href:
                 work_href += f"?back={quote(back_href, safe='')}"
             return render_html_template(
@@ -463,7 +463,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             version_reader_query["back"] = back_href
         version_reader_query_string = urlencode(version_reader_query)
         version_reader_href = f"/tools/reader/{escape(work_id)}?{version_reader_query_string}"
-        work_href = f"/works/{escape(work_id)}"
+        work_href = f"/comic/{escape(work_id)}"
         if back_href:
             work_href += f"?back={quote(back_href, safe='')}"
         return render_html_template(
@@ -510,7 +510,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     cover_image_name = str(cover_files["image"]).strip() if cover_files else ""
     work_id_quoted = quote(work_id, safe="")
     if cover_image_name:
-        cover_src = media_url(f"/works/{work_id_quoted}/pages/{quote(cover_image_name, safe='/')}")
+        cover_src = media_url(f"/comic/{work_id_quoted}/pages/{quote(cover_image_name, safe='/')}")
     else:
         cover_src = media_url("/static/logo.png")
 
@@ -547,7 +547,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if reader_query_string
         else f"/tools/reader/{escape(work_id)}"
     )
-    versions_href = f"/works/{escape(work_id)}/versions"
+    versions_href = f"/comic/{escape(work_id)}/versions"
     if back_href:
         versions_href += f"?back={quote(back_href, safe='')}"
 
@@ -561,10 +561,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_META__": f"{rating_html} | {status} | {page_count} pages",
             "__WORK_COVER_SRC__": cover_src,
             "__WORK_READ_HREF__": reader_href,
-            "__WORK_DOWNLOAD_HREF__": f"/api/works/{escape(work_id)}/download",
+            "__WORK_DOWNLOAD_HREF__": f"/api/comic/{escape(work_id)}/download",
             "__WORK_VERSIONS_HREF__": versions_href,
             "__WORK_TAGS_HTML__": tag_html,
-            "__EDIT_METADATA_HREF__": f"/works/{escape(work_id)}/edit",
+            "__EDIT_METADATA_HREF__": f"/comic/{escape(work_id)}/edit",
             "__EDIT_METADATA_HIDDEN_ATTR__": "" if can_edit else "hidden",
             "__ADMIN_DELETE_HIDDEN_ATTR__": "" if can_delete else "hidden",
             "__WORK_ID__": escape(work_id),
@@ -577,7 +577,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
             "__DMCA_WORK_ID__": escape(work_id),
             "__DMCA_WORK_TITLE__": title,
-            "__DMCA_CLAIMED_URL__": f"/works/{escape(work_id)}",
+            "__DMCA_CLAIMED_URL__": f"/comic/{escape(work_id)}",
             "__WORK_BOOKMARK_WORK_ID__": escape(work_id),
             "__WORK_BOOKMARK_USER_ID__": escape(progress_user_id),
             "__WORK_BOOKMARK_PAGE_INDEX__": escape(str(bookmark_page_index)),

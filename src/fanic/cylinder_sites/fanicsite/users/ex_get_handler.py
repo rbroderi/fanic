@@ -30,7 +30,7 @@ def _uploaded_works_html(works: Sequence[WorkListItem]) -> str:
         page_count = escape(str(work.get("page_count", 0)))
         status = escape(str(work.get("status", "in_progress")))
         items.append(
-            f'<li><a href="/works/{work_id}">{title}</a> '
+            f'<li><a href="/comic/{work_id}">{title}</a> '
             + f'<span class="profile-meta">({status}, {page_count} pages)</span></li>'
         )
     return '<ul class="work-links">' + "".join(items) + "</ul>"

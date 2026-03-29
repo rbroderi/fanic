@@ -174,6 +174,15 @@ server {
     listen 127.0.0.1:${LISTEN_PORT};
     server_name ${SERVER_NAME};
 
+  error_page 502 503 504 =200 /upstream-unavailable.html;
+
+  location = /upstream-unavailable.html {
+    internal;
+    root /var/www/fanic-errors;
+    default_type text/html;
+    add_header Cache-Control "no-store" always;
+  }
+
     location ~* ^/(?:fanic\.db|storage/|.*\.(?:db|sqlite|sqlite3))$ {
         return 404;
     }
@@ -212,6 +221,7 @@ server {
     location / {
         proxy_pass http://${WSGI_HOST}:${WSGI_PORT};
         proxy_http_version 1.1;
+      proxy_intercept_errors on;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

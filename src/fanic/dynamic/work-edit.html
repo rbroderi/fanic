@@ -12,11 +12,11 @@
     <main class="layout">
       <section class="card info-card">
         <h2>Edit Metadata</h2>
-        <p><a href="/works/__WORK_ID__">Back to comic page</a></p>
+        <p><a href="/comic/__WORK_ID__">Back to comic page</a></p>
       </section>
 
       <section class="card info-card">
-        <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+        <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit">
           <label for="title">Title</label>
           <input id="title" name="title" type="text" value="__EDIT_TITLE__" required />
 
@@ -83,7 +83,7 @@
           <p id="selectedPageLabel" class="profile-meta">No page selected.</p>
           <p id="galleryDirtyBadge" class="status-text warning" hidden>Unsaved gallery order changes. Save gallery order before replacing or deleting pages.</p>
 
-          <form class="upload-form" method="post" enctype="multipart/form-data" action="/works/__WORK_ID__/edit">
+          <form class="upload-form" method="post" enctype="multipart/form-data" action="/comic/__WORK_ID__/edit">
             <input type="hidden" name="edit_action" value="editor-add-page" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input id="insertAfterPageIndex" type="hidden" name="insert_after_page_index" value="" />
@@ -92,7 +92,7 @@
             <button type="submit">Insert page</button>
           </form>
 
-          <form class="upload-form" method="post" enctype="multipart/form-data" action="/works/__WORK_ID__/edit">
+          <form class="upload-form" method="post" enctype="multipart/form-data" action="/comic/__WORK_ID__/edit">
             <input type="hidden" name="edit_action" value="editor-replace-page" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input id="replacePageIndex" type="hidden" name="page_index" value="" />
@@ -101,14 +101,14 @@
             <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
           </form>
 
-          <form class="upload-form" method="post" action="/works/__WORK_ID__/edit" onsubmit="return confirm('Delete selected page?');">
+          <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit" onsubmit="return confirm('Delete selected page?');">
             <input type="hidden" name="edit_action" value="editor-delete-page" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input id="deletePageIndex" type="hidden" name="page_index" value="" />
             <button id="deleteSelectedButton" type="submit" class="button-muted" disabled>Delete selected page</button>
           </form>
 
-          <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+          <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit">
             <input type="hidden" name="edit_action" value="editor-reorder-gallery" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input id="orderedFilenamesInput" type="hidden" name="ordered_filenames_json" value="" />
@@ -121,7 +121,7 @@
       <section class="card info-card">
         <h3>Chapters</h3>
         <p class="profile-meta">Create chapters for reader chapter options. Chapters follow page identity during reorder/delete.</p>
-        <form class="upload-form" method="post" action="/works/__WORK_ID__/edit">
+        <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit">
           <input type="hidden" name="edit_action" value="editor-add-chapter" />
           <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
           <label for="editorChapterTitle">Chapter title</label>

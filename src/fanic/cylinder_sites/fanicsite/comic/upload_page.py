@@ -39,7 +39,7 @@ def _status_class(kind: str) -> str:
     return ""
 
 
-def render_ingest_page(
+def render_upload_page(
     request: RequestLike,
     response: ResponseLike,
     *,
@@ -54,9 +54,12 @@ def render_ingest_page(
     editor_language: str = "en",
     editor_pages: list[dict[str, ConvertibleToInt]] | None = None,
     editor_chapters: list[dict[str, ConvertibleToInt]] | None = None,
+    upload_status_text: str = "",
+    upload_status_kind: str = "",
     ingest_status: str = "",
     ingest_status_kind: str = "",
     result_payload: dict[str, object] | None = None,
+    form_action: str = "",
 ) -> ResponseLike:
     user = current_user(request)
     logged_in = user is not None
@@ -64,7 +67,12 @@ def render_ingest_page(
     data = metadata if metadata else {}
     pages: list[dict[str, ConvertibleToInt]] = editor_pages if editor_pages else []
     chapters: list[dict[str, ConvertibleToInt]] = editor_chapters if editor_chapters else []
-    ingest_html = (STATIC_ROOT / "ingest.html").read_text(encoding="utf-8")
+    resolved_form_action = form_action.strip() if form_action.strip() else request.path
+    if resolved_form_action != "/comic/upload":
+        resolved_form_action = "/comic/upload"
+    status_text = upload_status_text if upload_status_text else ingest_status
+    status_kind = upload_status_kind if upload_status_kind else ingest_status_kind
+    upload_html = (STATIC_ROOT / "comic-upload.html").read_text(encoding="utf-8")
 
     replacements = {
         "__LOGIN_REQUIRED_HIDDEN_ATTR__": "hidden" if logged_in else "",
@@ -72,6 +80,7 @@ def render_ingest_page(
         "__AUTH_STATUS__": f"Logged in as {user}." if logged_in and user else "Not logged in.",
         "__AUTH_STATUS_CLASS__": "" if logged_in else "error",
         "__METADATA_FORM_HIDDEN_ATTR__": "" if show_metadata_form else "hidden",
+        "__INGEST_FORM_ACTION__": escape(resolved_form_action),
         "__UPLOAD_TOKEN__": escape(upload_token),
         "__EDITOR_WORK_ID__": escape(editor_work_id),
         "__EDITOR_TERMS_REQUIRED_ATTR__": "required" if not editor_work_id else "",
@@ -90,7 +99,7 @@ def render_ingest_page(
         "__EDITOR_STATUS_VALUE__": escape(editor_status),
         "__EDITOR_LANGUAGE__": escape(editor_language),
         "__EDITOR_LINKS_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
-        "__EDITOR_WORK_HREF__": f"/works/{escape(editor_work_id)}",
+        "__EDITOR_WORK_HREF__": f"/comic/{escape(editor_work_id)}",
         "__EDITOR_READER_HREF__": f"/tools/reader/{escape(editor_work_id)}",
         "__EDITOR_MANAGER_HIDDEN_ATTR__": "" if editor_work_id else "hidden",
         "__EDITOR_PAGE_GALLERY_HTML__": render_editor_page_gallery_html(
@@ -101,14 +110,14 @@ def render_ingest_page(
         "__EDITOR_CHAPTERS_HTML__": render_editor_chapters_html(
             editor_work_id,
             chapters,
-            form_action="/ingest",
+            form_action=resolved_form_action,
             action_field_name="action",
             update_action_value="editor-update-chapter",
             delete_action_value="editor-delete-chapter",
         ),
-        "__INGEST_STATUS__": escape(ingest_status),
-        "__INGEST_STATUS_CLASS__": _status_class(ingest_status_kind),
-        "__INGEST_STATUS_HIDDEN_ATTR__": "" if ingest_status else "hidden",
+        "__INGEST_STATUS__": escape(status_text),
+        "__INGEST_STATUS_CLASS__": _status_class(status_kind),
+        "__INGEST_STATUS_HIDDEN_ATTR__": "" if status_text else "hidden",
         "__META_TITLE__": escape(str(data.get("title", ""))),
         "__META_SUMMARY__": escape(str(data.get("summary", ""))),
         "__META_RATING_OPTIONS_HTML__": render_options_html(
@@ -144,11 +153,11 @@ def render_ingest_page(
         replacements["__INGEST_RESULT__"] = ""
 
     for marker, value in replacements.items():
-        ingest_html = ingest_html.replace(marker, value)
+        upload_html = upload_html.replace(marker, value)
 
-    ingest_html = apply_security_markup(request, response, ingest_html)
+    upload_html = apply_security_markup(request, response, upload_html)
 
     response.status_code = 200
     response.content_type = "text/html; charset=utf-8"
-    response.set_data(ingest_html)
+    response.set_data(upload_html)
     return response

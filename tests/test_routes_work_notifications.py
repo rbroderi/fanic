@@ -66,7 +66,7 @@ def test_works_post_kudos_creates_notification_for_uploader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_ex_post_kudos_notification_test",
     )
 
@@ -99,16 +99,16 @@ def test_works_post_kudos_creates_notification_for_uploader(
 
     monkeypatch.setattr(module, "create_notification", fake_create_notification)
 
-    request = dummy_request(path="/works/work-1/kudos", method="POST", form={})
+    request = dummy_request(path="/comic/work-1/kudos", method="POST", form={})
     response = dummy_response()
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/works/work-1?msg=kudos-saved"
+    assert result.headers["Location"] == "/comic/work-1?msg=kudos-saved"
     assert captured["username"] == "alice"
     assert captured["actor"] == "bob"
     assert captured["kind"] == "kudo"
-    assert captured["href"] == "/works/work-1"
+    assert captured["href"] == "/comic/work-1"
 
 
 def test_works_post_comment_creates_notification_for_uploader(
@@ -118,7 +118,7 @@ def test_works_post_comment_creates_notification_for_uploader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.post.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_ex_post_comment_notification_test",
     )
 
@@ -152,7 +152,7 @@ def test_works_post_comment_creates_notification_for_uploader(
     monkeypatch.setattr(module, "create_notification", fake_create_notification)
 
     request = dummy_request(
-        path="/works/work-1/comments",
+        path="/comic/work-1/comments",
         method="POST",
         form={"comment_body": "Great chapter", "chapter_number": "2"},
     )
@@ -160,9 +160,9 @@ def test_works_post_comment_creates_notification_for_uploader(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    assert result.headers["Location"] == "/works/work-1?msg=comment-saved"
+    assert result.headers["Location"] == "/comic/work-1?msg=comment-saved"
     assert captured["username"] == "alice"
     assert captured["actor"] == "bob"
     assert captured["kind"] == "comment"
     assert "chapter 2" in captured["message"]
-    assert captured["href"] == "/works/work-1"
+    assert captured["href"] == "/comic/work-1"

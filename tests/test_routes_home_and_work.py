@@ -79,7 +79,7 @@ def test_home_route_renders_work_links(
     result = module.main(request, response)
 
     assert result.status_code == 200
-    assert b"/works/work-1" in result.data
+    assert b"/comic/work-1" in result.data
 
 
 def test_home_route_renders_fanart_tab(
@@ -332,7 +332,7 @@ def test_work_detail_route_renders_work_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_ex_get_test",
     )
 
@@ -400,7 +400,7 @@ def test_work_detail_route_renders_work_page(
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1", args={})
+    request = dummy_request(path="/comic/work-1", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -417,7 +417,7 @@ def test_work_edit_route_renders_editor_with_success_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_edit_ex_get_test",
     )
 
@@ -520,7 +520,7 @@ def test_work_edit_route_renders_editor_with_success_status(
     )
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1/edit", args={"msg": "page-added"})
+    request = dummy_request(path="/comic/work-1/edit", args={"msg": "page-added"})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -538,7 +538,7 @@ def test_work_edit_route_renders_explicit_rating_lock_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_edit_explicit_lock_msg_test",
     )
 
@@ -640,7 +640,7 @@ def test_work_edit_route_renders_explicit_rating_lock_error(
     )
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1/edit", args={"msg": "explicit-rating-locked"})
+    request = dummy_request(path="/comic/work-1/edit", args={"msg": "explicit-rating-locked"})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -656,7 +656,7 @@ def test_work_versions_route_renders_selected_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_ex_get_test",
     )
 
@@ -725,7 +725,7 @@ def test_work_versions_route_renders_selected_version(
     monkeypatch.setattr(module, "get_work_version_manifest", fake_get_work_version_manifest)
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1/versions", args={})
+    request = dummy_request(path="/comic/work-1/versions", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -742,7 +742,7 @@ def test_work_versions_route_returns_404_for_missing_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_missing_ex_get_test",
     )
 
@@ -771,7 +771,7 @@ def test_work_versions_route_returns_404_for_missing_version(
     monkeypatch.setattr(module, "list_work_versions", fake_list_work_versions)
     monkeypatch.setattr(module, "get_work_version_manifest", fake_get_work_version_manifest)
 
-    request = dummy_request(path="/works/work-1/versions/missing", args={})
+    request = dummy_request(path="/comic/work-1/versions/missing", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -786,7 +786,7 @@ def test_work_edit_route_forbidden_for_non_uploader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_edit_forbidden_test",
     )
 
@@ -814,7 +814,7 @@ def test_work_edit_route_forbidden_for_non_uploader(
     monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
     monkeypatch.setattr(module, "get_work", fake_get_work)
 
-    request = dummy_request(path="/works/work-1/edit", args={})
+    request = dummy_request(path="/comic/work-1/edit", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -828,7 +828,7 @@ def test_work_versions_route_renders_empty_versions_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_empty_test",
     )
 
@@ -873,7 +873,7 @@ def test_work_versions_route_renders_empty_versions_message(
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1/versions", args={})
+    request = dummy_request(path="/comic/work-1/versions", args={})
     response = dummy_response()
     result = module.main(request, response)
 
@@ -901,7 +901,7 @@ def test_work_detail_status_messages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/works.ex.get.py",
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         f"fanicsite_work_status_msg_{msg}",
     )
 
@@ -963,7 +963,7 @@ def test_work_detail_status_messages(
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
 
-    request = dummy_request(path="/works/work-1", args={"msg": msg})
+    request = dummy_request(path="/comic/work-1", args={"msg": msg})
     response = dummy_response()
     result = module.main(request, response)
 

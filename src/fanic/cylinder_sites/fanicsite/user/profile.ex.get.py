@@ -36,7 +36,7 @@ def _uploaded_works_html(works: list[dict[str, object]]) -> str:
         kudos_count = escape(str(work.get("kudos_count", 0)))
         comments_count = escape(str(work.get("comments_count", 0)))
         items.append(
-            f'<li><a href="/works/{work_id}">{title}</a> '
+            f'<li><a href="/comic/{work_id}">{title}</a> '
             f'<span class="profile-meta">({status}, {page_count} pages, {kudos_count} kudos, {comments_count} comments)</span></li>'
         )
     return '<ul class="work-links">' + "".join(items) + "</ul>"
