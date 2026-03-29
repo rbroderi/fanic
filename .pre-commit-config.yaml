@@ -1,6 +1,14 @@
 repos:
   - repo: local
     hooks:
+      - id: set-source-permissions
+        name: set-source-permissions
+        entry: bash scripts/set-source-permissions.sh src
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: sync-static-to-storage
         name: sync-static-to-storage
         entry: bash scripts/sync-static-from-storage.sh

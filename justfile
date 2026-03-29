@@ -136,3 +136,12 @@ restart:
 [unix]
 restart:
     if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; sudo systemctl daemon-reload; sudo systemctl restart fanic
+
+# Normalize source file permissions so the fanic service user can read all app code.
+[windows]
+set-permissions root_dir="/opt/fanic/src":
+    echo "set-permissions is only supported on Linux"; exit 1
+
+[unix]
+set-permissions root_dir="/opt/fanic/src":
+    sudo bash scripts/set-source-permissions.sh "{{ root_dir }}"
