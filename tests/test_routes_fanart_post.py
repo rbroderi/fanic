@@ -67,6 +67,40 @@ def test_fanart_delete_admin_redirects_to_gallery(
     assert result.headers["Location"] == "/fanart/alice?msg=deleted"
 
 
+def test_fanart_delete_admin_redirects_to_safe_next_target(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_delete_next_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "superadmin")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item",
+        lambda *_: {"id": "fanart-1", "uploader_username": "alice"},
+    )
+    monkeypatch.setattr(module, "delete_fanart_item", lambda *_: True)
+
+    request = dummy_request(
+        path="/fanart/alice/fanart-1/delete",
+        method="POST",
+        args={"next": "/?view=fanart"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/?view=fanart"
+
+
 def test_fanart_upload_redirects_with_rating_elevated_message(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

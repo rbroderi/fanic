@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from html import escape
+from urllib.parse import quote
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -17,7 +18,11 @@ def _notifications_html(rows: Sequence[NotificationRow]) -> str:
     items: list[str] = []
     for row in rows:
         notification_id = escape(str(row.get("id", "0")))
-        actor = escape(str(row.get("actor_username", "someone")))
+        actor_username = str(row.get("actor_username", "someone")).strip()
+        actor_display_name_raw = str(row.get("actor_display_name", "")).strip()
+        actor_display_name = actor_display_name_raw if actor_display_name_raw else actor_username
+        actor_href = f"/users/{quote(actor_display_name, safe='')}"
+        actor_html = f'<a href="{actor_href}">{escape(actor_display_name)}</a>'
         message = escape(str(row.get("message", "")))
         href = escape(str(row.get("href", "")))
         created_at = escape(str(row.get("created_at", "")))
@@ -27,7 +32,7 @@ def _notifications_html(rows: Sequence[NotificationRow]) -> str:
 
         items.append(
             '<article class="card comment-card">'
-            + f'<p class="comment-meta">{unread_label}From {actor} at {created_at}</p>'
+            + f'<p class="comment-meta">{unread_label}From {actor_html} at {created_at}</p>'
             + f"<p>{message}</p>"
             + '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">'
             + view_html

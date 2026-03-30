@@ -215,7 +215,7 @@ def test_profile_get_marks_custom_theme_checked(
     assert captured["public_link_hidden"] == ""
     assert captured["public_href"] == "/users/AliceDisplay"
     assert captured["immutable_public_link_hidden"] == ""
-    assert captured["immutable_public_href"] == "/users/alice"
+    assert captured["immutable_public_href"] == "/users/AliceDisplay"
     assert captured["history_hidden"] == ""
     assert captured["details"] == "Display name: AliceDisplay"
 
@@ -377,6 +377,249 @@ def test_users_public_profile_resolves_by_display_name(
     assert result.status_code == 200
     assert captured["template"] == "profile-public.html"
     assert captured["details"] == "Display name: AdminDisplay"
+
+
+def test_profile_get_fanart_links_use_reader_with_gallery_context(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.get.py",
+        "fanicsite_user_profile_ex_get_fanart_reader_links_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "list_works_by_uploader", lambda _username: [])
+    monkeypatch.setattr(module, "user_prefers_mature", lambda _username: False)
+    monkeypatch.setattr(module, "user_prefers_explicit", lambda _username: False)
+    monkeypatch.setattr(module, "list_recent_reading_history", lambda _username, *, limit: [])
+    monkeypatch.setattr(module, "list_user_bookmarks", lambda _username: [])
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        lambda _username, *, limit=30: [
+            {
+                "id": "art-1",
+                "uploader_username": "alice",
+                "title": "Sky",
+                "image_filename": "_objects/aa/image.avif",
+            }
+        ],
+    )
+    monkeypatch.setattr(module, "can_view_work", lambda _username, _work: True)
+    monkeypatch.setattr(
+        module,
+        "get_user_theme_preference",
+        lambda _username: {"enabled": False, "toml_text": ""},
+    )
+    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: False)
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        lambda _username: {
+            "username": "alice",
+            "display_name": "AliceDisplay",
+            "email": "alice@example.com",
+            "is_over_18": True,
+            "age_gate_completed": True,
+            "role": "user",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "list_fanart_galleries_by_uploader",
+        lambda _username: [
+            {
+                "id": "gallery-1",
+                "slug": "sketches",
+            }
+        ],
+    )
+    monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda _gallery_id: {"art-1"})
+
+    class FakeSettings:
+        profile_history_limit: int = 5
+
+    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        captured["shared"] = replacements["__PROFILE_SHARED_SECTIONS__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(path="/user/profile", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    assert "/fanart/AliceDisplay/reader?item_id=art-1&gallery=sketches" in captured["shared"]
+
+
+def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    route_module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
+        "fanicsite_users_ex_get_fanart_reader_links_test",
+    )
+    handler_module = route_module.ex_get_handler
+
+    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
+    monkeypatch.setattr(handler_module, "list_works_by_uploader", lambda _username: [])
+    monkeypatch.setattr(handler_module, "list_user_bookmarks", lambda _username: [])
+    monkeypatch.setattr(
+        handler_module,
+        "list_fanart_items_by_uploader",
+        lambda _username, *, limit=30: [
+            {
+                "id": "art-1",
+                "uploader_username": "admin",
+                "title": "Sky",
+                "image_filename": "_objects/aa/image.avif",
+            }
+        ],
+    )
+    monkeypatch.setattr(handler_module, "can_view_work", lambda _username, _work: True)
+    monkeypatch.setattr(
+        handler_module,
+        "list_fanart_galleries_by_uploader",
+        lambda _username: [
+            {
+                "id": "gallery-1",
+                "slug": "sketches",
+            }
+        ],
+    )
+    monkeypatch.setattr(handler_module, "list_fanart_gallery_item_ids", lambda _gallery_id: {"art-1"})
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        lambda _username: {
+            "username": "admin",
+            "display_name": "AdminDisplay",
+            "email": "admin@example.com",
+            "is_over_18": True,
+            "age_gate_completed": True,
+            "role": "admin",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        captured["shared"] = replacements["__PROFILE_SHARED_SECTIONS__"]
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(handler_module, "render_html_template", fake_render_html_template)
+
+    request = dummy_request(path="/users/admin", args={})
+    response = dummy_response()
+    result = route_module.main(request, response)
+
+    assert result.status_code == 200
+    assert "/users/AdminDisplay/gallery/sketches" in captured["shared"]
+
+
+def test_users_gallery_all_redirects_to_fanart_gallery(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    route_module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
+        "fanicsite_users_ex_get_gallery_all_redirect_test",
+    )
+    handler_module = route_module.ex_get_handler
+
+    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        lambda _username: {
+            "username": "admin",
+            "display_name": "AdminDisplay",
+            "email": "admin@example.com",
+            "is_over_18": True,
+            "age_gate_completed": True,
+            "role": "admin",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
+
+    request = dummy_request(path="/users/admin/gallery/all", args={})
+    response = dummy_response()
+    result = route_module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/AdminDisplay"
+
+
+def test_users_gallery_slug_redirects_to_filtered_fanart_gallery(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    route_module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
+        "fanicsite_users_ex_get_gallery_slug_redirect_test",
+    )
+    handler_module = route_module.ex_get_handler
+
+    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        lambda _username: {
+            "username": "admin",
+            "display_name": "AdminDisplay",
+            "email": "admin@example.com",
+            "is_over_18": True,
+            "age_gate_completed": True,
+            "role": "admin",
+            "active": True,
+            "created_at": "2026-03-22T00:00:00Z",
+        },
+    )
+
+    request = dummy_request(path="/users/admin/gallery/new_name", args={})
+    response = dummy_response()
+    result = route_module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/AdminDisplay?gallery=new_name"
 
 
 def test_profile_post_disabling_custom_theme_stops_override_injection(

@@ -54,6 +54,7 @@ def _sample_notifications(username: str, *, limit: int = 200) -> list[dict[str, 
             "id": 1,
             "username": username,
             "actor_username": "bob",
+            "actor_display_name": "BobDisplay",
             "work_id": "work-1",
             "kind": "comment",
             "message": "bob commented.",
@@ -143,6 +144,7 @@ def test_notification_get_renders_items(
     assert result.status_code == 200
     assert captured["unread"] == "1"
     assert "bob commented." in captured["items"]
+    assert 'From <a href="/users/BobDisplay">BobDisplay</a>' in captured["items"]
 
 
 def test_notification_post_actions_redirect(

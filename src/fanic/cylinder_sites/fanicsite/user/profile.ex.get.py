@@ -12,6 +12,8 @@ from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
 from fanic.repository import can_view_work
 from fanic.repository import get_local_user
 from fanic.repository import get_user_theme_preference
+from fanic.repository import list_fanart_galleries_by_uploader
+from fanic.repository import list_fanart_gallery_item_ids
 from fanic.repository import list_fanart_items_by_uploader
 from fanic.repository import list_recent_reading_history
 from fanic.repository import list_user_bookmarks
@@ -68,27 +70,55 @@ def _bookmarks_html(bookmarks: Sequence[Mapping[str, object]]) -> str:
     for row in bookmarks:
         work_id = escape(str(row.get("work_id", "")))
         work_title = escape(str(row.get("work_title", "Untitled")))
-        author_username = escape(str(row.get("author_username", "unknown")))
+        author_username = str(row.get("author_username", "unknown"))
+        author_display_name_raw = str(row.get("author_display_name", "")).strip()
+        author_display_name = author_display_name_raw if author_display_name_raw else author_username
+        author_profile_href = f"/users/{quote(author_display_name, safe='')}"
         message = escape(str(row.get("message", "")))
         page_index = escape(str(row.get("page_index", 1)))
 
         message_html = f' <span class="profile-meta">- {message}</span>' if message else ""
         items.append(
             f'<li><a href="/tools/reader/{work_id}">{work_title}</a> '
-            f'<span class="profile-meta">by <a href="/users/{author_username}">{author_username}</a> (saved at page {page_index})</span>'
+            f'<span class="profile-meta">by <a href="{author_profile_href}">{escape(author_display_name)}</a> (saved at page {page_index})</span>'
             f"{message_html}</li>"
         )
     return '<ul class="work-links">' + "".join(items) + "</ul>"
 
 
-def _fanart_html(uploader_username: str, fanart_items: Sequence[Mapping[str, object]]) -> str:
+def _fanart_html(
+    uploader_username: str,
+    uploader_profile_key: str,
+    fanart_items: Sequence[Mapping[str, object]],
+) -> str:
     if not fanart_items:
         return '<p class="profile-meta">No fanart uploaded yet.</p>'
 
-    _ = uploader_username
+    gallery_slug_by_item_id: dict[str, str] = {}
+    galleries = list_fanart_galleries_by_uploader(uploader_username)
+    for gallery in galleries:
+        gallery_id = str(gallery.get("id", "")).strip()
+        gallery_slug = str(gallery.get("slug", "")).strip()
+        if not gallery_id or not gallery_slug:
+            continue
+        for item_id in list_fanart_gallery_item_ids(gallery_id):
+            if item_id not in gallery_slug_by_item_id:
+                gallery_slug_by_item_id[item_id] = gallery_slug
+
+    safe_uploader = quote(uploader_profile_key, safe="")
     items: list[str] = []
     for row in fanart_items:
         title = escape(str(row.get("title", "Untitled")))
+        item_id = str(row.get("id", "")).strip()
+        if item_id:
+            safe_item_id = quote(item_id, safe="")
+            link_href = f"/fanart/{safe_uploader}/reader?item_id={safe_item_id}"
+            gallery_slug = gallery_slug_by_item_id.get(item_id, "")
+            if gallery_slug:
+                link_href = f"{link_href}&gallery={quote(gallery_slug, safe='')}"
+            items.append(f'<li><a href="{link_href}">{title}</a></li>')
+            continue
+
         image_name = quote(str(row.get("image_filename", "")).strip(), safe="/")
         items.append(f'<li><a href="/static/fanart/images/{image_name}">{title}</a></li>')
     return '<ul class="work-links">' + "".join(items) + "</ul>"
@@ -225,6 +255,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             response.headers["Location"] = "/user/onboarding?msg=onboarding-required"
             response.set_data("See Other: /user/onboarding?msg=onboarding-required")
             return response
+        local_user = get_local_user(username)
+        display_name = username
+        is_over_18: bool | None = None
+        if local_user is not None:
+            display_name = local_user["display_name"]
+            is_over_18 = local_user["is_over_18"]
+
         history_limit = get_settings().profile_history_limit
         recent_history = list_recent_reading_history(username, limit=history_limit)
         uploaded_works_raw = list_works_by_uploader(username)
@@ -249,7 +286,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__PROFILE_UPLOADED_WORKS_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
                 "__PROFILE_UPLOADED_WORKS_HTML__": _uploaded_works_html(uploaded_works),
                 "__PROFILE_FANART_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
-                "__PROFILE_FANART_HTML__": _fanart_html(username, fanart_items),
+                "__PROFILE_FANART_HTML__": _fanart_html(
+                    username,
+                    display_name,
+                    fanart_items,
+                ),
                 "__PROFILE_BOOKMARKS_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
                 "__PROFILE_BOOKMARKS_HTML__": _bookmarks_html(visible_bookmarks),
             }
@@ -258,12 +299,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         view_explicit_checked = "checked" if user_prefers_explicit(username) else ""
         theme_preference = get_user_theme_preference(username)
         custom_theme_checked = "checked" if theme_preference["enabled"] else ""
-        local_user = get_local_user(username)
-        display_name = username
-        is_over_18: bool | None = None
-        if local_user is not None:
-            display_name = local_user["display_name"]
-            is_over_18 = local_user["is_over_18"]
 
         over_18_yes_selected = "selected" if is_over_18 is True else ""
         over_18_no_selected = "selected" if is_over_18 is False else ""
@@ -288,7 +323,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
             "__PROFILE_PUBLIC_HREF__": f"/users/{escape(display_name)}",
             "__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
-            "__PROFILE_IMMUTABLE_PUBLIC_HREF__": f"/users/{escape(username)}",
+            "__PROFILE_IMMUTABLE_PUBLIC_HREF__": f"/users/{escape(display_name)}",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "",
             "__PROFILE_ONBOARDING_HIDDEN_ATTR__": onboarding_hidden_attr,
             "__PROFILE_DISPLAY_NAME_VALUE__": escape(display_name),

@@ -616,6 +616,9 @@ function bindControls() {
   readerStage?.addEventListener(
     "click",
     (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest(".reader-ui")) {
+        return;
+      }
       if (state.didPan) {
         event.preventDefault();
         event.stopPropagation();

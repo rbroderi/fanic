@@ -158,10 +158,10 @@ def test_home_route_renders_fanart_tab(
     result = module.main(request, response)
 
     assert result.status_code == 200
-    assert b"/fanart/alice/reader?item_id=fanart-1" in result.data
+    assert b"/fanart/AliceArtist/reader?item_id=fanart-1" in result.data
     assert b'<h3><a href="/users/AliceArtist">@AliceArtist</a></h3>' in result.data
     assert b'class="admin-delete-form"' in result.data
-    assert b"/fanart/alice/fanart-1/delete" in result.data
+    assert b"/fanart/AliceArtist/fanart-1/delete?next=%2F%3Fview%3Dfanart" in result.data
     assert b"/static/fanart/thumbs/_objects/ab/thumb.avif" in result.data
     assert (
         b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
@@ -440,9 +440,144 @@ def test_fanart_route_gallery_grouping_filter(
     assert rendered["template"] == "fanart-gallery.html"
     assert "Cloud" in rendered["grid"]
     assert "/fanart/alice/reader?item_id=art-1" not in rendered["grid"]
-    assert "/fanart/alice/reader?item_id=art-2" in rendered["grid"]
+    assert "/fanart/alice/reader?item_id=art-2&gallery=sketches" in rendered["grid"]
     assert rendered["__GALLERY_DOWNLOAD_CBZ_HREF__"] == "/fanart/alice/download/cbz?gallery=sketches"
     assert 'name="gallery_item_id"' in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
+
+    reader_request = dummy_request(
+        path="/fanart/alice/reader",
+        args={"item_id": "art-2", "gallery": "sketches"},
+    )
+    reader_response = dummy_response()
+    reader_result = module.main(reader_request, reader_response)
+
+    assert reader_result.status_code == 200
+    assert rendered["template"] == "reader.html"
+    reader_bootstrap = json.loads(rendered["__READER_BOOTSTRAP_JSON__"])
+    assert len(reader_bootstrap["pages"]) == 1
+    assert reader_bootstrap["pages"][0]["id"] == "art-2"
+    assert rendered["__READER_WORK_HREF__"] == "/fanart/alice?gallery=sketches"
+
+
+def test_fanart_download_filename_uses_display_name_fallback(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
+        "fanicsite_fanart_ex_get_download_filename_display_fallback_test",
+    )
+
+    image_file = tmp_path / "image.avif"
+    image_file.write_bytes(b"image")
+
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item_by_image_filename",
+        lambda *_: {
+            "id": "art-1",
+            "uploader_username": "uuid-owner",
+            "title": "Sky",
+        },
+    )
+    monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        lambda username: {
+            "username": username,
+            "display_name": "AliceArtist",
+        },
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_send_file_download(
+        response: ResponseLike,
+        file_path: Path,
+        filename: str | None = None,
+    ) -> ResponseLike:
+        captured["filename"] = filename if filename else ""
+        response.status_code = 200
+        response.content_type = "image/avif"
+        response.set_data(file_path.read_bytes())
+        return response
+
+    monkeypatch.setattr(module, "send_file", fake_send_file_download)
+
+    download_request = dummy_request(path="/fanart/download/_objects/aa/image.avif")
+    download_response = dummy_response()
+    download_result = module.main(download_request, download_response)
+
+    assert download_result.status_code == 200
+    assert captured["filename"] == "aliceartist_sky.avif"
+
+
+def test_fanart_reader_normalizes_legacy_image_filename_urls(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
+        "fanicsite_fanart_ex_get_reader_legacy_path_test",
+    )
+
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        lambda *_args, **_kwargs: [
+            {
+                "id": "art-1",
+                "uploader_username": "alice",
+                "uploader_display_name": "AliceArtist",
+                "title": "Sky",
+                "summary": "Color test",
+                "fandom": "Skyverse",
+                "rating": "General Audiences",
+                "image_filename": "/_objects/aa/image.avif",
+                "thumb_filename": "_objects/aa/thumb.avif",
+                "width": 1000,
+                "height": 800,
+                "created_at": "2026-03-22T00:00:00Z",
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
+
+    rendered: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        rendered["template"] = template_name
+        rendered.update(replacements)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    reader_request = dummy_request(path="/fanart/alice/reader", args={"item_id": "art-1"})
+    reader_response = dummy_response()
+    reader_result = module.main(reader_request, reader_response)
+
+    assert reader_result.status_code == 200
+    assert rendered["template"] == "reader.html"
+    reader_bootstrap = json.loads(rendered["__READER_BOOTSTRAP_JSON__"])
+    page = reader_bootstrap["pages"][0]
+    assert page["image_url"].endswith("/static/fanart/images/_objects/aa/image.avif")
+    assert page["download_url"] == "/fanart/download/_objects/aa/image.avif"
 
 
 def test_work_detail_route_renders_work_page(

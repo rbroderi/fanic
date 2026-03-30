@@ -24,6 +24,8 @@ from fanic.repository import FanartItemRow
 from fanic.repository import fanart_file_for
 from fanic.repository import get_fanart_gallery_by_slug
 from fanic.repository import get_fanart_item_by_image_filename
+from fanic.repository import get_local_user
+from fanic.repository import get_local_user_by_display_name
 from fanic.repository import list_fanart_galleries_by_uploader
 from fanic.repository import list_fanart_gallery_item_ids
 from fanic.repository import list_fanart_items_by_uploader
@@ -53,15 +55,16 @@ def _standardized_download_filename(
 
 
 def _work_grid_html(
-    work_owner_username: str,
+    work_owner_profile_key: str,
     works: Sequence[FanartItemRow],
     *,
     can_delete: bool,
+    active_gallery_slug: str = "",
 ) -> str:
     if not works:
         return '<p class="profile-meta">No fanart uploaded yet.</p>'
 
-    safe_owner = quote(work_owner_username, safe="")
+    safe_owner = quote(work_owner_profile_key, safe="")
     parts: list[str] = []
     for work in works:
         work_id = str(work.get("id", "")).strip()
@@ -76,11 +79,13 @@ def _work_grid_html(
         fandom_raw = str(work.get("fandom", "")).strip()
         fandom_html = f" | fandom: {escape(fandom_raw)}" if fandom_raw else ""
         rating_html = rating_badge_html(work.get("rating", "Not Rated"))
-        image_name = str(work.get("image_filename", "")).strip()
-        thumb_name = str(work.get("thumb_filename", "")).strip()
+        image_name = str(work.get("image_filename", "")).strip().lstrip("/")
+        thumb_name = str(work.get("thumb_filename", "")).strip().lstrip("/")
         created_at = escape(str(work.get("created_at", "")))
         size_text = f"{work.get('width', 0)}x{work.get('height', 0)}"
         reader_href = f"/fanart/{safe_owner}/reader?item_id={safe_work_id}"
+        if active_gallery_slug:
+            reader_href = f"{reader_href}&gallery={quote(active_gallery_slug, safe='')}"
         download_href = f"/fanart/download/{quote(image_name, safe='/')}" if image_name else reader_href
         claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else reader_href
         report_href = (
@@ -121,11 +126,11 @@ def _work_grid_html(
 
 
 def _gallery_links_html(
-    work_owner_username: str,
+    work_owner_profile_key: str,
     galleries: Sequence[FanartGalleryRow],
     active_gallery_slug: str,
 ) -> str:
-    safe_owner = quote(work_owner_username, safe="")
+    safe_owner = quote(work_owner_profile_key, safe="")
     all_current = ' aria-current="page"' if not active_gallery_slug else ""
     links = [f'<a href="/fanart/{safe_owner}"{all_current}>All fanart</a>']
     for gallery in galleries:
@@ -137,8 +142,8 @@ def _gallery_links_html(
     return " | ".join(links)
 
 
-def _gallery_create_form_html(work_owner_username: str) -> str:
-    safe_owner = quote(work_owner_username, safe="")
+def _gallery_create_form_html(work_owner_profile_key: str) -> str:
+    safe_owner = quote(work_owner_profile_key, safe="")
     return (
         f'<form method="post" action="/fanart/{safe_owner}/galleries/create" class="inline-form">'
         '<label for="galleryName">Create gallery:</label> '
@@ -150,7 +155,7 @@ def _gallery_create_form_html(work_owner_username: str) -> str:
 
 
 def _gallery_manage_form_html(
-    work_owner_username: str,
+    work_owner_profile_key: str,
     active_gallery: FanartGalleryRow | None,
     works: Sequence[FanartItemRow],
     selected_item_ids: set[str],
@@ -160,7 +165,7 @@ def _gallery_manage_form_html(
 
     gallery_name = escape(str(active_gallery.get("name", "Gallery")))
     gallery_slug = escape(str(active_gallery.get("slug", "")))
-    safe_owner = quote(work_owner_username, safe="")
+    safe_owner = quote(work_owner_profile_key, safe="")
     lines: list[str] = [
         '<section class="card">',
         f"<h3>Manage {gallery_name}</h3>",
@@ -211,7 +216,7 @@ def _build_gallery_cbz_bytes(
 
     with ZipFile(payload, "w", compression=ZIP_DEFLATED) as archive:
         for work in works:
-            image_name = str(work.get("image_filename", "")).strip()
+            image_name = str(work.get("image_filename", "")).strip().lstrip("/")
             if not image_name:
                 continue
 
@@ -240,21 +245,21 @@ def _build_gallery_cbz_bytes(
 
 
 def _work_reader_bootstrap(
-    work_owner_username: str,
+    work_owner_profile_key: str,
     works: Sequence[FanartItemRow],
     requested_work_id: str,
 ) -> dict[str, object]:
     pages: list[dict[str, object]] = []
     selected_index = 1
-    safe_owner = quote(work_owner_username, safe="")
+    safe_owner = quote(work_owner_profile_key, safe="")
 
     for work in works:
         work_id = str(work.get("id", "")).strip()
-        image_name = str(work.get("image_filename", "")).strip()
+        image_name = str(work.get("image_filename", "")).strip().lstrip("/")
         if not work_id or not image_name:
             continue
 
-        thumb_name = str(work.get("thumb_filename", "")).strip()
+        thumb_name = str(work.get("thumb_filename", "")).strip().lstrip("/")
         thumb_url = media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}")
         if not thumb_name:
             thumb_url = media_url(f"/static/fanart/images/{quote(image_name, safe='/')}")
@@ -275,7 +280,7 @@ def _work_reader_bootstrap(
     return {
         "mode": "fanart",
         "work_id": "",
-        "title": f"@{_owner_display_name(work_owner_username, works)} fanart",
+        "title": f"@{_owner_display_name(work_owner_profile_key, works)} fanart",
         "work_href": f"/fanart/{safe_owner}",
         "user_id": "anon",
         "page_index": selected_index,
@@ -289,6 +294,37 @@ def _owner_display_name(work_owner_username: str, works: Sequence[FanartItemRow]
         display_name_raw = str(work.get("uploader_display_name", "")).strip()
         if display_name_raw:
             return display_name_raw
+    return work_owner_username
+
+
+def _resolve_owner_username(owner_key: str) -> str | None:
+    normalized_owner_key = owner_key.strip()
+    if not normalized_owner_key:
+        return None
+
+    local_user = get_local_user(normalized_owner_key)
+    if local_user is not None:
+        username = str(local_user.get("username", "")).strip()
+        if username:
+            return username
+
+    local_user = get_local_user_by_display_name(normalized_owner_key)
+    if local_user is not None:
+        username = str(local_user.get("username", "")).strip()
+        if username:
+            return username
+
+    return normalized_owner_key
+
+
+def _owner_profile_key(work_owner_username: str) -> str:
+    local_user = get_local_user(work_owner_username)
+    if local_user is None:
+        return work_owner_username
+
+    display_name = str(local_user.get("display_name", "")).strip()
+    if display_name:
+        return display_name
     return work_owner_username
 
 
@@ -313,17 +349,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not path.exists():
             return text_error(response, "Not found", 404)
 
+        uploader_username = str(work.get("uploader_username", "")).strip()
+        uploader_display_name = str(work.get("uploader_display_name", "")).strip()
+        if not uploader_display_name and uploader_username:
+            uploader_display_name = _owner_profile_key(uploader_username)
+
         download_filename = _standardized_download_filename(
-            str(work.get("uploader_display_name", "")).strip()
-            if str(work.get("uploader_display_name", "")).strip()
-            else str(work.get("uploader_username", "")).strip(),
+            uploader_display_name if uploader_display_name else uploader_username,
             str(work.get("title", "untitled")),
             file_name,
         )
         return send_file(response, path, filename=download_filename)
 
     if len(tail) == 3 and tail[1] == "download" and tail[2] == "cbz":
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         if not work_owner_username:
             return text_error(response, "Not found", 404)
 
@@ -351,9 +391,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return response
 
     if len(tail) == 1:
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         if not work_owner_username:
             return text_error(response, "Not found", 404)
+        work_owner_profile_key = _owner_profile_key(work_owner_username)
 
         username = current_user(request)
         can_manage_galleries = username == work_owner_username
@@ -375,11 +417,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             active_name = str(active_gallery.get("name", "")).strip()
             subtitle = f"Fanart gallery - {active_name}" if active_name else "Fanart gallery"
 
-        gallery_download_href = f"/fanart/{quote(work_owner_username, safe='')}/download/cbz"
+        gallery_download_href = f"/fanart/{quote(work_owner_profile_key, safe='')}/download/cbz"
         if active_gallery is not None:
             active_slug = str(active_gallery.get("slug", "")).strip()
             gallery_download_href = (
-                f"/fanart/{quote(work_owner_username, safe='')}/download/cbz?gallery={quote(active_slug, safe='')}"
+                f"/fanart/{quote(work_owner_profile_key, safe='')}/download/cbz?gallery={quote(active_slug, safe='')}"
             )
         return render_html_template(
             request,
@@ -388,43 +430,62 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             {
                 "__GALLERY_TITLE__": f"@{escape(owner_display_name)}",
                 "__GALLERY_SUBTITLE__": subtitle,
-                "__GALLERY_READER_HREF__": (f"/fanart/{quote(work_owner_username, safe='')}/reader"),
+                "__GALLERY_READER_HREF__": (f"/fanart/{quote(work_owner_profile_key, safe='')}/reader"),
                 "__GALLERY_DOWNLOAD_CBZ_HREF__": gallery_download_href,
                 "__FANART_GALLERY_LINKS_HTML__": _gallery_links_html(
-                    work_owner_username,
+                    work_owner_profile_key,
                     galleries,
                     active_gallery_slug,
                 ),
                 "__FANART_GALLERY_CREATE_FORM_HIDDEN_ATTR__": "" if can_manage_galleries else "hidden",
-                "__FANART_GALLERY_CREATE_FORM_HTML__": _gallery_create_form_html(work_owner_username),
+                "__FANART_GALLERY_CREATE_FORM_HTML__": _gallery_create_form_html(work_owner_profile_key),
                 "__FANART_GALLERY_MANAGE_FORM_HIDDEN_ATTR__": (
                     "" if can_manage_galleries and active_gallery is not None else "hidden"
                 ),
                 "__FANART_GALLERY_MANAGE_FORM_HTML__": _gallery_manage_form_html(
-                    work_owner_username,
+                    work_owner_profile_key,
                     active_gallery,
                     all_works,
                     active_gallery_item_ids,
                 ),
                 "__FANART_GRID_HTML__": _work_grid_html(
-                    work_owner_username,
+                    work_owner_profile_key,
                     works,
                     can_delete=can_delete,
+                    active_gallery_slug=active_gallery_slug,
                 ),
             },
         )
 
     if len(tail) == 2 and tail[1] == "reader":
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         if not work_owner_username:
             return text_error(response, "Not found", 404)
+        work_owner_profile_key = _owner_profile_key(work_owner_username)
         back_href = request.args.get("back", "").strip()
         back_href = back_href if back_href else "/?view=fanart"
 
-        works = list_fanart_items_by_uploader(work_owner_username, limit=500)
-        owner_display_name = _owner_display_name(work_owner_username, works)
-        bootstrap = _work_reader_bootstrap(
+        all_works = list_fanart_items_by_uploader(work_owner_username, limit=500)
+        works = all_works
+        active_gallery_slug = ""
+        requested_gallery_slug = request.args.get("gallery", "").strip()
+        if requested_gallery_slug:
+            gallery = get_fanart_gallery_by_slug(
+                work_owner_username,
+                requested_gallery_slug,
+            )
+            if gallery is not None:
+                gallery_item_ids = list_fanart_gallery_item_ids(str(gallery.get("id", "")))
+                works = [work for work in all_works if str(work.get("id", "")) in gallery_item_ids]
+                active_gallery_slug = requested_gallery_slug
+
+        owner_display_name = _owner_display_name(
             work_owner_username,
+            works if works else all_works,
+        )
+        bootstrap = _work_reader_bootstrap(
+            work_owner_profile_key,
             works,
             request.args.get("item_id", "").strip(),
         )
@@ -457,6 +518,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 image_url_obj = pages[page_pos].get("image_url", "")
                 initial_claimed_url = str(image_url_obj).strip()
 
+        reader_work_href = f"/fanart/{quote(work_owner_profile_key, safe='')}"
+        if active_gallery_slug:
+            reader_work_href = f"{reader_work_href}?gallery={quote(active_gallery_slug, safe='')}"
+
         return render_html_template(
             request,
             response,
@@ -465,7 +530,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__READER_TITLE__": escape(str(bootstrap.get("title", "Fanart Reader"))),
                 "__READER_BACK_HREF__": escape(back_href),
                 "__READER_BACK_LABEL__": "Back to search",
-                "__READER_WORK_HREF__": escape(f"/fanart/{quote(work_owner_username, safe='')}"),
+                "__READER_WORK_HREF__": escape(reader_work_href),
                 "__READER_WORK_LABEL__": "Gallery",
                 "__READER_DOWNLOAD_HIDDEN_ATTR__": "",
                 "__READER_DOWNLOAD_HREF__": "#",
