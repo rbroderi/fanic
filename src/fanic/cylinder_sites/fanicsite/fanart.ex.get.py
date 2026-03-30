@@ -86,7 +86,9 @@ def _work_grid_html(
         reader_href = f"/fanart/{safe_owner}/reader?item_id={safe_work_id}"
         if active_gallery_slug:
             reader_href = f"{reader_href}&gallery={quote(active_gallery_slug, safe='')}"
-        download_href = f"/fanart/download/{quote(image_name, safe='/')}" if image_name else reader_href
+        download_href = (
+            f"/fanart/download/{quote(image_name, safe='/')}?item_id={safe_work_id}" if image_name else reader_href
+        )
         claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else reader_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
@@ -268,7 +270,7 @@ def _work_reader_bootstrap(
             "id": work_id,
             "title": str(work.get("title", "Untitled")),
             "image_url": media_url(f"/static/fanart/images/{quote(image_name, safe='/')}"),
-            "download_url": f"/fanart/download/{quote(image_name, safe='/')}",
+            "download_url": (f"/fanart/download/{quote(image_name, safe='/')}?item_id={quote(work_id, safe='')}"),
             "thumb_url": thumb_url,
             "width": work.get("width"),
             "height": work.get("height"),
@@ -359,7 +361,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             str(work.get("title", "untitled")),
             file_name,
         )
-        return send_file(response, path, filename=download_filename)
+        download_response = send_file(response, path, filename=download_filename)
+        download_response.headers["Cache-Control"] = "no-store"
+        return download_response
 
     if len(tail) == 3 and tail[1] == "download" and tail[2] == "cbz":
         work_owner_key = tail[0].strip()
@@ -543,7 +547,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
                 "__READER_BOOKMARK_HIDDEN_ATTR__": "hidden",
                 "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-                "__READER_SCRIPT_SRC__": "/static/reader.js",
+                "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260330-download-click-fix",
             },
         )
 

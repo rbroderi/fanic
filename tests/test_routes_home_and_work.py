@@ -577,7 +577,7 @@ def test_fanart_reader_normalizes_legacy_image_filename_urls(
     reader_bootstrap = json.loads(rendered["__READER_BOOTSTRAP_JSON__"])
     page = reader_bootstrap["pages"][0]
     assert page["image_url"].endswith("/static/fanart/images/_objects/aa/image.avif")
-    assert page["download_url"] == "/fanart/download/_objects/aa/image.avif"
+    assert page["download_url"] == "/fanart/download/_objects/aa/image.avif?item_id=art-1"
 
 
 def test_work_detail_route_renders_work_page(
