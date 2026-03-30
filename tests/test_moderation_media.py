@@ -12,6 +12,7 @@ MEDIA_DIR = Path(__file__).resolve().parent / "media"
     ("filename", "expected_allow", "expected_style"),
     [
         ("safe.png", True, "comic"),
+        ("safe2.webp", True, "comic"),
         ("explicit.jpg", True, "comic"),
         ("photorealistic.jpg", False, "photorealistic"),
         ("photorealistic_marvel.jpg", False, "photorealistic"),
@@ -43,17 +44,22 @@ def test_moderation_media_expected_outcomes(
 def test_moderation_media_explicit_and_safe_rating_suggestion() -> None:
     explicit_path = MEDIA_DIR / "explicit.jpg"
     safe_path = MEDIA_DIR / "safe.png"
+    safe2_path = MEDIA_DIR / "safe2.webp"
 
-    if not explicit_path.exists() or not safe_path.exists():
+    if not explicit_path.exists() or not safe_path.exists() or not safe2_path.exists():
         pytest.skip("Missing one or more rating fixtures")
 
     explicit_result = moderate_image(str(explicit_path))
     safe_result = moderate_image(str(safe_path))
+    safe2_result = moderate_image(str(safe2_path))
 
     explicit_suggested = suggested_rating_for_nsfw(explicit_result["nsfw_score"])
     safe_suggested = suggested_rating_for_nsfw(safe_result["nsfw_score"])
+    safe2_suggested = suggested_rating_for_nsfw(safe2_result["nsfw_score"])
 
     assert explicit_result["allow"] is True
     assert safe_result["allow"] is True
+    assert safe2_result["allow"] is True
     assert explicit_suggested == "Explicit"
     assert safe_suggested is None
+    assert safe2_suggested is None

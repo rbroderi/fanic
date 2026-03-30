@@ -147,6 +147,17 @@ class FanartUserSummaryRow(TypedDict):
     latest_thumb_filename: str | None
 
 
+class FanartGalleryRow(TypedDict):
+    id: str
+    uploader_username: str
+    name: str
+    slug: str
+    description: str
+    item_count: int
+    created_at: str
+    updated_at: str
+
+
 def _normalize_user_role(role: object) -> UserRole:
     normalized = str(role).strip().lower()
     if normalized == "superadmin":
@@ -1569,6 +1580,254 @@ def mark_all_notifications_read(username: str) -> int:
             (normalized_username,),
         )
     return int(cursor.rowcount)
+
+
+def _next_available_fanart_gallery_slug(
+    connection: sqlite3.Connection,
+    uploader_username: str,
+    requested_name: str,
+) -> str:
+    base_slug = slugify(requested_name)
+    normalized_base_slug = base_slug if base_slug else "gallery"
+    slug_candidate = normalized_base_slug
+    suffix = 2
+
+    while True:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM fanart_galleries
+            WHERE uploader_username = ? AND slug = ?
+            LIMIT 1
+            """,
+            (uploader_username, slug_candidate),
+        ).fetchone()
+        if row is None:
+            return slug_candidate
+
+        slug_candidate = f"{normalized_base_slug}-{suffix}"
+        suffix += 1
+
+
+def create_fanart_gallery(
+    *,
+    uploader_username: str,
+    name: str,
+    description: str = "",
+) -> FanartGalleryRow:
+    normalized_uploader = uploader_username.strip()
+    normalized_name = name.strip()
+    normalized_description = description.strip()
+    if not normalized_uploader:
+        raise ValueError("uploader_username must not be empty")
+    if not normalized_name:
+        raise ValueError("name must not be empty")
+
+    gallery_id = str(uuid.uuid4())
+    with get_connection() as connection:
+        slug = _next_available_fanart_gallery_slug(connection, normalized_uploader, normalized_name)
+        connection.execute(
+            """
+            INSERT INTO fanart_galleries (
+                id,
+                uploader_username,
+                name,
+                slug,
+                description
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                gallery_id,
+                normalized_uploader,
+                normalized_name,
+                slug,
+                normalized_description,
+            ),
+        )
+
+    return {
+        "id": gallery_id,
+        "uploader_username": normalized_uploader,
+        "name": normalized_name,
+        "slug": slug,
+        "description": normalized_description,
+        "item_count": 0,
+        "created_at": "",
+        "updated_at": "",
+    }
+
+
+def list_fanart_galleries_by_uploader(
+    uploader_username: str,
+) -> list[FanartGalleryRow]:
+    normalized_uploader = uploader_username.strip()
+    if not normalized_uploader:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                g.id,
+                g.uploader_username,
+                g.name,
+                g.slug,
+                g.description,
+                g.created_at,
+                g.updated_at,
+                COUNT(gi.fanart_item_id) AS item_count
+            FROM fanart_galleries g
+            LEFT JOIN fanart_gallery_items gi ON gi.gallery_id = g.id
+            WHERE g.uploader_username = ?
+            GROUP BY g.id, g.uploader_username, g.name, g.slug, g.description, g.created_at, g.updated_at
+            ORDER BY g.created_at DESC, g.id DESC
+            """,
+            (normalized_uploader,),
+        ).fetchall()
+
+    galleries: list[FanartGalleryRow] = []
+    for row in rows:
+        galleries.append(
+            {
+                "id": str(row["id"]),
+                "uploader_username": str(row["uploader_username"]),
+                "name": str(row["name"]),
+                "slug": str(row["slug"]),
+                "description": str(row["description"]),
+                "item_count": _to_int(row["item_count"], 0),
+                "created_at": str(row["created_at"]),
+                "updated_at": str(row["updated_at"]),
+            }
+        )
+    return galleries
+
+
+def get_fanart_gallery_by_slug(
+    uploader_username: str,
+    gallery_slug: str,
+) -> FanartGalleryRow | None:
+    normalized_uploader = uploader_username.strip()
+    normalized_slug = gallery_slug.strip()
+    if not normalized_uploader or not normalized_slug:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                g.id,
+                g.uploader_username,
+                g.name,
+                g.slug,
+                g.description,
+                g.created_at,
+                g.updated_at,
+                COUNT(gi.fanart_item_id) AS item_count
+            FROM fanart_galleries g
+            LEFT JOIN fanart_gallery_items gi ON gi.gallery_id = g.id
+            WHERE g.uploader_username = ? AND g.slug = ?
+            GROUP BY g.id, g.uploader_username, g.name, g.slug, g.description, g.created_at, g.updated_at
+            LIMIT 1
+            """,
+            (normalized_uploader, normalized_slug),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "name": str(row["name"]),
+        "slug": str(row["slug"]),
+        "description": str(row["description"]),
+        "item_count": _to_int(row["item_count"], 0),
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def list_fanart_gallery_item_ids(gallery_id: str) -> set[str]:
+    normalized_gallery_id = gallery_id.strip()
+    if not normalized_gallery_id:
+        return set()
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT fanart_item_id
+            FROM fanart_gallery_items
+            WHERE gallery_id = ?
+            ORDER BY position ASC, created_at ASC
+            """,
+            (normalized_gallery_id,),
+        ).fetchall()
+
+    return {str(row["fanart_item_id"]) for row in rows}
+
+
+def replace_fanart_gallery_items(
+    *,
+    uploader_username: str,
+    gallery_id: str,
+    fanart_item_ids: list[str],
+) -> int:
+    normalized_uploader = uploader_username.strip()
+    normalized_gallery_id = gallery_id.strip()
+    if not normalized_uploader or not normalized_gallery_id:
+        return 0
+
+    seen_item_ids: set[str] = set()
+    normalized_item_ids: list[str] = []
+    for item_id in fanart_item_ids:
+        normalized_item_id = item_id.strip()
+        if not normalized_item_id or normalized_item_id in seen_item_ids:
+            continue
+        seen_item_ids.add(normalized_item_id)
+        normalized_item_ids.append(normalized_item_id)
+
+    with get_connection() as connection:
+        gallery_row = connection.execute(
+            """
+            SELECT id
+            FROM fanart_galleries
+            WHERE id = ? AND uploader_username = ?
+            LIMIT 1
+            """,
+            (normalized_gallery_id, normalized_uploader),
+        ).fetchone()
+        if gallery_row is None:
+            return 0
+
+        valid_ids: list[str] = []
+        if normalized_item_ids:
+            placeholders = ",".join("?" for _ in normalized_item_ids)
+            valid_rows = connection.execute(
+                f"""
+                SELECT id
+                FROM fanart_items
+                WHERE uploader_username = ?
+                  AND id IN ({placeholders})
+                """,
+                [normalized_uploader, *normalized_item_ids],
+            ).fetchall()
+            valid_ids = [str(row["id"]) for row in valid_rows]
+
+        connection.execute(
+            "DELETE FROM fanart_gallery_items WHERE gallery_id = ?",
+            (normalized_gallery_id,),
+        )
+
+        for index, item_id in enumerate(valid_ids):
+            connection.execute(
+                """
+                INSERT INTO fanart_gallery_items (gallery_id, fanart_item_id, position)
+                VALUES (?, ?, ?)
+                """,
+                (normalized_gallery_id, item_id, index),
+            )
+
+    return len(valid_ids)
 
 
 def create_fanart_item(

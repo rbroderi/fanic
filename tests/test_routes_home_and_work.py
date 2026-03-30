@@ -1,9 +1,11 @@
 import json
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 from typing import Protocol
+from zipfile import ZipFile
 
 import pytest
 
@@ -208,6 +210,9 @@ def test_fanart_route_gallery_and_media(
         "list_fanart_items_by_uploader",
         fake_list_fanart_items_by_uploader,
     )
+    monkeypatch.setattr(module, "list_fanart_galleries_by_uploader", lambda *_: [])
+    monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
+    monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: set())
     monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
 
@@ -237,8 +242,10 @@ def test_fanart_route_gallery_and_media(
     assert gallery_result.status_code == 200
     assert rendered["template"] == "fanart-gallery.html"
     assert rendered["__GALLERY_TITLE__"] == "@AliceArtist"
+    assert rendered["__GALLERY_DOWNLOAD_CBZ_HREF__"] == "/fanart/alice/download/cbz"
     assert "/static/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
     assert "/fanart/download/_objects/aa/image.avif" in rendered["grid"]
+    assert 'data-copy-url="/static/fanart/images/_objects/aa/image.avif"' in rendered["grid"]
     assert "/static/citrus.svg" in rendered["grid"]
     assert "fandom: Skyverse" in rendered["grid"]
     assert 'class="admin-delete-form"' in rendered["grid"]
@@ -308,6 +315,130 @@ def test_fanart_route_gallery_and_media(
     assert download_result.status_code == 200
     assert download_result.data == b"image"
     assert captured["filename"] == "alice_sky.avif"
+
+    cbz_download_request = dummy_request(path="/fanart/alice/download/cbz")
+    cbz_download_response = dummy_response()
+    cbz_download_result = module.main(cbz_download_request, cbz_download_response)
+
+    assert cbz_download_result.status_code == 200
+    assert cbz_download_result.content_type == "application/vnd.comicbook+zip"
+    assert cbz_download_result.headers["Content-Disposition"] == 'attachment; filename="alice_fanart_gallery.cbz"'
+
+    with ZipFile(BytesIO(cbz_download_result.data), "r") as archive:
+        names = archive.namelist()
+        assert names == ["alice_sky.avif"]
+        assert archive.read("alice_sky.avif") == b"image"
+
+
+def test_fanart_route_gallery_grouping_filter(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
+        "fanicsite_fanart_ex_get_gallery_filter_test",
+    )
+
+    works = [
+        {
+            "id": "art-1",
+            "uploader_username": "alice",
+            "uploader_display_name": "AliceArtist",
+            "title": "Sky",
+            "summary": "Color test",
+            "fandom": "Skyverse",
+            "rating": "General Audiences",
+            "image_filename": "_objects/aa/image.avif",
+            "thumb_filename": "_objects/aa/thumb.avif",
+            "width": 1000,
+            "height": 800,
+            "created_at": "2026-03-22T00:00:00Z",
+            "updated_at": "2026-03-22T00:00:00Z",
+        },
+        {
+            "id": "art-2",
+            "uploader_username": "alice",
+            "uploader_display_name": "AliceArtist",
+            "title": "Cloud",
+            "summary": "Shape study",
+            "fandom": "Skyverse",
+            "rating": "General Audiences",
+            "image_filename": "_objects/bb/image.avif",
+            "thumb_filename": "_objects/bb/thumb.avif",
+            "width": 1000,
+            "height": 800,
+            "created_at": "2026-03-23T00:00:00Z",
+            "updated_at": "2026-03-23T00:00:00Z",
+        },
+    ]
+
+    monkeypatch.setattr(module, "list_fanart_items_by_uploader", lambda *_args, **_kwargs: works)
+    monkeypatch.setattr(
+        module,
+        "list_fanart_galleries_by_uploader",
+        lambda *_: [
+            {
+                "id": "gallery-1",
+                "uploader_username": "alice",
+                "name": "Sketches",
+                "slug": "sketches",
+                "description": "",
+                "item_count": 1,
+                "created_at": "",
+                "updated_at": "",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        module,
+        "get_fanart_gallery_by_slug",
+        lambda *_: {
+            "id": "gallery-1",
+            "uploader_username": "alice",
+            "name": "Sketches",
+            "slug": "sketches",
+            "description": "",
+            "item_count": 1,
+            "created_at": "",
+            "updated_at": "",
+        },
+    )
+    monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: {"art-2"})
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+
+    rendered: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        rendered["template"] = template_name
+        rendered["grid"] = replacements.get("__FANART_GRID_HTML__", "")
+        rendered.update(replacements)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    gallery_request = dummy_request(path="/fanart/alice", args={"gallery": "sketches"})
+    gallery_response = dummy_response()
+    gallery_result = module.main(gallery_request, gallery_response)
+
+    assert gallery_result.status_code == 200
+    assert rendered["template"] == "fanart-gallery.html"
+    assert "Cloud" in rendered["grid"]
+    assert "/fanart/alice/reader?item_id=art-1" not in rendered["grid"]
+    assert "/fanart/alice/reader?item_id=art-2" in rendered["grid"]
+    assert rendered["__GALLERY_DOWNLOAD_CBZ_HREF__"] == "/fanart/alice/download/cbz?gallery=sketches"
+    assert 'name="gallery_item_id"' in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
 
 
 def test_work_detail_route_renders_work_page(

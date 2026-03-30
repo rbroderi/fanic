@@ -82,6 +82,27 @@ CREATE TABLE IF NOT EXISTS fanart_items (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS fanart_galleries (
+    id TEXT PRIMARY KEY,
+    uploader_username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (uploader_username, slug)
+);
+
+CREATE TABLE IF NOT EXISTS fanart_gallery_items (
+    gallery_id TEXT NOT NULL,
+    fanart_item_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (gallery_id, fanart_item_id),
+    FOREIGN KEY (gallery_id) REFERENCES fanart_galleries(id) ON DELETE CASCADE,
+    FOREIGN KEY (fanart_item_id) REFERENCES fanart_items(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS reading_progress (
     work_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -209,6 +230,9 @@ CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_tags_tag ON work_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
 CREATE INDEX IF NOT EXISTS idx_fanart_items_uploader_created_at ON fanart_items(uploader_username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fanart_galleries_uploader_created_at ON fanart_galleries(uploader_username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_gallery_position ON fanart_gallery_items(gallery_id, position ASC, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_fanart_item ON fanart_gallery_items(fanart_item_id);
 CREATE INDEX IF NOT EXISTS idx_work_comments_work ON work_comments(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);

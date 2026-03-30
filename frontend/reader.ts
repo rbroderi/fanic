@@ -65,6 +65,7 @@ const bookmarkSaveBtn = document.getElementById("bookmarkSaveBtn");
 const reportImageButton = document.getElementById("reportImageButton");
 const reportModal = document.getElementById("reportModal");
 const reportModalCancel = document.getElementById("reportModalCancel");
+const downloadImageLink = document.getElementById("downloadImageLink") as HTMLAnchorElement | null;
 const readerReportClaimedUrl = document.getElementById(
   "readerReportClaimedUrl",
 ) as HTMLInputElement | null;
@@ -472,6 +473,26 @@ function updateReportFieldsForCurrentPage() {
   }
 }
 
+function updateDownloadLinkForCurrentPage() {
+  if (!downloadImageLink || state.mode !== "fanart") {
+    return;
+  }
+
+  const page = state.pages[state.index - 1];
+  if (!page) {
+    return;
+  }
+
+  const downloadUrl = typeof page.download_url === "string" ? page.download_url.trim() : "";
+  if (!downloadUrl) {
+    downloadImageLink.hidden = true;
+    return;
+  }
+
+  downloadImageLink.hidden = false;
+  downloadImageLink.href = downloadUrl;
+}
+
 function openReportModal() {
   if (!reportModal) {
     return;
@@ -504,6 +525,7 @@ function renderPage(index) {
   syncChapterSelection();
   saveProgress();
   updateReportFieldsForCurrentPage();
+  updateDownloadLinkForCurrentPage();
 
   for (let offset = -1; offset <= 2; offset += 1) {
     loadThumbByIndex(state.index + offset);
@@ -731,6 +753,10 @@ async function init() {
     if (bookmarkDialog) {
       bookmarkDialog.hidden = true;
     }
+  }
+
+  if (state.mode !== "fanart" && downloadImageLink) {
+    downloadImageLink.hidden = true;
   }
 
   renderSidebar();

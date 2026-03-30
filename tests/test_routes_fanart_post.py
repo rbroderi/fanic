@@ -113,3 +113,122 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/fanart/alice?msg=uploaded-rating-elevated"
+
+
+def test_fanart_gallery_create_requires_owner(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_create_forbidden_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/create",
+        method="POST",
+        form={"gallery_name": "Sketches"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 403
+
+
+def test_fanart_gallery_create_redirects_to_new_gallery(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_create_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(
+        module,
+        "create_fanart_gallery",
+        lambda **_kwargs: {
+            "id": "gallery-1",
+            "uploader_username": "alice",
+            "name": "Sketches",
+            "slug": "sketches",
+            "description": "",
+            "item_count": 0,
+            "created_at": "",
+            "updated_at": "",
+        },
+    )
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/create",
+        method="POST",
+        form={"gallery_name": "Sketches", "gallery_description": "Warmups"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice?gallery=sketches&msg=gallery-created"
+
+
+def test_fanart_gallery_update_items_redirects_with_success(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_update_items_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_gallery_by_slug",
+        lambda *_: {
+            "id": "gallery-1",
+            "uploader_username": "alice",
+            "name": "Sketches",
+            "slug": "sketches",
+            "description": "",
+            "item_count": 0,
+            "created_at": "",
+            "updated_at": "",
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_replace_fanart_gallery_items(**kwargs: object) -> int:
+        captured.update(kwargs)
+        return 1
+
+    monkeypatch.setattr(module, "replace_fanart_gallery_items", fake_replace_fanart_gallery_items)
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/update-items",
+        method="POST",
+        form={"gallery_slug": "sketches", "gallery_item_id": "art-1,art-2"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice?gallery=sketches&msg=gallery-updated"
+    assert captured["uploader_username"] == "alice"
+    assert captured["gallery_id"] == "gallery-1"
+    assert captured["fanart_item_ids"] == ["art-1", "art-2"]
