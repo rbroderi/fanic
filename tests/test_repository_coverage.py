@@ -375,6 +375,7 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     comments = repository.list_work_comments("work-1")
     assert len(comments) == 1
     assert comments[0]["chapter_number"] == 1
+    assert comments[0]["commenter_display_name"] == "alice"
 
     notification_id = repository.create_notification(
         "alice",
@@ -389,6 +390,7 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     notification_rows = repository.list_user_notifications("alice", limit=10)
     assert len(notification_rows) == 1
     assert notification_rows[0]["kind"] == "comment"
+    assert notification_rows[0]["actor_display_name"] == "bob"
     assert notification_rows[0]["is_read"] is False
     assert repository.mark_notification_read("alice", notification_id) is True
     assert repository.count_unread_notifications("alice") == 0
@@ -599,10 +601,16 @@ def test_fanart_crud_and_lookup_helpers(
     item_by_image = repository.get_fanart_item_by_image("alice", "_objects/ab/image.avif")
     assert item_by_image is not None
     assert item_by_image["id"] == "fanart-1"
+    item_by_image_legacy = repository.get_fanart_item_by_image("alice", "/_objects/ab/image.avif")
+    assert item_by_image_legacy is not None
+    assert item_by_image_legacy["id"] == "fanart-1"
 
     item_by_thumb = repository.get_fanart_item_by_thumb("alice", "_objects/ab/thumb.avif")
     assert item_by_thumb is not None
     assert item_by_thumb["id"] == "fanart-1"
+    item_by_thumb_legacy = repository.get_fanart_item_by_thumb("alice", "/_objects/ab/thumb.avif")
+    assert item_by_thumb_legacy is not None
+    assert item_by_thumb_legacy["id"] == "fanart-1"
 
     assert repository.delete_fanart_item("fanart-1") is True
     assert repository.get_fanart_item("fanart-1") is None
@@ -611,7 +619,13 @@ def test_fanart_crud_and_lookup_helpers(
     assert repository.fanart_file_for("_objects/ab/image.avif") == (
         repository.FANART_DIR / "images" / "_objects/ab/image.avif"
     )
+    assert repository.fanart_file_for("/_objects/ab/image.avif") == (
+        repository.FANART_DIR / "images" / "_objects/ab/image.avif"
+    )
     assert repository.fanart_thumb_for("_objects/ab/thumb.avif") == (
+        repository.FANART_DIR / "thumbs" / "_objects/ab/thumb.avif"
+    )
+    assert repository.fanart_thumb_for("/_objects/ab/thumb.avif") == (
         repository.FANART_DIR / "thumbs" / "_objects/ab/thumb.avif"
     )
 

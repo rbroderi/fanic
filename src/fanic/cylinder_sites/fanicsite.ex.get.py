@@ -91,6 +91,7 @@ def _fanart_items_html(
     if not items:
         return "<p>No fanart matches found.</p>"
 
+    home_fanart_next = quote("/?view=fanart", safe="")
     parts: list[str] = []
     for row in items:
         uploader = str(row.get("uploader_username", "")).strip()
@@ -104,8 +105,9 @@ def _fanart_items_html(
 
         safe_display_name = escape(display_name)
         safe_item_id = quote(item_id, safe="")
-        safe_uploader = quote(uploader, safe="")
-        uploader_gallery_href = f"/fanart/{quote(uploader, safe='')}"
+        profile_key = display_name if display_name else uploader
+        safe_profile_key = quote(profile_key, safe="")
+        uploader_gallery_href = f"/fanart/{safe_profile_key}"
         uploader_profile_href = f"/users/{quote(display_name, safe='')}"
         viewer_href = f"{uploader_gallery_href}/reader?item_id={safe_item_id}&back={quote(back_href, safe='')}"
         title_raw = str(row.get("title", "Untitled"))
@@ -114,14 +116,14 @@ def _fanart_items_html(
         summary = escape(summary_raw if summary_raw else "No summary yet.")
         rating_html = rating_badge_html(row.get("rating", "Not Rated"))
         created_at = escape(str(row.get("created_at", "")))
-        image_name = str(row.get("image_filename", "")).strip()
+        image_name = str(row.get("image_filename", "")).strip().lstrip("/")
         claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else viewer_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
             f"&work_title={quote(title_raw, safe='')}"
             f"&claimed_url={quote(claimed_url, safe='')}"
         )
-        thumb_name = str(row.get("thumb_filename", "")).strip()
+        thumb_name = str(row.get("thumb_filename", "")).strip().lstrip("/")
         if thumb_name:
             thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}"
         else:
@@ -130,7 +132,7 @@ def _fanart_items_html(
         delete_html = ""
         if can_delete:
             delete_html = (
-                f'<form method="post" action="/fanart/{safe_uploader}/{safe_item_id}/delete" '
+                f'<form method="post" action="/fanart/{safe_profile_key}/{safe_item_id}/delete?next={home_fanart_next}" '
                 'class="admin-delete-form" onsubmit="return confirm(\'Delete this fanart? This cannot be undone.\');">'
                 '<button type="submit" class="icon-delete-button" title="Delete fanart" aria-label="Delete fanart">'
                 '<i class="fa-solid fa-trash" aria-hidden="true"></i>'

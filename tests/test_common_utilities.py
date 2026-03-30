@@ -80,7 +80,13 @@ def test_send_file_and_safe_static_path(
     safe_path = module.safe_static_path("styles.css")
     assert safe_path is not None
     assert safe_path.name == "styles.css"
+
+    fanart_safe_path = module.safe_static_path("fanart/images/example.avif")
+    assert fanart_safe_path is not None
+    assert fanart_safe_path == (module.FANART_DIR / "images" / "example.avif").resolve()
+
     assert module.safe_static_path("../../escape.txt") is None
+    assert module.safe_static_path("fanart/../../escape.txt") is None
 
 
 def test_route_helpers_and_user_menu(

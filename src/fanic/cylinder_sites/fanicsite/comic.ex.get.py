@@ -30,6 +30,7 @@ from fanic.cylinder_sites.editor_metadata import render_options_html
 from fanic.cylinder_sites.editor_metadata import selected_attr
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.repository import can_view_work
+from fanic.repository import get_local_user
 from fanic.repository import get_page_files
 from fanic.repository import get_work
 from fanic.repository import get_work_version_manifest
@@ -75,7 +76,11 @@ def _comment_cards_html(comments: Sequence[Mapping[str, object]]) -> str:
 
     parts: list[str] = []
     for comment in comments:
-        username = escape(str(comment.get("username", "anon")))
+        username_raw = str(comment.get("username", "anon")).strip()
+        display_name_raw = str(comment.get("commenter_display_name", "")).strip()
+        display_name = display_name_raw if display_name_raw else username_raw
+        commenter_href = f"/users/{quote(display_name, safe='')}"
+        commenter_html = f'<a href="{commenter_href}">{escape(display_name)}</a>'
         created_at = escape(str(comment.get("created_at", "")))
         chapter_number = comment.get("chapter_number")
         if chapter_number is None:
@@ -84,9 +89,37 @@ def _comment_cards_html(comments: Sequence[Mapping[str, object]]) -> str:
             scope = f"Chapter {escape(str(chapter_number))}"
         body = escape(str(comment.get("body", ""))).replace("\n", "<br />")
         parts.append(
-            f'<article class="card comment-card"><p class="comment-meta"><strong>{scope}</strong> by {username} on {created_at}</p><p>{body}</p></article>'
+            f'<article class="card comment-card"><p class="comment-meta"><strong>{scope}</strong> by {commenter_html} on {created_at}</p><p>{body}</p></article>'
         )
     return "".join(parts)
+
+
+def _display_name_for_username(
+    username: str,
+    *,
+    cache: dict[str, str],
+) -> str:
+    normalized_username = username.strip()
+    if not normalized_username:
+        return ""
+    cached = cache.get(normalized_username)
+    if cached is not None:
+        return cached
+
+    try:
+        local_user = get_local_user(normalized_username)
+    except Exception:
+        cache[normalized_username] = normalized_username
+        return normalized_username
+
+    if local_user is None:
+        cache[normalized_username] = normalized_username
+        return normalized_username
+
+    display_name = str(local_user.get("display_name", "")).strip()
+    resolved = display_name if display_name else normalized_username
+    cache[normalized_username] = resolved
+    return resolved
 
 
 def _work_versions_list_html(
@@ -99,12 +132,23 @@ def _work_versions_list_html(
     if not versions:
         return '<p class="profile-meta">No versions recorded yet.</p>'
 
+    actor_display_name_cache: dict[str, str] = {}
     items: list[str] = []
     for version in versions:
         version_id = escape(str(version.get("version_id", "")))
         created_at = escape(str(version.get("created_at", "")))
         action = escape(str(version.get("action", "")))
-        actor = escape(str(version.get("actor", "")))
+        actor_username = str(version.get("actor", "")).strip()
+        actor_display_name_raw = str(version.get("actor_display_name", "")).strip()
+        actor_display_name = (
+            actor_display_name_raw
+            if actor_display_name_raw
+            else _display_name_for_username(
+                actor_username,
+                cache=actor_display_name_cache,
+            )
+        )
+        actor = escape(actor_display_name)
         page_count = escape(str(version.get("page_count", 0)))
         selected_attr = ' aria-current="page"' if version_id == selected_version_id else ""
         version_href = f"/comic/{escape(work_id)}/versions/{quote(version_id)}"
@@ -125,13 +169,15 @@ def _version_metadata_html(version_manifest: dict[str, object]) -> str:
         work_block = {}
 
     work_block = cast(dict[str, Any], work_block)
+    actor_username = str(version_manifest.get("actor", "")).strip()
+    actor_display_name = _display_name_for_username(actor_username, cache={})
     rows = [
         ("Version ID", escape(str(version_manifest.get("version_id", "")))),
         ("Created", escape(str(version_manifest.get("created_at", "")))),
         ("Action", escape(str(version_manifest.get("action", "")))),
         (
             "Actor",
-            escape(str(version_manifest.get("actor", "") if version_manifest.get("actor", "") else "unknown")),
+            escape(actor_display_name if actor_display_name else "unknown"),
         ),
         ("Title", escape(str(work_block.get("title", "Untitled")))),
         ("Rating", escape(str(work_block.get("rating", "Not Rated")))),

@@ -38,6 +38,7 @@ DISPLAY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+$")
 class WorkComment(TypedDict):
     id: int
     username: str
+    commenter_display_name: NotRequired[str]
     chapter_number: int | None
     body: str
     created_at: str
@@ -104,6 +105,7 @@ class UserBookmarkRow(TypedDict):
     work_id: str
     work_title: str
     author_username: str
+    author_display_name: NotRequired[str]
     page_index: int
     message: str
     updated_at: str
@@ -115,6 +117,7 @@ class NotificationRow(TypedDict):
     id: int
     username: str
     actor_username: str
+    actor_display_name: NotRequired[str]
     work_id: str
     kind: str
     message: str
@@ -1399,10 +1402,17 @@ def list_work_comments(work_id: str) -> list[WorkComment]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, username, chapter_number, body, created_at
-            FROM work_comments
+            SELECT
+                c.id,
+                c.username,
+                COALESCE(NULLIF(u.display_name, ''), c.username) AS commenter_display_name,
+                c.chapter_number,
+                c.body,
+                c.created_at
+            FROM work_comments c
+            LEFT JOIN users u ON lower(u.username) = lower(c.username)
             WHERE work_id = ?
-            ORDER BY created_at DESC, id DESC
+            ORDER BY c.created_at DESC, c.id DESC
             """,
             (work_id,),
         ).fetchall()
@@ -1414,6 +1424,7 @@ def list_work_comments(work_id: str) -> list[WorkComment]:
             {
                 "id": int(row["id"]),
                 "username": str(row["username"]),
+                "commenter_display_name": str(row["commenter_display_name"]),
                 "chapter_number": chapter_number,
                 "body": str(row["body"]),
                 "created_at": str(row["created_at"]),
@@ -1505,10 +1516,21 @@ def list_user_notifications(
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, username, actor_username, work_id, kind, message, href, is_read, created_at
-            FROM notifications
-            WHERE username = ?
-            ORDER BY created_at DESC, id DESC
+            SELECT
+                n.id,
+                n.username,
+                n.actor_username,
+                COALESCE(NULLIF(u.display_name, ''), n.actor_username) AS actor_display_name,
+                n.work_id,
+                n.kind,
+                n.message,
+                n.href,
+                n.is_read,
+                n.created_at
+            FROM notifications n
+            LEFT JOIN users u ON lower(u.username) = lower(n.actor_username)
+            WHERE n.username = ?
+            ORDER BY n.created_at DESC, n.id DESC
             LIMIT ?
             """,
             (normalized_username, int(limit)),
@@ -1522,6 +1544,7 @@ def list_user_notifications(
                 "id": int(row["id"]),
                 "username": str(row["username"]),
                 "actor_username": str(row["actor_username"]),
+                "actor_display_name": str(row["actor_display_name"]),
                 "work_id": str(work_id_obj) if work_id_obj is not None else "",
                 "kind": str(row["kind"]),
                 "message": str(row["message"]),
@@ -2182,7 +2205,7 @@ def get_fanart_item_by_image(
     image_filename: str,
 ) -> FanartItemRow | None:
     normalized_uploader = uploader_username.strip()
-    normalized_image = image_filename.strip()
+    normalized_image = image_filename.strip().lstrip("/")
     if not normalized_uploader or not normalized_image:
         return None
 
@@ -2193,7 +2216,7 @@ def get_fanart_item_by_image(
                    width, height, created_at, updated_at
             FROM fanart_items
             WHERE uploader_username = ?
-              AND image_filename = ?
+                                                    AND ltrim(image_filename, '/') = ?
             """,
             (normalized_uploader, normalized_image),
         ).fetchone()
@@ -2224,7 +2247,7 @@ def get_fanart_item_by_thumb(
     thumb_filename: str,
 ) -> FanartItemRow | None:
     normalized_uploader = uploader_username.strip()
-    normalized_thumb = thumb_filename.strip()
+    normalized_thumb = thumb_filename.strip().lstrip("/")
     if not normalized_uploader or not normalized_thumb:
         return None
 
@@ -2235,7 +2258,7 @@ def get_fanart_item_by_thumb(
                    width, height, created_at, updated_at
             FROM fanart_items
             WHERE uploader_username = ?
-              AND thumb_filename = ?
+                                                    AND ltrim(thumb_filename, '/') = ?
             """,
             (normalized_uploader, normalized_thumb),
         ).fetchone()
@@ -2262,7 +2285,7 @@ def get_fanart_item_by_thumb(
 
 
 def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | None:
-    normalized_image = image_filename.strip()
+    normalized_image = image_filename.strip().lstrip("/")
     if not normalized_image:
         return None
 
@@ -2272,7 +2295,7 @@ def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | No
             SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
                    width, height, created_at, updated_at
             FROM fanart_items
-            WHERE image_filename = ?
+                 WHERE ltrim(image_filename, '/') = ?
             """,
             (normalized_image,),
         ).fetchone()
@@ -2299,7 +2322,7 @@ def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | No
 
 
 def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | None:
-    normalized_thumb = thumb_filename.strip()
+    normalized_thumb = thumb_filename.strip().lstrip("/")
     if not normalized_thumb:
         return None
 
@@ -2309,7 +2332,7 @@ def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | No
             SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
                    width, height, created_at, updated_at
             FROM fanart_items
-            WHERE thumb_filename = ?
+                 WHERE ltrim(thumb_filename, '/') = ?
             """,
             (normalized_thumb,),
         ).fetchone()
@@ -2336,11 +2359,13 @@ def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | No
 
 
 def fanart_file_for(image_name: str) -> Path:
-    return FANART_DIR / "images" / image_name
+    normalized_image = image_name.strip().lstrip("/")
+    return FANART_DIR / "images" / normalized_image
 
 
 def fanart_thumb_for(thumb_name: str) -> Path:
-    return FANART_DIR / "thumbs" / thumb_name
+    normalized_thumb = thumb_name.strip().lstrip("/")
+    return FANART_DIR / "thumbs" / normalized_thumb
 
 
 def delete_fanart_item(item_id: str) -> bool:
@@ -3300,6 +3325,7 @@ def list_user_bookmarks(
                 ub.work_id,
                 w.title,
                 COALESCE(w.uploader_username, '') AS author_username,
+                COALESCE(NULLIF(au.display_name, ''), COALESCE(w.uploader_username, '')) AS author_display_name,
                 ub.page_index,
                 ub.message,
                 ub.updated_at,
@@ -3307,6 +3333,7 @@ def list_user_bookmarks(
                 w.status
             FROM user_bookmarks ub
             JOIN works w ON w.id = ub.work_id
+            LEFT JOIN users au ON lower(au.username) = lower(w.uploader_username)
             WHERE ub.username = ?
             ORDER BY ub.updated_at DESC
             LIMIT ?
@@ -3322,6 +3349,7 @@ def list_user_bookmarks(
                 "work_id": str(row["work_id"]),
                 "work_title": str(row["title"]),
                 "author_username": str(row["author_username"]),
+                "author_display_name": str(row["author_display_name"]),
                 "page_index": _to_int(row["page_index"], 1),
                 "message": str(row["message"]),
                 "updated_at": str(row["updated_at"]),

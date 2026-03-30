@@ -27,6 +27,7 @@ from fanic.repository import UserRole
 from fanic.repository import get_local_user
 from fanic.repository import get_user_role
 from fanic.repository import get_user_theme_preference
+from fanic.settings import FANART_DIR
 from fanic.settings import STATIC_ASSETS_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
@@ -521,7 +522,19 @@ def send_file(response: ResponseLike, path: Path, filename: str | None = None) -
 
 
 def safe_static_path(rel_path: str) -> Path | None:
-    candidate = (ASSET_ROOT / rel_path).resolve()
+    normalized_rel_path = rel_path.strip().lstrip("/")
+
+    # Fanart media is stored under FANART_DIR but exposed at /static/fanart/*.
+    if normalized_rel_path.startswith("fanart/"):
+        fanart_rel_path = normalized_rel_path[len("fanart/") :]
+        candidate = (FANART_DIR / fanart_rel_path).resolve()
+        try:
+            _ = candidate.relative_to(FANART_DIR)
+        except ValueError:
+            return None
+        return candidate
+
+    candidate = (ASSET_ROOT / normalized_rel_path).resolve()
     try:
         _ = candidate.relative_to(ASSET_ROOT)
     except ValueError:

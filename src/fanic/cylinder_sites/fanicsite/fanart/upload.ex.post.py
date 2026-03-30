@@ -16,6 +16,7 @@ from fanic.cylinder_sites.common import validate_saved_upload_size
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
 from fanic.fanart import ingest_fanart_image
 from fanic.ingest import ModerationBlockedError
+from fanic.repository import get_local_user
 
 
 def _redirect(response: ResponseLike, location: str) -> ResponseLike:
@@ -125,7 +126,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     uploaded_msg = "uploaded-rating-elevated"
     if not bool(ingest_work_result.get("rating_auto_elevated", False)):
         uploaded_msg = "uploaded"
+    local_user = get_local_user(username)
+    profile_key = username
+    if local_user is not None:
+        display_name = str(local_user.get("display_name", "")).strip()
+        if display_name:
+            profile_key = display_name
     return _redirect(
         response,
-        f"/fanart/{quote(username, safe='')}?msg={uploaded_msg}",
+        f"/fanart/{quote(profile_key, safe='')}?msg={uploaded_msg}",
     )

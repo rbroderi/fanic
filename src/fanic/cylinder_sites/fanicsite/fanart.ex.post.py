@@ -12,6 +12,8 @@ from fanic.repository import create_fanart_gallery
 from fanic.repository import delete_fanart_item
 from fanic.repository import get_fanart_gallery_by_slug
 from fanic.repository import get_fanart_item
+from fanic.repository import get_local_user
+from fanic.repository import get_local_user_by_display_name
 from fanic.repository import replace_fanart_gallery_items
 
 
@@ -36,6 +38,50 @@ def _form_values(request: RequestLike, key: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def _safe_redirect_target(raw_target: str) -> str | None:
+    target = raw_target.strip()
+    if not target:
+        return None
+    if not target.startswith("/"):
+        return None
+    if target.startswith("//"):
+        return None
+    if "://" in target:
+        return None
+    return target
+
+
+def _resolve_owner_username(owner_key: str) -> str | None:
+    normalized_owner_key = owner_key.strip()
+    if not normalized_owner_key:
+        return None
+
+    local_user = get_local_user(normalized_owner_key)
+    if local_user is not None:
+        username = str(local_user.get("username", "")).strip()
+        if username:
+            return username
+
+    local_user = get_local_user_by_display_name(normalized_owner_key)
+    if local_user is not None:
+        username = str(local_user.get("username", "")).strip()
+        if username:
+            return username
+
+    return normalized_owner_key
+
+
+def _owner_profile_key(work_owner_username: str) -> str:
+    local_user = get_local_user(work_owner_username)
+    if local_user is None:
+        return work_owner_username
+
+    display_name = str(local_user.get("display_name", "")).strip()
+    if display_name:
+        return display_name
+    return work_owner_username
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tail = route_tail(request, ["fanart"])
     if tail is None:
@@ -52,7 +98,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if role_for_user(username) not in {"superadmin", "admin"}:
             return text_error(response, "Forbidden", 403)
 
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         work_id = tail[1].strip()
         if not work_owner_username or not work_id:
             return text_error(response, "Not found", 404)
@@ -65,13 +112,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         _ = delete_fanart_item(work_id)
+        next_target = _safe_redirect_target(request.args.get("next", ""))
+        if next_target:
+            return _redirect(response, next_target)
+        profile_key = _owner_profile_key(work_owner_username)
         return _redirect(
             response,
-            f"/fanart/{quote(work_owner_username, safe='')}?msg=deleted",
+            f"/fanart/{quote(profile_key, safe='')}?msg=deleted",
         )
 
     if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "create":
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         if not work_owner_username:
             return text_error(response, "Not found", 404)
 
@@ -81,10 +133,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         gallery_name = request.form.get("gallery_name", "").strip()
         gallery_description = request.form.get("gallery_description", "").strip()
+        profile_key = _owner_profile_key(work_owner_username)
         if not gallery_name:
             return _redirect(
                 response,
-                f"/fanart/{quote(work_owner_username, safe='')}?msg=gallery-name-required",
+                f"/fanart/{quote(profile_key, safe='')}?msg=gallery-name-required",
             )
 
         try:
@@ -96,20 +149,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         except ValueError:
             return _redirect(
                 response,
-                f"/fanart/{quote(work_owner_username, safe='')}?msg=gallery-invalid",
+                f"/fanart/{quote(profile_key, safe='')}?msg=gallery-invalid",
             )
 
         gallery_slug = str(gallery.get("slug", "")).strip()
         return _redirect(
             response,
-            (
-                f"/fanart/{quote(work_owner_username, safe='')}"
-                f"?gallery={quote(gallery_slug, safe='')}&msg=gallery-created"
-            ),
+            (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-created"),
         )
 
     if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "update-items":
-        work_owner_username = tail[0].strip()
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
         if not work_owner_username:
             return text_error(response, "Not found", 404)
 
@@ -128,12 +179,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             gallery_id=str(gallery.get("id", "")),
             fanart_item_ids=selected_item_ids,
         )
+        profile_key = _owner_profile_key(work_owner_username)
         return _redirect(
             response,
-            (
-                f"/fanart/{quote(work_owner_username, safe='')}"
-                f"?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"
-            ),
+            (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"),
         )
 
     return text_error(response, "Not found", 404)
