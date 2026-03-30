@@ -82,7 +82,12 @@ def _aria_current(is_current: bool) -> str:
     return 'aria-current="page"' if is_current else ""
 
 
-def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str:
+def _fanart_items_html(
+    items: Sequence[FanartItemRow],
+    *,
+    back_href: str,
+    can_delete: bool,
+) -> str:
     if not items:
         return "<p>No fanart matches found.</p>"
 
@@ -99,8 +104,10 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
 
         safe_display_name = escape(display_name)
         safe_item_id = quote(item_id, safe="")
-        uploader_href = f"/fanart/{quote(uploader, safe='')}"
-        viewer_href = f"{uploader_href}/reader?item_id={safe_item_id}&back={quote(back_href, safe='')}"
+        safe_uploader = quote(uploader, safe="")
+        uploader_gallery_href = f"/fanart/{quote(uploader, safe='')}"
+        uploader_profile_href = f"/users/{quote(display_name, safe='')}"
+        viewer_href = f"{uploader_gallery_href}/reader?item_id={safe_item_id}&back={quote(back_href, safe='')}"
         title_raw = str(row.get("title", "Untitled"))
         title = escape(title_raw)
         summary_raw = str(row.get("summary", "")).strip()
@@ -120,14 +127,26 @@ def _fanart_items_html(items: Sequence[FanartItemRow], *, back_href: str) -> str
         else:
             thumb_src = "/static/logo.png"
 
+        delete_html = ""
+        if can_delete:
+            delete_html = (
+                f'<form method="post" action="/fanart/{safe_uploader}/{safe_item_id}/delete" '
+                'class="admin-delete-form" onsubmit="return confirm(\'Delete this fanart? This cannot be undone.\');">'
+                '<button type="submit" class="icon-delete-button" title="Delete fanart" aria-label="Delete fanart">'
+                '<i class="fa-solid fa-trash" aria-hidden="true"></i>'
+                "</button>"
+                "</form>"
+            )
+
         parts.append(
             f'''
       <article class="card work-card">
+        {delete_html}
                 <a href="{viewer_href}">
             <img class="work-cover" src="{thumb_src}" alt="{safe_display_name} fanart preview" loading="lazy" />
         </a>
         <h3><a href="{viewer_href}">{title}</a></h3>
-                <h3><a href="{uploader_href}">@{safe_display_name}</a></h3>
+                <h3><a href="{uploader_profile_href}">@{safe_display_name}</a></h3>
         <p class="work-meta">{rating_html} | {created_at}</p>
         <p>{summary}</p>
         <p><a href="{report_href}">Report</a></p>
@@ -175,7 +194,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "sort": sort,
         }
         fanart_items = list_fanart_items(filters=fanart_filters, limit=120)
-        work_grid_html = _fanart_items_html(fanart_items, back_href=back_href)
+        work_grid_html = _fanart_items_html(
+            fanart_items,
+            back_href=back_href,
+            can_delete=can_delete,
+        )
     else:
         works = [work for work in list_works(filters) if can_view_work(username, work)]
         work_grid_html = _work_grid_html(works, can_delete, back_href=back_href)

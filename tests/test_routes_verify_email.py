@@ -12,6 +12,16 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def _allow_secure_get(monkeypatch: Any, module: ModuleType) -> None:
+    monkeypatch.setattr(module, "enforce_https_termination", lambda _request, _response: True)
+
+
+def _allow_secure_post(monkeypatch: Any, module: ModuleType) -> None:
+    _allow_secure_get(monkeypatch, module)
+    monkeypatch.setattr(module, "validate_csrf", lambda _request: True)
+    monkeypatch.setattr(module, "check_post_rate_limit", lambda _request: 0)
+
+
 def test_verify_email_get_renders_when_unverified(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -22,6 +32,7 @@ def test_verify_email_get_renders_when_unverified(
         "src/fanic/cylinder_sites/fanicsite/account/verify-email.ex.get.py",
         "fanicsite_account_verify_email_ex_get_render_test",
     )
+    _allow_secure_get(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "get_auth0_email_verified_for_username", lambda _username: False)
@@ -79,6 +90,7 @@ def test_verify_email_get_redirects_to_onboarding_when_verified(
         "src/fanic/cylinder_sites/fanicsite/account/verify-email.ex.get.py",
         "fanicsite_account_verify_email_ex_get_verified_onboarding_test",
     )
+    _allow_secure_get(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "get_auth0_email_verified_for_username", lambda _username: True)
@@ -102,6 +114,7 @@ def test_verify_email_post_refresh_redirects_to_check_email_when_still_unverifie
         "src/fanic/cylinder_sites/fanicsite/account/verify-email.ex.post.py",
         "fanicsite_account_verify_email_ex_post_unverified_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "get_auth0_email_verified_for_username", lambda _username: False)
@@ -124,6 +137,7 @@ def test_verify_email_post_refresh_redirects_to_onboarding_when_verified(
         "src/fanic/cylinder_sites/fanicsite/account/verify-email.ex.post.py",
         "fanicsite_account_verify_email_ex_post_verified_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "get_auth0_email_verified_for_username", lambda _username: True)

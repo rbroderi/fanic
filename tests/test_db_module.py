@@ -93,6 +93,61 @@ def test_ensure_runtime_schema_creates_auth_identity_table_and_indexes() -> None
         connection.close()
 
 
+def test_ensure_runtime_schema_normalizes_legacy_fanart_paths() -> None:
+    ensure_runtime_schema = _ensure_runtime_schema_fn()
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.execute(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                email TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE fanart_items (
+                id TEXT PRIMARY KEY,
+                uploader_username TEXT NOT NULL,
+                title TEXT NOT NULL,
+                image_filename TEXT NOT NULL,
+                thumb_filename TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO fanart_items (id, uploader_username, title, image_filename, thumb_filename)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "item-1",
+                "alice",
+                "Sky",
+                "/_objects/aa/image.avif",
+                "/_objects/aa/thumb.avif",
+            ),
+        )
+
+        ensure_runtime_schema(connection)
+
+        row = connection.execute(
+            "SELECT image_filename, thumb_filename FROM fanart_items WHERE id = ?",
+            ("item-1",),
+        ).fetchone()
+        assert row is not None
+        assert str(row[0]) == "_objects/aa/image.avif"
+        assert str(row[1]) == "_objects/aa/thumb.avif"
+    finally:
+        connection.close()
+
+
 def test_initialize_database_reset_recreates_database(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

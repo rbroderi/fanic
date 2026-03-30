@@ -24,6 +24,16 @@ class DummyUpload:
         Path(dst).write_text(self._content, encoding="utf-8")
 
 
+def _allow_secure_get(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> None:
+    monkeypatch.setattr(module, "enforce_https_termination", lambda _request, _response: True)
+
+
+def _allow_secure_post(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> None:
+    _allow_secure_get(monkeypatch, module)
+    monkeypatch.setattr(module, "validate_csrf", lambda _request: True)
+    monkeypatch.setattr(module, "check_post_rate_limit", lambda _request: 0)
+
+
 def test_profile_post_saves_theme_toml(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -34,6 +44,7 @@ def test_profile_post_saves_theme_toml(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     def fake_current_user(request: Any) -> str:
         _ = request
@@ -378,6 +389,7 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_disable_theme_test",
     )
+    _allow_secure_post(monkeypatch, post_module)
     common_module = load_route_module(
         "src/fanic/cylinder_sites/common.py",
         "fanicsite_common_disable_theme_test",
@@ -449,6 +461,7 @@ def test_profile_post_onboarding_saves_display_name_and_age_gate(
         "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.post.py",
         "fanicsite_user_onboarding_ex_post_onboarding_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
@@ -493,6 +506,7 @@ def test_profile_post_onboarding_rejects_repeat_submission(
         "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.post.py",
         "fanicsite_user_onboarding_ex_post_onboarding_repeat_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(
@@ -524,6 +538,7 @@ def test_profile_post_display_name_saves_successfully(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_display_name_saved_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
 
@@ -571,6 +586,7 @@ def test_profile_post_display_name_rejects_invalid_name(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_display_name_invalid_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
 
@@ -612,6 +628,7 @@ def test_profile_post_display_name_rejects_taken_name(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_display_name_taken_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
 
@@ -653,6 +670,7 @@ def test_profile_post_display_name_requires_age_selection(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
         "fanicsite_user_profile_ex_post_display_name_requires_age_test",
     )
+    _allow_secure_post(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
 
@@ -808,6 +826,7 @@ def test_onboarding_get_shows_page_when_required(
         "src/fanic/cylinder_sites/fanicsite/user/onboarding.ex.get.py",
         "fanicsite_user_onboarding_ex_get_required_test",
     )
+    _allow_secure_get(monkeypatch, module)
 
     monkeypatch.setattr(module, "current_user", lambda _request: "alice")
     monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)

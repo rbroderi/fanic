@@ -39,15 +39,17 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
 
 
 def _standardized_download_filename(
-    work_owner_username: str,
+    work_owner_name: str,
     title: str,
     image_filename: str,
 ) -> str:
-    owner_slug = slugify(work_owner_username).replace("-", "_")
+    owner_slug = slugify(work_owner_name).replace("-", "_")
     title_slug = slugify(title).replace("-", "_")
+    safe_owner = owner_slug if owner_slug else "fanart"
+    safe_title = title_slug if title_slug else "untitled"
     suffix = Path(image_filename).suffix.lower()
     safe_suffix = suffix if suffix else ".avif"
-    return f"{owner_slug}_{title_slug}{safe_suffix}"
+    return f"{safe_owner}_{safe_title}{safe_suffix}"
 
 
 def _work_grid_html(
@@ -193,17 +195,18 @@ def _gallery_manage_form_html(
     return "".join(lines)
 
 
-def _gallery_download_filename(work_owner_username: str) -> str:
-    owner_slug = slugify(work_owner_username).replace("-", "_")
+def _gallery_download_filename(work_owner_name: str) -> str:
+    owner_slug = slugify(work_owner_name).replace("-", "_")
     safe_owner = owner_slug if owner_slug else "fanart"
     return f"{safe_owner}_fanart_gallery.cbz"
 
 
 def _build_gallery_cbz_bytes(
-    work_owner_username: str,
+    work_owner_name: str,
     works: Sequence[FanartItemRow],
-) -> bytes:
+) -> tuple[bytes, int]:
     used_names: dict[str, int] = {}
+    added_files = 0
     payload = BytesIO()
 
     with ZipFile(payload, "w", compression=ZIP_DEFLATED) as archive:
@@ -217,7 +220,7 @@ def _build_gallery_cbz_bytes(
                 continue
 
             base_name = _standardized_download_filename(
-                work_owner_username,
+                work_owner_name,
                 str(work.get("title", "untitled")),
                 image_name,
             )
@@ -231,8 +234,9 @@ def _build_gallery_cbz_bytes(
             used_names[base_name] = seen + 1
 
             archive.write(image_path, arcname=archive_name)
+            added_files += 1
 
-    return payload.getvalue()
+    return payload.getvalue(), added_files
 
 
 def _work_reader_bootstrap(
@@ -310,7 +314,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         download_filename = _standardized_download_filename(
-            str(work.get("uploader_username", "")),
+            str(work.get("uploader_display_name", "")).strip()
+            if str(work.get("uploader_display_name", "")).strip()
+            else str(work.get("uploader_username", "")).strip(),
             str(work.get("title", "untitled")),
             file_name,
         )
@@ -323,19 +329,23 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         gallery_slug = request.args.get("gallery", "").strip()
         works = list_fanart_items_by_uploader(work_owner_username, limit=500)
+        owner_display_name = _owner_display_name(work_owner_username, works)
         if gallery_slug:
             gallery = get_fanart_gallery_by_slug(work_owner_username, gallery_slug)
             if gallery is not None:
                 gallery_item_ids = list_fanart_gallery_item_ids(str(gallery.get("id", "")))
                 works = [work for work in works if str(work.get("id", "")) in gallery_item_ids]
-        archive_bytes = _build_gallery_cbz_bytes(work_owner_username, works)
-        if not archive_bytes:
+        archive_bytes, archive_file_count = _build_gallery_cbz_bytes(
+            owner_display_name,
+            works,
+        )
+        if archive_file_count < 1:
             return text_error(response, "Not found", 404)
 
         response.status_code = 200
         response.content_type = "application/vnd.comicbook+zip"
         response.headers["Content-Disposition"] = (
-            f'attachment; filename="{_gallery_download_filename(work_owner_username)}"'
+            f'attachment; filename="{_gallery_download_filename(owner_display_name)}"'
         )
         response.set_data(archive_bytes)
         return response

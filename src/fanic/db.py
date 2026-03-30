@@ -7,6 +7,7 @@ from types import TracebackType
 from typing import Literal
 from typing import override
 
+from fanic.db_migration import run_runtime_migrations
 from fanic.settings import CBZ_DIR
 from fanic.settings import DATA_ROOT
 from fanic.settings import DB_PATH
@@ -150,6 +151,8 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         """
     )
 
+    run_runtime_migrations(connection, _table_exists)
+
 
 def get_connection() -> sqlite3.Connection:
     ensure_storage_dirs()
@@ -187,6 +190,18 @@ def initialize_database(schema_path: Path = SCHEMA_PATH, *, reset: bool = False)
         connection.execute("PRAGMA synchronous = NORMAL;")
         connection.execute("PRAGMA busy_timeout = 5000;")
         connection.executescript(sql)
+        _ensure_runtime_schema(connection)
+    return 0
+
+
+def run_database_migrations() -> int:
+    ensure_storage_dirs()
+    with sqlite3.connect(DB_PATH, factory=_ManagedConnection) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("PRAGMA journal_mode = WAL;")
+        connection.execute("PRAGMA synchronous = NORMAL;")
+        connection.execute("PRAGMA busy_timeout = 5000;")
         _ensure_runtime_schema(connection)
     return 0
 

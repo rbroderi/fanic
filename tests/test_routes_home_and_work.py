@@ -128,6 +128,7 @@ def test_home_route_renders_fanart_tab(
         ]
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "superadmin")
     monkeypatch.setattr(module, "list_fanart_items", fake_list_fanart_items)
 
     def fake_render_html_template(
@@ -158,7 +159,9 @@ def test_home_route_renders_fanart_tab(
 
     assert result.status_code == 200
     assert b"/fanart/alice/reader?item_id=fanart-1" in result.data
-    assert b'<h3><a href="/fanart/alice">@AliceArtist</a></h3>' in result.data
+    assert b'<h3><a href="/users/AliceArtist">@AliceArtist</a></h3>' in result.data
+    assert b'class="admin-delete-form"' in result.data
+    assert b"/fanart/alice/fanart-1/delete" in result.data
     assert b"/static/fanart/thumbs/_objects/ab/thumb.avif" in result.data
     assert (
         b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
@@ -288,6 +291,7 @@ def test_fanart_route_gallery_and_media(
         lambda *_: {
             "id": "art-1",
             "uploader_username": "alice",
+            "uploader_display_name": "AliceArtist",
             "title": "Sky",
         },
     )
@@ -314,7 +318,7 @@ def test_fanart_route_gallery_and_media(
 
     assert download_result.status_code == 200
     assert download_result.data == b"image"
-    assert captured["filename"] == "alice_sky.avif"
+    assert captured["filename"] == "aliceartist_sky.avif"
 
     cbz_download_request = dummy_request(path="/fanart/alice/download/cbz")
     cbz_download_response = dummy_response()
@@ -322,12 +326,12 @@ def test_fanart_route_gallery_and_media(
 
     assert cbz_download_result.status_code == 200
     assert cbz_download_result.content_type == "application/vnd.comicbook+zip"
-    assert cbz_download_result.headers["Content-Disposition"] == 'attachment; filename="alice_fanart_gallery.cbz"'
+    assert cbz_download_result.headers["Content-Disposition"] == 'attachment; filename="aliceartist_fanart_gallery.cbz"'
 
     with ZipFile(BytesIO(cbz_download_result.data), "r") as archive:
         names = archive.namelist()
-        assert names == ["alice_sky.avif"]
-        assert archive.read("alice_sky.avif") == b"image"
+        assert names == ["aliceartist_sky.avif"]
+        assert archive.read("aliceartist_sky.avif") == b"image"
 
 
 def test_fanart_route_gallery_grouping_filter(

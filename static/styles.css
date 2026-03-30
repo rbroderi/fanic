@@ -1227,6 +1227,7 @@ a {
   bottom: 0;
   width: 24%;
   cursor: pointer;
+  z-index: 1;
 }
 
 .reader-hit.left {
