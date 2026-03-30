@@ -18,6 +18,15 @@ profile fanic flags=(attach_disconnected,mediate_deleted) {
   /usr/bin/aa-exec ixr,
   /opt/fanic/.venv/bin/python rix,
   /home/fanic/.local/share/uv/python/** rix,
+  /usr/bin/npm ixr,
+  /usr/share/nodejs/npm/bin/npm-cli.js ixr,
+  /usr/bin/node ixr,
+  /usr/bin/nodejs ixr,
+  /bin/sh ixr,
+  /bin/dash ixr,
+  /usr/bin/dash ixr,
+  /opt/fanic/node_modules/.bin/tsc ixr,
+  /opt/fanic/node_modules/typescript/bin/tsc ixr,
 
   # Read application code and dependencies.
   /opt/fanic/ r,
@@ -29,6 +38,8 @@ profile fanic flags=(attach_disconnected,mediate_deleted) {
   /home/fanic/.local/share/uv/** mr,
   /home/fanic/.cache/ rw,
   /home/fanic/.cache/** rwk,
+  /home/fanic/.npm/ rw,
+  /home/fanic/.npm/** rwk,
   /home/fanic/.cache/clip/ rw,
   /home/fanic/.cache/clip/** rwkl,
   /usr/** mr,
@@ -51,6 +62,9 @@ profile fanic flags=(attach_disconnected,mediate_deleted) {
   # Runtime write locations.
   /opt/fanic/runtime/ rw,
   /opt/fanic/runtime/** rwk,
+  /opt/fanic/static/ rw,
+  /opt/fanic/static/*.js rwk,
+  /opt/fanic/static/*.js.map rwk,
   /run/fanic/ rw,
   /run/fanic/** rwk,
   /var/log/fanic/ rw,
@@ -64,7 +78,11 @@ profile fanic flags=(attach_disconnected,mediate_deleted) {
   /mnt/storage/ rw,
   /mnt/storage/** rwk,
 
-  # Deny shell execution from inside the service domain.
-  deny /bin/** x,
-  deny /usr/bin/** x,
+  # Keep interactive shell/tool execution restricted.
+  deny /bin/bash x,
+  deny /usr/bin/bash x,
+  deny /bin/zsh x,
+  deny /usr/bin/zsh x,
+  deny /bin/fish x,
+  deny /usr/bin/fish x,
 }

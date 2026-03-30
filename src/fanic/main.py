@@ -1,19 +1,36 @@
 import argparse
 import atexit
+import errno
 import functools
 import logging
 import shutil
 import signal
 import subprocess
+import traceback
 from collections.abc import Callable
 from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 
 from fanic.db import initialize_database
+from fanic.db import run_database_migrations
 from fanic.settings import get_settings
 
 OK = 0
 ERROR = 1
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_STARTUP_LOG_PATH = _REPO_ROOT / "startup.log"
+
+
+def _append_startup_log(message: str) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    line = f"[{timestamp}Z] {message}\n"
+    try:
+        _STARTUP_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _STARTUP_LOG_PATH.open("a", encoding="utf-8") as handle:
+            _ = handle.write(line)
+    except OSError:
+        pass
 
 
 def once_only(func: Callable[..., int]) -> Callable[..., int]:
@@ -52,6 +69,7 @@ def _compile_frontend_assets() -> int:
     repo_root = Path(__file__).resolve().parent.parent.parent
     package_json = repo_root / "package.json"
     if not package_json.exists():
+        _append_startup_log("frontend compile skipped: package.json not found")
         return OK
 
     npm_path = shutil.which("npm")
@@ -60,15 +78,31 @@ def _compile_frontend_assets() -> int:
             "frontend compile skipped: npm not found. Install Node.js/npm or remove package.json if unused.",
             flush=True,
         )
+        _append_startup_log("frontend compile failed: npm not found")
         return ERROR
 
-    completed = subprocess.run(
-        [npm_path, "run", "frontend:build"],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            [npm_path, "run", "frontend:build"],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        if exc.errno == errno.EACCES:
+            print(
+                (
+                    "frontend compile skipped: npm exists but execution is denied "
+                    "(check AppArmor/permissions). Using existing static assets."
+                ),
+                flush=True,
+            )
+            _append_startup_log("frontend compile skipped: npm permission denied, using existing static assets")
+            return OK
+        print(f"frontend compile failed: {exc}", flush=True)
+        _append_startup_log(f"frontend compile failed: {exc}")
+        return ERROR
 
     if completed.returncode != 0:
         output = completed.stdout if completed.stdout else ""
@@ -78,9 +112,11 @@ def _compile_frontend_assets() -> int:
         if errors:
             print(errors, flush=True)
         print("frontend compile failed", flush=True)
+        _append_startup_log(f"frontend compile failed: exit code {completed.returncode}")
         return ERROR
 
     print("frontend compile complete", flush=True)
+    _append_startup_log("frontend compile complete")
     return OK
 
 
@@ -90,6 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_db = subcommands.add_parser("init-db", help="Initialize SQLite schema")
     init_db.set_defaults(command="init-db")
+
+    migrate_db = subcommands.add_parser(
+        "migrate-db",
+        help="Run runtime database migrations",
+    )
+    migrate_db.set_defaults(command="migrate-db")
 
     ingest = subcommands.add_parser("ingest", help="Ingest a CBZ archive")
     ingest.add_argument("cbz", type=Path, help="Path to the source CBZ file")
@@ -178,11 +220,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    _append_startup_log(f"command start: {args.command}")
 
     match args.command:
         case "init-db":
             result_code = initialize_database(reset=True)
             print("Database and storage reset, then schema initialized")
+            return result_code
+        case "migrate-db":
+            result_code = run_database_migrations()
+            print("Runtime database migrations applied")
             return result_code
         case "ingest":
             from fanic.ingest import ingest_cbz
@@ -210,10 +257,17 @@ def main() -> int:
         case "serve":
             from fanic.cylinder_main import serve as serve
 
+            if args.unix_socket:
+                _append_startup_log(f"serve requested: unix_socket={args.unix_socket} perms={args.unix_socket_perms}")
+            else:
+                _append_startup_log(f"serve requested: host={args.host} port={args.port}")
+
             compile_result = _compile_frontend_assets()
             if compile_result != OK:
+                _append_startup_log("serve aborted: frontend compile failed")
                 return compile_result
 
+            _append_startup_log("serve starting web server")
             return serve(
                 host=args.host,
                 port=args.port,
@@ -311,9 +365,16 @@ if __name__ == "__main__":
     _install_signal_handlers()
     main_error = OK
     try:
+        _append_startup_log("process boot")
         main_error = main()
     except KeyboardInterrupt:
+        _append_startup_log("shutdown requested: keyboard interrupt")
         pass
+    except Exception as exc:
+        _append_startup_log(f"fatal startup error: {exc}")
+        _append_startup_log(traceback.format_exc())
+        raise
     finally:
         clean_error = run_cleanup_once()
+        _append_startup_log(f"process exit: main_error={main_error} cleanup_error={clean_error}")
     raise SystemExit(max(main_error, clean_error))
