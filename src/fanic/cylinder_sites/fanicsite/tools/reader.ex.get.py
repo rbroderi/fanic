@@ -159,6 +159,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
             "__READER_BOOKMARK_HIDDEN_ATTR__": "",
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-            "__READER_SCRIPT_SRC__": "/static/reader.js",
+            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260330-download-click-fix",
         },
     )

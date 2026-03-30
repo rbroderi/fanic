@@ -2292,10 +2292,23 @@ def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | No
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-                 WHERE ltrim(image_filename, '/') = ?
+            SELECT
+                fi.id,
+                fi.uploader_username,
+                COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name,
+                fi.title,
+                fi.summary,
+                fi.fandom,
+                fi.rating,
+                fi.image_filename,
+                fi.thumb_filename,
+                fi.width,
+                fi.height,
+                fi.created_at,
+                fi.updated_at
+            FROM fanart_items fi
+            LEFT JOIN users u ON lower(u.username) = lower(fi.uploader_username)
+            WHERE ltrim(fi.image_filename, '/') = ?
             """,
             (normalized_image,),
         ).fetchone()
@@ -2308,6 +2321,7 @@ def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | No
     return {
         "id": str(row["id"]),
         "uploader_username": str(row["uploader_username"]),
+        "uploader_display_name": str(row["uploader_display_name"]),
         "title": str(row["title"]),
         "summary": str(row["summary"]),
         "fandom": str(row["fandom"]),

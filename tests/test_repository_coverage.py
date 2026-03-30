@@ -601,6 +601,11 @@ def test_fanart_crud_and_lookup_helpers(
     item_by_image = repository.get_fanart_item_by_image("alice", "_objects/ab/image.avif")
     assert item_by_image is not None
     assert item_by_image["id"] == "fanart-1"
+
+    item_by_image_filename = repository.get_fanart_item_by_image_filename("_objects/ab/image.avif")
+    assert item_by_image_filename is not None
+    assert item_by_image_filename["uploader_display_name"] == "alice"
+
     item_by_image_legacy = repository.get_fanart_item_by_image("alice", "/_objects/ab/image.avif")
     assert item_by_image_legacy is not None
     assert item_by_image_legacy["id"] == "fanart-1"
