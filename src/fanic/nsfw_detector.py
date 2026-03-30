@@ -15,6 +15,11 @@ _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
         "a romantic but non-sexual artwork",
         "a cartoon character scene with no erotic content",
         "a family friendly anime or manga panel",
+        "a beach or swimsuit anime image with no nudity and no sexual act",
+        "a pinup style illustration that is still non-explicit and not pornographic",
+        "a suggestive but safe-for-work drawing with covered genitals and chest",
+        "an artistic figure drawing with no visible genitals and no sexual activity",
+        "a fashion, cosplay, or glamour illustration that is not explicit",
     ],
     "explicit": [
         "a pornographic, explicit nudity image",
@@ -27,6 +32,11 @@ _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
         "erotic porn scene with exposed nipples and genitals",
         "fetish artwork with clear sexual act",
         "adult explicit hentai or pornographic comic panel",
+        "close-up of explicit sexual body parts including genitals",
+        "female or male nipples and genitals clearly exposed for sexual intent",
+        "sex act depiction including penetration, oral sex, or masturbation",
+        "hardcore adult content designed to be sexually arousing",
+        "porn comic panel with explicit genital detail and sexual activity",
     ],
 }
 _NSFW_CLASS_NAMES = list(_NSFW_PROMPTS_BY_CLASS.keys())

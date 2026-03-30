@@ -225,6 +225,47 @@ function bindProfileDisplayNameValidation() {
   validateDisplayName();
 }
 
+function bindCopyLinkButtons() {
+  const copyLinks = Array.from(document.querySelectorAll<HTMLElement>("[data-copy-url]"));
+  for (const copyLink of copyLinks) {
+    if (copyLink.dataset.copyBound === "true") {
+      continue;
+    }
+
+    copyLink.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const rawUrl = copyLink.dataset.copyUrl ? copyLink.dataset.copyUrl.trim() : "";
+      if (!rawUrl) {
+        return;
+      }
+
+      const absoluteUrl = rawUrl.startsWith("/") ? `${window.location.origin}${rawUrl}` : rawUrl;
+      try {
+        await navigator.clipboard.writeText(absoluteUrl);
+      } catch {
+        const helper = document.createElement("textarea");
+        helper.value = absoluteUrl;
+        helper.setAttribute("readonly", "readonly");
+        helper.style.position = "fixed";
+        helper.style.opacity = "0";
+        document.body.appendChild(helper);
+        helper.focus();
+        helper.select();
+        document.execCommand("copy");
+        document.body.removeChild(helper);
+      }
+
+      const originalText = copyLink.textContent ? copyLink.textContent : "Get link";
+      copyLink.textContent = "Copied";
+      window.setTimeout(() => {
+        copyLink.textContent = originalText;
+      }, 1200);
+    });
+
+    copyLink.dataset.copyBound = "true";
+  }
+}
+
 applyTheme(preferredTheme());
 ensureUserMenuNotificationLink();
 ensureUserMenuFeedbackLink();
@@ -234,6 +275,7 @@ for (const toggle of themeToggles()) {
 }
 bindCustomThemePreferenceToggle();
 bindProfileDisplayNameValidation();
+bindCopyLinkButtons();
 applyTheme(preferredTheme());
 
 if (

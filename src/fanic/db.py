@@ -104,6 +104,51 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         ON auth_identities(email)
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fanart_galleries (
+            id TEXT PRIMARY KEY,
+            uploader_username TEXT NOT NULL,
+            name TEXT NOT NULL,
+            slug TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (uploader_username, slug)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fanart_gallery_items (
+            gallery_id TEXT NOT NULL,
+            fanart_item_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (gallery_id, fanart_item_id),
+            FOREIGN KEY (gallery_id) REFERENCES fanart_galleries(id) ON DELETE CASCADE,
+            FOREIGN KEY (fanart_item_id) REFERENCES fanart_items(id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_galleries_uploader_created_at
+        ON fanart_galleries(uploader_username, created_at DESC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_gallery_position
+        ON fanart_gallery_items(gallery_id, position ASC, created_at ASC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_fanart_item
+        ON fanart_gallery_items(fanart_item_id)
+        """
+    )
 
 
 def get_connection() -> sqlite3.Connection:
