@@ -386,6 +386,8 @@ def _read_json_via_selenium_browser_auth(
     page_count: int,
     page_count_auto: bool,
     user_agent: str,
+    user_data_dir: str,
+    profile_directory: str,
 ) -> tuple[dict[str, Any], str]:
     try:
         from selenium import webdriver
@@ -400,6 +402,12 @@ def _read_json_via_selenium_browser_auth(
 
     chrome_options = Options()
     chrome_options.add_argument(f"--user-agent={user_agent}")
+    normalized_user_data_dir = user_data_dir.strip()
+    normalized_profile_directory = profile_directory.strip()
+    if normalized_user_data_dir:
+        chrome_options.add_argument(f"--user-data-dir={normalized_user_data_dir}")
+    if normalized_profile_directory:
+        chrome_options.add_argument(f"--profile-directory={normalized_profile_directory}")
     # Reduce common automation fingerprints; still requires manual challenge solve.
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -440,6 +448,22 @@ def _read_json_via_selenium_browser_auth(
         if resolved_page_count <= 0:
             resolved_page_count = 1
 
+        def _resolve_challenge_for_current_page(page_label: str) -> str:
+            max_attempts = 5
+            for attempt in range(1, max_attempts + 1):
+                page_html = driver.page_source
+                if not _is_ao3_bot_challenge_html(page_html):
+                    return page_html
+                input(
+                    f"Challenge detected on {page_label}. Solve it in browser and press Enter "
+                    f"(attempt {attempt}/{max_attempts})... "
+                )
+            raise RuntimeError(
+                f"AO3 challenge persisted on {page_label} after multiple attempts. "
+                "Try Selenium with your real Chrome profile via "
+                "--selenium-user-data-dir and --selenium-profile-directory."
+            )
+
         tag_counts: dict[str, int] = {}
         with alive_bar(
             resolved_page_count,
@@ -448,8 +472,7 @@ def _read_json_via_selenium_browser_auth(
         ) as bar:
             for page in range(1, resolved_page_count + 1):
                 driver.get(_ao3_freeform_search_url(page))
-                page_html = driver.page_source
-                _assert_not_ao3_bot_challenge_html(page_html)
+                page_html = _resolve_challenge_for_current_page(f"page {page}")
                 page_tags = _extract_tag_counts_from_search_html(page_html)
                 for name, count in page_tags.items():
                     tag_counts[name] = count
@@ -723,6 +746,22 @@ def main() -> int:
         help="User-Agent header used in interactive browser-auth mode.",
     )
     parser.add_argument(
+        "--selenium-user-data-dir",
+        default="",
+        help=(
+            "Optional Chrome user-data-dir for Selenium browser mode. "
+            "Useful to reuse a local browser profile that already passed challenge."
+        ),
+    )
+    parser.add_argument(
+        "--selenium-profile-directory",
+        default="",
+        help=(
+            "Optional Chrome profile directory name for Selenium mode "
+            "(for example: Default or Profile 1)."
+        ),
+    )
+    parser.add_argument(
         "--out-dir",
         type=Path,
         default=REPO_ROOT / "logs",
@@ -773,6 +812,8 @@ def main() -> int:
                 page_count=args.ao3tags_page_count,
                 page_count_auto=args.ao3tags_page_count_auto,
                 user_agent=args.ao3_user_agent,
+                user_data_dir=args.selenium_user_data_dir,
+                profile_directory=args.selenium_profile_directory,
             )
         else:
             resolved_page_count = (

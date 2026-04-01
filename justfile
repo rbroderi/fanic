@@ -284,6 +284,17 @@ import-ao3tags-live-selenium:
 import-ao3tags-live-selenium:
     uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --out-dir logs
 
+# Selenium mode with explicit Chrome profile reuse (best for local Windows runs).
+# Usage example:
+#   just import-ao3tags-live-selenium-profile "C:\\Users\\you\\AppData\\Local\\Google\\Chrome\\User Data" "Default"
+[windows]
+import-ao3tags-live-selenium-profile user_data_dir profile_dir="Default":
+    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --selenium-user-data-dir "{{ user_data_dir }}" --selenium-profile-directory "{{ profile_dir }}" --out-dir logs
+
+[unix]
+import-ao3tags-live-selenium-profile user_data_dir profile_dir="Default":
+    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --selenium-user-data-dir "{{ user_data_dir }}" --selenium-profile-directory "{{ profile_dir }}" --out-dir logs
+
 # Apply generated AO3 freeform SQL into the Fanic SQLite database.
 # Usage examples:
 #   just apply-ao3tags-sql
