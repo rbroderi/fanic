@@ -297,6 +297,18 @@ apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
 apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
     uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; sql_file = Path(r'{{ sql_path }}').expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
 
+# Apply a transferred AO3 SQL file on this server (apply-only workflow).
+# Usage examples:
+#   just import-ao3tags-from-file-and-apply
+#   just import-ao3tags-from-file-and-apply ./logs/ao3_freeform_tags.fanic.upsert.sql
+[windows]
+import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
+    just apply-ao3tags-sql "{{ sql_path }}"
+
+[unix]
+import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
+    just apply-ao3tags-sql "{{ sql_path }}"
+
 # Convenience command: refresh live AO3 tags, export SQL, then apply to DB.
 # Usage examples:
 #   just import-ao3tags-live-and-apply

@@ -400,6 +400,10 @@ def _read_json_via_selenium_browser_auth(
 
     chrome_options = Options()
     chrome_options.add_argument(f"--user-agent={user_agent}")
+    # Reduce common automation fingerprints; still requires manual challenge solve.
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
@@ -408,9 +412,24 @@ def _read_json_via_selenium_browser_auth(
             "\nSelenium browser opened. Complete any AO3 anti-bot challenge in that window, "
             "then return here."
         )
-        input("Press Enter after AO3 page is fully visible... ")
 
-        page_source = driver.page_source
+        page_source = ""
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            input(
+                f"Press Enter after AO3 page is visible "
+                f"(attempt {attempt}/{max_attempts})... "
+            )
+            page_source = driver.page_source
+            if not _is_ao3_bot_challenge_html(page_source):
+                break
+            if attempt < max_attempts:
+                print(
+                    "AO3 challenge still detected in Selenium page. "
+                    "Complete challenge in the opened browser and try again."
+                )
+                driver.get(AO3_FREEFORM_SEARCH_PAGE_1_URL)
+
         _assert_not_ao3_bot_challenge_html(page_source)
 
         resolved_page_count = (
