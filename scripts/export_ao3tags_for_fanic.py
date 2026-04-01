@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
@@ -415,30 +416,25 @@ def _read_json_via_selenium_browser_auth(
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
-        driver.get(AO3_FREEFORM_SEARCH_PAGE_1_URL)
-        print(
-            "\nSelenium browser opened. Complete any AO3 anti-bot challenge in that window, "
-            "then return here."
-        )
-
-        page_source = ""
-        max_attempts = 5
-        for attempt in range(1, max_attempts + 1):
-            input(
-                f"Press Enter after AO3 page is visible "
-                f"(attempt {attempt}/{max_attempts})... "
+        def _wait_until_not_challenge(page_label: str, timeout_seconds: int = 180) -> str:
+            print(
+                f"Waiting for AO3 page on {page_label}. "
+                "Complete challenge in browser if shown..."
             )
-            page_source = driver.page_source
-            if not _is_ao3_bot_challenge_html(page_source):
-                break
-            if attempt < max_attempts:
-                print(
-                    "AO3 challenge still detected in Selenium page. "
-                    "Complete challenge in the opened browser and try again."
-                )
-                driver.get(AO3_FREEFORM_SEARCH_PAGE_1_URL)
+            deadline = time.time() + timeout_seconds
+            while time.time() < deadline:
+                page_html = driver.page_source
+                if not _is_ao3_bot_challenge_html(page_html):
+                    return page_html
+                time.sleep(1)
+            raise RuntimeError(
+                f"Timed out waiting for challenge clearance on {page_label}. "
+                "If this persists, try profile mode with "
+                "--selenium-user-data-dir and --selenium-profile-directory."
+            )
 
-        _assert_not_ao3_bot_challenge_html(page_source)
+        driver.get(AO3_FREEFORM_SEARCH_PAGE_1_URL)
+        page_source = _wait_until_not_challenge("initial page")
 
         resolved_page_count = (
             _extract_max_page_from_ao3_search_html(page_source)
@@ -448,22 +444,6 @@ def _read_json_via_selenium_browser_auth(
         if resolved_page_count <= 0:
             resolved_page_count = 1
 
-        def _resolve_challenge_for_current_page(page_label: str) -> str:
-            max_attempts = 5
-            for attempt in range(1, max_attempts + 1):
-                page_html = driver.page_source
-                if not _is_ao3_bot_challenge_html(page_html):
-                    return page_html
-                input(
-                    f"Challenge detected on {page_label}. Solve it in browser and press Enter "
-                    f"(attempt {attempt}/{max_attempts})... "
-                )
-            raise RuntimeError(
-                f"AO3 challenge persisted on {page_label} after multiple attempts. "
-                "Try Selenium with your real Chrome profile via "
-                "--selenium-user-data-dir and --selenium-profile-directory."
-            )
-
         tag_counts: dict[str, int] = {}
         with alive_bar(
             resolved_page_count,
@@ -472,7 +452,7 @@ def _read_json_via_selenium_browser_auth(
         ) as bar:
             for page in range(1, resolved_page_count + 1):
                 driver.get(_ao3_freeform_search_url(page))
-                page_html = _resolve_challenge_for_current_page(f"page {page}")
+                page_html = _wait_until_not_challenge(f"page {page}")
                 page_tags = _extract_tag_counts_from_search_html(page_html)
                 for name, count in page_tags.items():
                     tag_counts[name] = count
