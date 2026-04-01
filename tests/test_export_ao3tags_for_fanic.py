@@ -149,3 +149,17 @@ def test_ao3_headers_from_auth_inputs_falls_back_to_cf_clearance() -> None:
 
     assert headers["Cookie"] == "cf_clearance=token123"
     assert headers["User-Agent"] == "Agent/1.0"
+
+
+def test_extract_tag_counts_from_search_html() -> None:
+    module = _load_module()
+
+    html = (
+        '<li><a class="tag" href="/tags/1">Hurt &amp; Comfort</a> (123)</li>'
+        '<li><a class="tag" href="/tags/2">Fluff</a> (45)</li>'
+    )
+
+    tags = module._extract_tag_counts_from_search_html(html)
+
+    assert tags["Hurt & Comfort"] == 123
+    assert tags["Fluff"] == 45

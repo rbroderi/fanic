@@ -272,6 +272,18 @@ import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
 import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
     uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --interactive-browser-auth --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
 
+# Run live AO3 import via Selenium browser session (local GUI machine recommended).
+# Usage examples:
+
+# just import-ao3tags-live-selenium
+[windows]
+import-ao3tags-live-selenium:
+    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --out-dir logs
+
+[unix]
+import-ao3tags-live-selenium:
+    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --out-dir logs
+
 # Apply generated AO3 freeform SQL into the Fanic SQLite database.
 # Usage examples:
 #   just apply-ao3tags-sql
@@ -323,3 +335,15 @@ import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
 [unix]
 import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
     just import-ao3tags-live-interactive "{{ repo_dir }}" && just apply-ao3tags-sql
+
+# Convenience command: Selenium live import, then apply.
+# Usage examples:
+
+# just import-ao3tags-live-selenium-and-apply
+[windows]
+import-ao3tags-live-selenium-and-apply:
+    just import-ao3tags-live-selenium && just apply-ao3tags-sql
+
+[unix]
+import-ao3tags-live-selenium-and-apply:
+    just import-ao3tags-live-selenium && just apply-ao3tags-sql

@@ -15,6 +15,7 @@ Usage examples:
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import subprocess
@@ -362,6 +363,85 @@ def _read_json_via_interactive_browser_auth(
         return _read_json_from_file(tags_path), source
 
 
+def _extract_tag_counts_from_search_html(page_html: str) -> dict[str, int]:
+    matches = re.findall(
+        r'class="tag"[^>]*>(.+?)</a>.*?\((\d+)\)',
+        page_html,
+        flags=re.S,
+    )
+    tag_counts: dict[str, int] = {}
+    for raw_name, raw_count in matches:
+        name = html.unescape(raw_name).strip()
+        if not name:
+            continue
+        count = _to_int(raw_count)
+        if count <= 0:
+            continue
+        tag_counts[name] = count
+    return tag_counts
+
+
+def _read_json_via_selenium_browser_auth(
+    *,
+    page_count: int,
+    page_count_auto: bool,
+    user_agent: str,
+) -> tuple[dict[str, Any], str]:
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+    except ImportError as exc:
+        raise RuntimeError(
+            "Selenium mode requires 'selenium' package. Install with: uv add selenium"
+        ) from exc
+
+    if page_count <= 0:
+        raise ValueError("--ao3tags-page-count must be greater than 0")
+
+    chrome_options = Options()
+    chrome_options.add_argument(f"--user-agent={user_agent}")
+    driver = webdriver.Chrome(options=chrome_options)
+
+    try:
+        driver.get(AO3_FREEFORM_SEARCH_PAGE_1_URL)
+        print(
+            "\nSelenium browser opened. Complete any AO3 anti-bot challenge in that window, "
+            "then return here."
+        )
+        input("Press Enter after AO3 page is fully visible... ")
+
+        page_source = driver.page_source
+        _assert_not_ao3_bot_challenge_html(page_source)
+
+        resolved_page_count = (
+            _extract_max_page_from_ao3_search_html(page_source)
+            if page_count_auto
+            else page_count
+        )
+        if resolved_page_count <= 0:
+            resolved_page_count = 1
+
+        tag_counts: dict[str, int] = {}
+        with alive_bar(
+            resolved_page_count,
+            title="Collecting AO3 tags via Selenium",
+            force_tty=True,
+        ) as bar:
+            for page in range(1, resolved_page_count + 1):
+                driver.get(_ao3_freeform_search_url(page))
+                page_html = driver.page_source
+                _assert_not_ao3_bot_challenge_html(page_html)
+                page_tags = _extract_tag_counts_from_search_html(page_html)
+                for name, count in page_tags.items():
+                    tag_counts[name] = count
+                bar()
+
+        print(f"Using AO3 page count: {resolved_page_count}")
+        return tag_counts, f"selenium AO3 browser session ({resolved_page_count} pages)"
+    finally:
+        driver.quit()
+
+
 def _read_json_via_ao3tags_live_fetch(
     *,
     page_count: int,
@@ -600,6 +680,14 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--selenium-browser-auth",
+        action="store_true",
+        help=(
+            "Use Selenium with a real browser window to solve AO3 challenge and "
+            "collect tags in-browser. Best run on your local machine with GUI."
+        ),
+    )
+    parser.add_argument(
         "--cf-clearance",
         default="",
         help=(
@@ -659,6 +747,12 @@ def main() -> int:
                 repo_dir=live_repo_dir,
                 cookie_header=args.ao3_cookie_header,
                 cf_clearance=args.cf_clearance,
+                user_agent=args.ao3_user_agent,
+            )
+        elif args.selenium_browser_auth:
+            source_data, source_description = _read_json_via_selenium_browser_auth(
+                page_count=args.ao3tags_page_count,
+                page_count_auto=args.ao3tags_page_count_auto,
                 user_agent=args.ao3_user_agent,
             )
         else:
