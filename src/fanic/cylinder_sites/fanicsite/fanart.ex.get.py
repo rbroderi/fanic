@@ -167,6 +167,7 @@ def _gallery_manage_form_html(
 
     gallery_name = escape(str(active_gallery.get("name", "Gallery")))
     gallery_slug = escape(str(active_gallery.get("slug", "")))
+    gallery_item_count = int(active_gallery.get("item_count", 0))
     safe_owner = quote(work_owner_profile_key, safe="")
     lines: list[str] = [
         '<section class="card">',
@@ -198,6 +199,15 @@ def _gallery_manage_form_html(
         lines.append('<p><button type="submit">Save gallery items</button></p>')
 
     lines.append("</form>")
+    delete_confirm_attr = ""
+    if gallery_item_count > 0:
+        delete_confirm_attr = " onsubmit=\"return confirm('This gallery has assigned images. Deleting it will move all items to Ungrouped. Continue?')\""
+    lines.append(
+        f'<form method="post" action="/fanart/{safe_owner}/galleries/delete"{delete_confirm_attr}>'
+        f'<input type="hidden" name="gallery_slug" value="{gallery_slug}" />'
+        '<p><button type="submit" class="danger">Trash gallery</button></p>'
+        "</form>"
+    )
     lines.append("</section>")
     return "".join(lines)
 

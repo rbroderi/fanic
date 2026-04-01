@@ -3,6 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
+from fanic.authorization import AuthorizationContext
+from fanic.authorization import ComicPolicy
 from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -52,10 +54,6 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     response.headers["Location"] = location
     response.set_data(f"See Other: {location}")
     return response
-
-
-def _can_edit_work(username: str | None, uploader_username: str, *, is_admin: bool) -> bool:
-    return bool(username) and (username == uploader_username or is_admin)
 
 
 def _is_explicit_rating(value: object) -> bool:
@@ -110,9 +108,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     username = current_user(request)
     user_role = role_for_user(username)
     is_admin = user_role in {"superadmin", "admin"}
+    uploader = str(work.get("uploader_username") if work.get("uploader_username") else "")
+    normalized_username = str(username if username else "")
 
     if action == "delete":
-        if not is_admin:
+        delete_ctx = AuthorizationContext.from_inputs(
+            current_username=normalized_username,
+            current_role=user_role,
+            owner_username=uploader,
+        )
+        if not ComicPolicy.can_delete(delete_ctx):
             return text_error(response, "Forbidden", 403)
         _ = delete_work(work_id)
         return _redirect(response, "/")
@@ -180,8 +185,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if action != "edit":
         return text_error(response, "Not found", 404)
 
-    uploader = str(work.get("uploader_username") if work.get("uploader_username") else "")
-    if not _can_edit_work(username, uploader, is_admin=is_admin):
+    edit_ctx = AuthorizationContext.from_inputs(
+        current_username=normalized_username,
+        current_role=user_role,
+        owner_username=uploader,
+    )
+    if not ComicPolicy.can_edit(edit_ctx):
         return text_error(response, "Forbidden", 403)
 
     assert username is not None

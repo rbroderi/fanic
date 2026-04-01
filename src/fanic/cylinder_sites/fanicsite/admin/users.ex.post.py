@@ -1,6 +1,8 @@
 import sqlite3
 from typing import cast
 
+from fanic.authorization import AdminUsersPolicy
+from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
@@ -9,7 +11,6 @@ from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
 from fanic.cylinder_sites.user_roles import ManagedUserRole
-from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import UserRole
 from fanic.repository import create_user
 from fanic.repository import delete_user
@@ -42,7 +43,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     actor_username = current_user(request)
     actor_role = role_for_user(actor_username)
-    if not is_privileged_role(actor_role):
+    normalized_actor_username = str(actor_username if actor_username else "")
+    actor_ctx = AuthorizationContext.from_inputs(
+        current_username=normalized_actor_username,
+        current_role=actor_role,
+    )
+    if not AdminUsersPolicy.can_create(actor_ctx):
         return text_error(response, "Forbidden", 403)
 
     action = request.form.get("user_action", "").strip()
@@ -58,7 +64,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _redirect_msg(response, "invalid")
         role_value = cast(UserRole, managed_role.value)
 
-        if role_value == ManagedUserRole.SUPERADMIN.value and actor_role != ManagedUserRole.SUPERADMIN.value:
+        create_ctx = AuthorizationContext.from_inputs(
+            current_username=normalized_actor_username,
+            current_role=actor_role,
+            requested_role=role_value,
+        )
+        if not AdminUsersPolicy.can_create(create_ctx):
             return _redirect_msg(response, "forbidden-action")
 
         resolved_display_name = display_name if display_name else username
@@ -88,19 +99,20 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if target_user is None:
         return _redirect_msg(response, "not-found")
 
-    if target_user["role"] == ManagedUserRole.SUPERADMIN.value and actor_role != ManagedUserRole.SUPERADMIN.value:
-        return _redirect_msg(response, "forbidden-action")
-
-    if actor_username is not None and target_username == actor_username and action in {"set-active", "remove"}:
-        return _redirect_msg(response, "self-action-blocked")
-
     if action == "set-role":
         role = request.form.get("role", "").strip()
         managed_role = ManagedUserRole.from_value(role)
         if managed_role is None:
             return _redirect_msg(response, "invalid")
         role_value = cast(UserRole, managed_role.value)
-        if role_value == ManagedUserRole.SUPERADMIN.value and actor_role != ManagedUserRole.SUPERADMIN.value:
+        set_role_ctx = AuthorizationContext.from_inputs(
+            current_username=normalized_actor_username,
+            current_role=actor_role,
+            requested_role=role_value,
+            target_username=target_username,
+            target_role=str(target_user.get("role", "")),
+        )
+        if not AdminUsersPolicy.can_set_role(set_role_ctx):
             return _redirect_msg(response, "forbidden-action")
         try:
             updated = set_user_role(target_username, role_value)
@@ -109,6 +121,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect_msg(response, "updated" if updated else "not-found")
 
     if action == "set-active":
+        if normalized_actor_username and target_username == normalized_actor_username:
+            return _redirect_msg(response, "self-action-blocked")
+
+        set_active_ctx = AuthorizationContext.from_inputs(
+            current_username=normalized_actor_username,
+            current_role=actor_role,
+            target_username=target_username,
+            target_role=str(target_user.get("role", "")),
+        )
+        if not AdminUsersPolicy.can_set_active(set_active_ctx):
+            return _redirect_msg(response, "forbidden-action")
+
         active_raw = request.form.get("active", "").strip()
         if active_raw not in {"0", "1"}:
             return _redirect_msg(response, "invalid")
@@ -116,6 +140,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect_msg(response, "updated" if updated else "not-found")
 
     if action == "remove":
+        if normalized_actor_username and target_username == normalized_actor_username:
+            return _redirect_msg(response, "self-action-blocked")
+
+        remove_ctx = AuthorizationContext.from_inputs(
+            current_username=normalized_actor_username,
+            current_role=actor_role,
+            target_username=target_username,
+            target_role=str(target_user.get("role", "")),
+        )
+        if not AdminUsersPolicy.can_remove(remove_ctx):
+            return _redirect_msg(response, "forbidden-action")
+
         try:
             deleted = delete_user(target_username)
         except ValueError:

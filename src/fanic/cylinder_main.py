@@ -23,6 +23,8 @@ from wsgiref.types import WSGIApplication
 import cylinder
 import waitress
 
+from fanic.authorization import AdminPathPolicy
+from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common import SESSION_COOKIE_NAME
 from fanic.cylinder_sites.common import decode_session
 from fanic.db import initialize_database
@@ -112,7 +114,12 @@ def _is_authorized_admin_request(environ: dict[str, object]) -> bool:
 
     username = decode_session(token)
     role = get_user_role(username)
-    return role in ADMIN_ROLES
+    normalized_username = str(username if username else "")
+    admin_path_ctx = AuthorizationContext.from_inputs(
+        current_username=normalized_username,
+        current_role=role,
+    )
+    return AdminPathPolicy.can_access(admin_path_ctx)
 
 
 def _admin_path_guard(app: WSGIApplication) -> WSGIApplication:

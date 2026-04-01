@@ -58,6 +58,17 @@ def _local_user_bob(_: str) -> dict[str, Any]:
     }
 
 
+def _local_user_superadmin(_: str) -> dict[str, Any]:
+    return {
+        "username": "owner",
+        "display_name": "Owner",
+        "email": "owner@example.com",
+        "role": "superadmin",
+        "active": True,
+        "created_at": "2026-03-22T00:00:00Z",
+    }
+
+
 def _delete_user_success(_: str) -> bool:
     return True
 
@@ -318,6 +329,64 @@ def test_users_post_admin_cannot_promote_superadmin(
             "target_username": "bob",
             "role": "superadmin",
         },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers.get("Location") == "/admin/users?msg=forbidden-action"
+
+
+def test_users_post_blocks_self_remove(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/admin/users.ex.post.py",
+        "fanicsite_users_ex_post_self_remove_block_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
+    monkeypatch.setattr(module, "get_local_user", _local_user_alice)
+
+    request = dummy_request(
+        path="/admin/users",
+        method="POST",
+        form={"user_action": "remove", "target_username": "alice"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers.get("Location") == "/admin/users?msg=self-action-blocked"
+
+
+def test_users_post_admin_cannot_remove_superadmin(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/admin/users.ex.post.py",
+        "fanicsite_users_ex_post_remove_superadmin_forbidden_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
+    monkeypatch.setattr(module, "get_local_user", _local_user_superadmin)
+
+    request = dummy_request(
+        path="/admin/users",
+        method="POST",
+        form={"user_action": "remove", "target_username": "owner"},
     )
     response = dummy_response()
     result = module.main(request, response)

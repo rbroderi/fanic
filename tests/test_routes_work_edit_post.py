@@ -14,6 +14,72 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def test_comic_delete_forbidden_for_non_admin(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
+        "fanicsite_comic_ex_post_delete_forbidden_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(
+        module,
+        "get_work",
+        lambda *_: {
+            "id": "work-1",
+            "uploader_username": "alice",
+            "rating": "General Audiences",
+        },
+    )
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+
+    request = dummy_request(path="/comic/work-1/delete", method="POST")
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 403
+
+
+def test_comic_delete_allows_admin(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
+        "fanicsite_comic_ex_post_delete_admin_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(
+        module,
+        "get_work",
+        lambda *_: {
+            "id": "work-1",
+            "uploader_username": "alice",
+            "rating": "General Audiences",
+        },
+    )
+    monkeypatch.setattr(module, "current_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "delete_work", lambda *_: True)
+
+    request = dummy_request(path="/comic/work-1/delete", method="POST")
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/"
+
+
 def test_non_admin_cannot_lower_explicit_rating(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

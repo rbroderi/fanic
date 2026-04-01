@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
 from types import ModuleType
 from typing import Any
 from typing import Protocol
@@ -170,6 +171,93 @@ def test_home_route_renders_fanart_tab(
     assert seen_filters["q"] == "ali"
     assert seen_filters["user"] == "alice"
     assert seen_filters["sort"] == "title_asc"
+
+
+def test_home_route_tab_views_render_quickly(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite.ex.get.py",
+        "fanicsite_ex_get_perf_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "can_view_work", lambda *_: True)
+    monkeypatch.setattr(
+        module,
+        "list_works",
+        lambda *_: [
+            {
+                "id": "work-1",
+                "slug": "work-1",
+                "title": "Fast Work",
+                "summary": "Summary",
+                "status": "complete",
+                "rating": "General Audiences",
+                "warnings": "",
+                "page_count": 5,
+                "cover_page_index": 1,
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items",
+        lambda **_: [
+            {
+                "id": "fanart-1",
+                "uploader_username": "alice",
+                "uploader_display_name": "AliceArtist",
+                "title": "Sky",
+                "summary": "Color test",
+                "fandom": "Skyverse",
+                "rating": "General Audiences",
+                "image_filename": "_objects/ab/image.avif",
+                "thumb_filename": "_objects/ab/thumb.avif",
+                "width": 1000,
+                "height": 800,
+                "created_at": "2026-03-22T00:00:00Z",
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ],
+    )
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data(replacements["__WORK_GRID_HTML__"])
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    budget_seconds = 0.08
+
+    comics_start = perf_counter()
+    comics_result = module.main(dummy_request(path="/", args={}), dummy_response())
+    comics_elapsed = perf_counter() - comics_start
+
+    fanart_start = perf_counter()
+    fanart_result = module.main(
+        dummy_request(path="/", args={"view": "fanart"}),
+        dummy_response(),
+    )
+    fanart_elapsed = perf_counter() - fanart_start
+
+    assert comics_result.status_code == 200
+    assert fanart_result.status_code == 200
+    assert comics_elapsed < budget_seconds
+    assert fanart_elapsed < budget_seconds
 
 
 def test_fanart_route_gallery_and_media(
@@ -443,6 +531,9 @@ def test_fanart_route_gallery_grouping_filter(
     assert "/fanart/alice/reader?item_id=art-2&gallery=sketches" in rendered["grid"]
     assert rendered["__GALLERY_DOWNLOAD_CBZ_HREF__"] == "/fanart/alice/download/cbz?gallery=sketches"
     assert 'name="gallery_item_id"' in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
+    assert "/fanart/alice/galleries/delete" in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
+    assert "Trash gallery" in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
+    assert "move all items to Ungrouped" in rendered["__FANART_GALLERY_MANAGE_FORM_HTML__"]
 
     reader_request = dummy_request(
         path="/fanart/alice/reader",

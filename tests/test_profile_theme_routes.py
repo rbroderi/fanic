@@ -385,6 +385,8 @@ def test_profile_get_fanart_links_use_reader_with_gallery_context(
     dummy_response: Callable[[], ResponseLike],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import fanic.cylinder_sites.profile_shared as profile_shared
+
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/user/profile.ex.get.py",
         "fanicsite_user_profile_ex_get_fanart_reader_links_test",
@@ -429,8 +431,9 @@ def test_profile_get_fanart_links_use_reader_with_gallery_context(
             "created_at": "2026-03-22T00:00:00Z",
         },
     )
+
     monkeypatch.setattr(
-        module,
+        profile_shared,
         "list_fanart_galleries_by_uploader",
         lambda _username: [
             {
@@ -439,7 +442,11 @@ def test_profile_get_fanart_links_use_reader_with_gallery_context(
             }
         ],
     )
-    monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda _gallery_id: {"art-1"})
+    monkeypatch.setattr(
+        profile_shared,
+        "list_fanart_gallery_item_ids",
+        lambda _gallery_id: {"art-1"},
+    )
 
     class FakeSettings:
         profile_history_limit: int = 5
@@ -477,6 +484,8 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
     dummy_response: Callable[[], ResponseLike],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import fanic.cylinder_sites.profile_shared as profile_shared
+
     route_module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_fanart_reader_links_test",
@@ -495,21 +504,32 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
                 "uploader_username": "admin",
                 "title": "Sky",
                 "image_filename": "_objects/aa/image.avif",
-            }
+            },
+            {
+                "id": "art-2",
+                "uploader_username": "admin",
+                "title": "Cloud",
+                "image_filename": "_objects/bb/image.avif",
+            },
         ],
     )
     monkeypatch.setattr(handler_module, "can_view_work", lambda _username, _work: True)
     monkeypatch.setattr(
-        handler_module,
+        profile_shared,
         "list_fanart_galleries_by_uploader",
         lambda _username: [
             {
                 "id": "gallery-1",
+                "name": "Sketches",
                 "slug": "sketches",
             }
         ],
     )
-    monkeypatch.setattr(handler_module, "list_fanart_gallery_item_ids", lambda _gallery_id: {"art-1"})
+    monkeypatch.setattr(
+        profile_shared,
+        "list_fanart_gallery_item_ids",
+        lambda _gallery_id: {"art-1"},
+    )
     monkeypatch.setattr(
         handler_module,
         "get_local_user",
@@ -548,6 +568,10 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
 
     assert result.status_code == 200
     assert "/users/AdminDisplay/gallery/sketches" in captured["shared"]
+    assert "<h4>Sketches</h4>" in captured["shared"]
+    assert "<h4>Ungrouped</h4>" in captured["shared"]
+    assert "Cloud" in captured["shared"]
+    assert captured["shared"].index("<h4>Sketches</h4>") < captured["shared"].index("<h4>Ungrouped</h4>")
 
 
 def test_users_gallery_all_redirects_to_fanart_gallery(

@@ -1,5 +1,7 @@
 from urllib.parse import quote
 
+from fanic.authorization import AuthorizationContext
+from fanic.authorization import FanartPolicy
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
@@ -9,6 +11,7 @@ from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.common import validate_csrf
 from fanic.repository import create_fanart_gallery
+from fanic.repository import delete_fanart_gallery
 from fanic.repository import delete_fanart_item
 from fanic.repository import get_fanart_gallery_by_slug
 from fanic.repository import get_fanart_item
@@ -93,13 +96,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
 
-    if len(tail) == 3 and tail[2] == "delete":
+    if len(tail) == 3 and tail[1] != "galleries" and tail[2] == "delete":
         username = current_user(request)
-        if role_for_user(username) not in {"superadmin", "admin"}:
-            return text_error(response, "Forbidden", 403)
-
+        user_role = role_for_user(username)
         work_owner_key = tail[0].strip()
         work_owner_username = _resolve_owner_username(work_owner_key)
+        if not work_owner_username:
+            return text_error(response, "Not found", 404)
+
+        delete_ctx = AuthorizationContext.from_inputs(
+            current_username=username,
+            current_role=user_role,
+            owner_username=work_owner_username,
+        )
+        if not FanartPolicy.can_delete_item(delete_ctx):
+            return text_error(response, "Forbidden", 403)
         work_id = tail[1].strip()
         if not work_owner_username or not work_id:
             return text_error(response, "Not found", 404)
@@ -128,7 +139,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         username = current_user(request)
-        if username != work_owner_username:
+        user_role = role_for_user(username)
+        create_ctx = AuthorizationContext.from_inputs(
+            current_username=username,
+            current_role=user_role,
+            owner_username=work_owner_username,
+        )
+        if not FanartPolicy.can_create_gallery(create_ctx):
             return text_error(response, "Forbidden", 403)
 
         gallery_name = request.form.get("gallery_name", "").strip()
@@ -165,7 +182,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
 
         username = current_user(request)
-        if username != work_owner_username:
+        user_role = role_for_user(username)
+        update_ctx = AuthorizationContext.from_inputs(
+            current_username=username,
+            current_role=user_role,
+            owner_username=work_owner_username,
+        )
+        if not FanartPolicy.can_update_gallery_items(update_ctx):
             return text_error(response, "Forbidden", 403)
 
         gallery_slug = request.form.get("gallery_slug", "").strip()
@@ -183,6 +206,40 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(
             response,
             (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"),
+        )
+
+    if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "delete":
+        work_owner_key = tail[0].strip()
+        work_owner_username = _resolve_owner_username(work_owner_key)
+        if not work_owner_username:
+            return text_error(response, "Not found", 404)
+
+        username = current_user(request)
+        user_role = role_for_user(username)
+        delete_gallery_ctx = AuthorizationContext.from_inputs(
+            current_username=username,
+            current_role=user_role,
+            owner_username=work_owner_username,
+        )
+        if not FanartPolicy.can_delete_gallery(delete_gallery_ctx):
+            return text_error(response, "Forbidden", 403)
+
+        gallery_slug = request.form.get("gallery_slug", "").strip()
+        gallery = get_fanart_gallery_by_slug(work_owner_username, gallery_slug)
+        if gallery is None:
+            return text_error(response, "Not found", 404)
+
+        deleted = delete_fanart_gallery(
+            uploader_username=work_owner_username,
+            gallery_id=str(gallery.get("id", "")),
+        )
+        if not deleted:
+            return text_error(response, "Not found", 404)
+
+        profile_key = _owner_profile_key(work_owner_username)
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}?msg=gallery-deleted",
         )
 
     return text_error(response, "Not found", 404)

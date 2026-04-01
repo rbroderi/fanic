@@ -231,3 +231,95 @@ frontend-watch:
 [unix]
 frontend-watch:
     npm run frontend:watch
+
+# Run live AO3 tag refresh via ceejbot/ao3tags and export Fanic seed files.
+# Usage examples:
+#   just import-ao3tags-live
+#   just import-ao3tags-live 500
+
+# just import-ao3tags-live 1000 ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live page_count="1000" repo_dir="./tmp/ao3tags-live":
+    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count {{ page_count }} --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+[unix]
+import-ao3tags-live page_count="1000" repo_dir="./tmp/ao3tags-live":
+    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count {{ page_count }} --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+# Run live AO3 tag refresh with automatic page-count detection.
+# Usage examples:
+#   just import-ao3tags-live-auto
+
+# just import-ao3tags-live-auto ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live-auto repo_dir="./tmp/ao3tags-live":
+    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+[unix]
+import-ao3tags-live-auto repo_dir="./tmp/ao3tags-live":
+    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+# Run live AO3 import with manual browser challenge solving (SSH-friendly).
+# Usage examples:
+#   just import-ao3tags-live-interactive
+
+# just import-ao3tags-live-interactive ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
+    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --interactive-browser-auth --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+[unix]
+import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
+    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --interactive-browser-auth --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
+
+# Apply generated AO3 freeform SQL into the Fanic SQLite database.
+# Usage examples:
+#   just apply-ao3tags-sql
+
+# just apply-ao3tags-sql ./logs/ao3_freeform_tags.fanic.upsert.sql
+[windows]
+apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
+    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; sql_file = Path(r'{{ sql_path }}').expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
+
+[unix]
+apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
+    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; sql_file = Path(r'{{ sql_path }}').expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
+
+# Convenience command: refresh live AO3 tags, export SQL, then apply to DB.
+# Usage examples:
+#   just import-ao3tags-live-and-apply
+
+# just import-ao3tags-live-and-apply 500 ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live-and-apply page_count="1000" repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live {{ page_count }} "{{ repo_dir }}" && just apply-ao3tags-sql
+
+[unix]
+import-ao3tags-live-and-apply page_count="1000" repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live {{ page_count }} "{{ repo_dir }}" && just apply-ao3tags-sql
+
+# Convenience command: auto-detect page count, refresh live AO3 tags, then apply.
+# Usage examples:
+#   just import-ao3tags-live-auto-and-apply
+
+# just import-ao3tags-live-auto-and-apply ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live-auto-and-apply repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live-auto "{{ repo_dir }}" && just apply-ao3tags-sql
+
+[unix]
+import-ao3tags-live-auto-and-apply repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live-auto "{{ repo_dir }}" && just apply-ao3tags-sql
+
+# Convenience command: manual browser auth live import, then apply.
+# Usage examples:
+#   just import-ao3tags-live-interactive-and-apply
+
+# just import-ao3tags-live-interactive-and-apply ./tmp/ao3tags-live
+[windows]
+import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live-interactive "{{ repo_dir }}" && just apply-ao3tags-sql
+
+[unix]
+import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
+    just import-ao3tags-live-interactive "{{ repo_dir }}" && just apply-ao3tags-sql

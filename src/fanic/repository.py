@@ -1853,6 +1853,41 @@ def replace_fanart_gallery_items(
     return len(valid_ids)
 
 
+def delete_fanart_gallery(
+    *,
+    uploader_username: str,
+    gallery_id: str,
+) -> bool:
+    normalized_uploader = uploader_username.strip()
+    normalized_gallery_id = gallery_id.strip()
+    if not normalized_uploader or not normalized_gallery_id:
+        return False
+
+    with get_connection() as connection:
+        gallery_row = connection.execute(
+            """
+            SELECT id
+            FROM fanart_galleries
+            WHERE id = ? AND uploader_username = ?
+            LIMIT 1
+            """,
+            (normalized_gallery_id, normalized_uploader),
+        ).fetchone()
+        if gallery_row is None:
+            return False
+
+        connection.execute(
+            "DELETE FROM fanart_gallery_items WHERE gallery_id = ?",
+            (normalized_gallery_id,),
+        )
+        deleted = connection.execute(
+            "DELETE FROM fanart_galleries WHERE id = ? AND uploader_username = ?",
+            (normalized_gallery_id, normalized_uploader),
+        )
+
+    return deleted.rowcount > 0
+
+
 def create_fanart_item(
     *,
     item_id: str,

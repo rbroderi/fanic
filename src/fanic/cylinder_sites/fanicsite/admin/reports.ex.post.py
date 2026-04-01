@@ -1,5 +1,7 @@
 from urllib.parse import urlencode
 
+from fanic.authorization import AdminReportsPolicy
+from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import current_user
@@ -60,7 +62,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Invalid CSRF token", 403)
 
     username = current_user(request)
-    if role_for_user(username) not in {"superadmin", "admin"}:
+    user_role = role_for_user(username)
+    normalized_username = str(username if username else "")
+    reports_ctx = AuthorizationContext.from_inputs(
+        current_username=normalized_username,
+        current_role=user_role,
+    )
+    if not AdminReportsPolicy.can_manage(reports_ctx):
         return text_error(response, "Forbidden", 403)
     admin_username = str(username if username else "")
 

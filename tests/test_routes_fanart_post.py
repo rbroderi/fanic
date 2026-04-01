@@ -163,6 +163,7 @@ def test_fanart_gallery_create_requires_owner(
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
 
     request = dummy_request(
         path="/fanart/alice/galleries/create",
@@ -189,6 +190,7 @@ def test_fanart_gallery_create_redirects_to_new_gallery(
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
     monkeypatch.setattr(
         module,
         "create_fanart_gallery",
@@ -230,6 +232,8 @@ def test_fanart_gallery_update_items_redirects_with_success(
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
         "get_fanart_gallery_by_slug",
@@ -266,3 +270,136 @@ def test_fanart_gallery_update_items_redirects_with_success(
     assert captured["uploader_username"] == "alice"
     assert captured["gallery_id"] == "gallery-1"
     assert captured["fanart_item_ids"] == ["art-1", "art-2"]
+
+
+def test_fanart_gallery_delete_requires_owner(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_delete_forbidden_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/delete",
+        method="POST",
+        form={"gallery_slug": "sketches"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 403
+
+
+def test_fanart_gallery_delete_redirects_to_gallery_root(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_delete_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_gallery_by_slug",
+        lambda *_: {
+            "id": "gallery-1",
+            "uploader_username": "alice",
+            "name": "Sketches",
+            "slug": "sketches",
+            "description": "",
+            "item_count": 2,
+            "created_at": "",
+            "updated_at": "",
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_delete_fanart_gallery(**kwargs: object) -> bool:
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(module, "delete_fanart_gallery", fake_delete_fanart_gallery)
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/delete",
+        method="POST",
+        form={"gallery_slug": "sketches"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice?msg=gallery-deleted"
+    assert captured["uploader_username"] == "alice"
+    assert captured["gallery_id"] == "gallery-1"
+
+
+def test_fanart_gallery_delete_admin_can_delete_for_owner(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_gallery_delete_admin_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
+    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_gallery_by_slug",
+        lambda *_: {
+            "id": "gallery-1",
+            "uploader_username": "alice",
+            "name": "Sketches",
+            "slug": "sketches",
+            "description": "",
+            "item_count": 2,
+            "created_at": "",
+            "updated_at": "",
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_delete_fanart_gallery(**kwargs: object) -> bool:
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(module, "delete_fanart_gallery", fake_delete_fanart_gallery)
+
+    request = dummy_request(
+        path="/fanart/alice/galleries/delete",
+        method="POST",
+        form={"gallery_slug": "sketches"},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice?msg=gallery-deleted"
+    assert captured["uploader_username"] == "alice"
+    assert captured["gallery_id"] == "gallery-1"
