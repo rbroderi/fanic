@@ -18,6 +18,7 @@ import argparse
 import html
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -401,19 +402,90 @@ def _read_json_via_selenium_browser_auth(
     if page_count <= 0:
         raise ValueError("--ao3tags-page-count must be greater than 0")
 
-    chrome_options = Options()
-    chrome_options.add_argument(f"--user-agent={user_agent}")
+    def _build_options(active_user_data_dir: str, active_profile_directory: str) -> Any:
+        chrome_options = Options()
+        chrome_options.add_argument(f"--user-agent={user_agent}")
+        normalized_user_data_dir = active_user_data_dir.strip()
+        normalized_profile_directory = active_profile_directory.strip()
+        if normalized_user_data_dir:
+            chrome_options.add_argument(f"--user-data-dir={normalized_user_data_dir}")
+        if normalized_profile_directory:
+            chrome_options.add_argument(f"--profile-directory={normalized_profile_directory}")
+        # Reduce common automation fingerprints; still requires manual challenge solve.
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option(
+            "excludeSwitches", ["enable-automation"]
+        )
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--remote-debugging-port=0")
+        return chrome_options
+
+    def _clone_profile_to_temp(
+        source_user_data_dir: str,
+        source_profile_directory: str,
+    ) -> tuple[str, Path]:
+        src_user_data = Path(source_user_data_dir).expanduser()
+        src_profile_name = source_profile_directory.strip()
+        src_profile_name = src_profile_name if src_profile_name else "Default"
+        src_profile = src_user_data / src_profile_name
+        if not src_profile.exists():
+            raise RuntimeError(f"Chrome profile not found: {src_profile}")
+
+        tmp_root = Path(tempfile.mkdtemp(prefix="fanic-selenium-profile-"))
+        dst_user_data = tmp_root / "user-data"
+        dst_profile = dst_user_data / src_profile_name
+        dst_user_data.mkdir(parents=True, exist_ok=True)
+
+        local_state = src_user_data / "Local State"
+        if local_state.exists():
+            shutil.copy2(local_state, dst_user_data / "Local State")
+
+        shutil.copytree(
+            src_profile,
+            dst_profile,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(
+                "Cache",
+                "Code Cache",
+                "GPUCache",
+                "DawnCache",
+                "GrShaderCache",
+                "ShaderCache",
+                "Service Worker",
+                "Crashpad",
+            ),
+        )
+        return str(dst_user_data), tmp_root
+
     normalized_user_data_dir = user_data_dir.strip()
     normalized_profile_directory = profile_directory.strip()
-    if normalized_user_data_dir:
-        chrome_options.add_argument(f"--user-data-dir={normalized_user_data_dir}")
-    if normalized_profile_directory:
-        chrome_options.add_argument(f"--profile-directory={normalized_profile_directory}")
-    # Reduce common automation fingerprints; still requires manual challenge solve.
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    driver = webdriver.Chrome(options=chrome_options)
+    profile_clone_tmp_root: Path | None = None
+
+    try:
+        driver = webdriver.Chrome(
+            options=_build_options(normalized_user_data_dir, normalized_profile_directory)
+        )
+    except Exception as exc:
+        message = str(exc).lower()
+        is_devtools_startup_error = (
+            "devtoolsactiveport" in message or "session not created" in message
+        )
+        if not (is_devtools_startup_error and normalized_user_data_dir):
+            raise
+
+        print(
+            "Chrome profile appears locked/in-use. Falling back to a temporary cloned "
+            "profile for Selenium..."
+        )
+        cloned_user_data_dir, profile_clone_tmp_root = _clone_profile_to_temp(
+            normalized_user_data_dir,
+            normalized_profile_directory,
+        )
+        driver = webdriver.Chrome(
+            options=_build_options(cloned_user_data_dir, normalized_profile_directory)
+        )
 
     try:
         def _wait_until_not_challenge(page_label: str, timeout_seconds: int = 180) -> str:
@@ -462,6 +534,8 @@ def _read_json_via_selenium_browser_auth(
         return tag_counts, f"selenium AO3 browser session ({resolved_page_count} pages)"
     finally:
         driver.quit()
+        if profile_clone_tmp_root:
+            shutil.rmtree(profile_clone_tmp_root, ignore_errors=True)
 
 
 def _read_json_via_ao3tags_live_fetch(
