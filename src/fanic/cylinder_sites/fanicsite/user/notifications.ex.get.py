@@ -34,7 +34,7 @@ def _notifications_html(rows: Sequence[NotificationRow]) -> str:
             '<article class="card comment-card">'
             + f'<p class="comment-meta">{unread_label}From {actor_html} at {created_at}</p>'
             + f"<p>{message}</p>"
-            + '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">'
+            + '<div class="inline-action-row">'
             + view_html
             + (
                 f'<form method="post" action="/user/notifications"><input type="hidden" name="notification_action" value="mark-read" /><input type="hidden" name="notification_id" value="{notification_id}" /><button type="submit">Mark read</button></form>'

@@ -48,13 +48,22 @@ ruff-ci:
 ruff-precommit:
     uvx ruff format --exclude typings src tests; uvx ruff check --exclude typings src tests
 
+# Run Python type checking with basedpyright.
+[windows]
+py-typecheck:
+    uvx basedpyright
+
+[unix]
+py-typecheck:
+    uvx basedpyright
+
 # Install prek pre-commit hook and hook environments.
 prek-install:
     uvx prek install --overwrite --install-hooks
 
 # Run prek hooks against all files.
 prek-run:
-    uvx prek run --all-files
+    bash static/sync-from-storage.sh; uvx prek run --all-files
 
 # Run pytest with coverage for the src package.
 [windows]
@@ -232,86 +241,24 @@ frontend-watch:
 frontend-watch:
     npm run frontend:watch
 
-# Run live AO3 tag refresh via ceejbot/ao3tags and export Fanic seed files.
-# Usage examples:
-#   just import-ao3tags-live
-#   just import-ao3tags-live 500
-
-# just import-ao3tags-live 1000 ./tmp/ao3tags-live
-[windows]
-import-ao3tags-live page_count="1000" repo_dir="./tmp/ao3tags-live":
-    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count {{ page_count }} --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-[unix]
-import-ao3tags-live page_count="1000" repo_dir="./tmp/ao3tags-live":
-    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count {{ page_count }} --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-# Run live AO3 tag refresh with automatic page-count detection.
-# Usage examples:
-#   just import-ao3tags-live-auto
-
-# just import-ao3tags-live-auto ./tmp/ao3tags-live
-[windows]
-import-ao3tags-live-auto repo_dir="./tmp/ao3tags-live":
-    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-[unix]
-import-ao3tags-live-auto repo_dir="./tmp/ao3tags-live":
-    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-# Run live AO3 import with manual browser challenge solving (SSH-friendly).
-# Usage examples:
-#   just import-ao3tags-live-interactive
-
-# just import-ao3tags-live-interactive ./tmp/ao3tags-live
-[windows]
-import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
-    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --interactive-browser-auth --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-[unix]
-import-ao3tags-live-interactive repo_dir="./tmp/ao3tags-live":
-    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --interactive-browser-auth --ao3tags-page-count-auto --ao3tags-repo-dir "{{ repo_dir }}" --out-dir logs
-
-# Run live AO3 import via Selenium browser session (local GUI machine recommended).
-# Usage examples:
-
-# just import-ao3tags-live-selenium
-[windows]
-import-ao3tags-live-selenium:
-    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --out-dir logs
-
-[unix]
-import-ao3tags-live-selenium:
-    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --out-dir logs
-
-# Selenium mode with explicit Chrome profile reuse (best for local Windows runs).
-# Usage example:
-#   just import-ao3tags-live-selenium-profile "C:\\Users\\you\\AppData\\Local\\Google\\Chrome\\User Data" "Default"
-[windows]
-import-ao3tags-live-selenium-profile user_data_dir profile_dir="Default":
-    uv run scripts\export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --selenium-user-data-dir "{{ user_data_dir }}" --selenium-profile-directory "{{ profile_dir }}" --out-dir logs
-
-[unix]
-import-ao3tags-live-selenium-profile user_data_dir profile_dir="Default":
-    uv run scripts/export_ao3tags_for_fanic.py --refresh-from-ao3 --selenium-browser-auth --ao3tags-page-count-auto --selenium-user-data-dir "{{ user_data_dir }}" --selenium-profile-directory "{{ profile_dir }}" --out-dir logs
-
-# Apply generated AO3 freeform SQL into the Fanic SQLite database.
+# Apply generated AO3 SQL into the Fanic SQLite database.
 # Usage examples:
 #   just apply-ao3tags-sql
 
-# just apply-ao3tags-sql ./logs/ao3_freeform_tags.fanic.upsert.sql
+# just apply-ao3tags-sql ./logs/ao3_tags_dump.fanic.upsert.sql
 [windows]
-apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
-    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; sql_file = Path(r'{{ sql_path }}').expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
+apply-ao3tags-sql sql_path="./logs/ao3_tags_dump.fanic.upsert.sql":
+    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; raw = r'{{ sql_path }}'; normalized = raw.split('=', 1)[1] if raw.startswith('sql_path=') else raw; sql_file = Path(normalized).expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
 
 [unix]
-apply-ao3tags-sql sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
-    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; sql_file = Path(r'{{ sql_path }}').expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
+apply-ao3tags-sql sql_path="./logs/ao3_tags_dump.fanic.upsert.sql":
+    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; raw = r'{{ sql_path }}'; normalized = raw.split('=', 1)[1] if raw.startswith('sql_path=') else raw; sql_file = Path(normalized).expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
 
 # Apply a transferred AO3 SQL file on this server (apply-only workflow).
 # Usage examples:
 #   just import-ao3tags-from-file-and-apply
-#   just import-ao3tags-from-file-and-apply ./logs/ao3_freeform_tags.fanic.upsert.sql
+
+# just import-ao3tags-from-file-and-apply ./logs/ao3_freeform_tags.fanic.upsert.sql
 [windows]
 import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
     just apply-ao3tags-sql "{{ sql_path }}"
@@ -320,53 +267,37 @@ import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upse
 import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
     just apply-ao3tags-sql "{{ sql_path }}"
 
-# Convenience command: refresh live AO3 tags, export SQL, then apply to DB.
+# Convert a local AO3 CSV dump into Fanic import files.
 # Usage examples:
-#   just import-ao3tags-live-and-apply
+#   just wrangle-ao3-dump
 
-# just import-ao3tags-live-and-apply 500 ./tmp/ao3tags-live
+# just wrangle-ao3-dump ./tmp/ao3tags-live/tags-20210226.csv 10
 [windows]
-import-ao3tags-live-and-apply page_count="1000" repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live {{ page_count }} "{{ repo_dir }}" && just apply-ao3tags-sql
+wrangle-ao3-dump source_path="./tmp/ao3tags-live/tags-20210226.csv" min_count="1":
+    uv run scripts\export_ao3tags_for_fanic.py --source "{{ source_path }}" --min-count {{ min_count }} --out-dir logs
 
 [unix]
-import-ao3tags-live-and-apply page_count="1000" repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live {{ page_count }} "{{ repo_dir }}" && just apply-ao3tags-sql
+wrangle-ao3-dump source_path="./tmp/ao3tags-live/tags-20210226.csv" min_count="1":
+    uv run scripts/export_ao3tags_for_fanic.py --source "{{ source_path }}" --min-count {{ min_count }} --out-dir logs
 
-# Convenience command: auto-detect page count, refresh live AO3 tags, then apply.
+# Print top tags by effective popularity (seed_count + usage_count).
 # Usage examples:
-#   just import-ao3tags-live-auto-and-apply
+#   just report-tag-popularity
 
-# just import-ao3tags-live-auto-and-apply ./tmp/ao3tags-live
+# just report-tag-popularity 100 freeform hurt
 [windows]
-import-ao3tags-live-auto-and-apply repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live-auto "{{ repo_dir }}" && just apply-ao3tags-sql
+report-tag-popularity limit="50" tag_type="" query="":
+    uv run src\fanic\main.py report-tag-popularity --limit {{ limit }} --type "{{ tag_type }}" --q "{{ query }}"
 
 [unix]
-import-ao3tags-live-auto-and-apply repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live-auto "{{ repo_dir }}" && just apply-ao3tags-sql
+report-tag-popularity limit="50" tag_type="" query="":
+    uv run src/fanic/main.py report-tag-popularity --limit {{ limit }} --type "{{ tag_type }}" --q "{{ query }}"
 
-# Convenience command: manual browser auth live import, then apply.
-# Usage examples:
-#   just import-ao3tags-live-interactive-and-apply
-
-# just import-ao3tags-live-interactive-and-apply ./tmp/ao3tags-live
+# One-shot backfill: usage_count = current number of work_tags rows per tag.
 [windows]
-import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live-interactive "{{ repo_dir }}" && just apply-ao3tags-sql
+backfill-tag-popularity:
+    uv run src\fanic\main.py backfill-tag-popularity
 
 [unix]
-import-ao3tags-live-interactive-and-apply repo_dir="./tmp/ao3tags-live":
-    just import-ao3tags-live-interactive "{{ repo_dir }}" && just apply-ao3tags-sql
-
-# Convenience command: Selenium live import, then apply.
-# Usage examples:
-
-# just import-ao3tags-live-selenium-and-apply
-[windows]
-import-ao3tags-live-selenium-and-apply:
-    just import-ao3tags-live-selenium && just apply-ao3tags-sql
-
-[unix]
-import-ao3tags-live-selenium-and-apply:
-    just import-ao3tags-live-selenium && just apply-ao3tags-sql
+backfill-tag-popularity:
+    uv run src/fanic/main.py backfill-tag-popularity

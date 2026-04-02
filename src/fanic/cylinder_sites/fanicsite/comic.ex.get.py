@@ -370,10 +370,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             image_filename_obj = page.get("image_filename")
             if image_filename_obj is None:
                 image_filename_obj = page.get("filename", "")
+            thumb_filename_obj = page.get("thumb_filename")
+            if thumb_filename_obj is None:
+                thumb_filename_obj = page.get("thumb", "")
             gallery_pages.append(
                 {
                     "page_index": int(page_index_obj),
                     "image_filename": str(image_filename_obj),
+                    "thumb_filename": str(thumb_filename_obj),
                 }
             )
 
@@ -551,7 +555,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     status = escape(str(work.get("status", "in_progress")))
     page_count = escape(str(work.get("page_count", 0)))
     cover_page_index_raw = work.get("cover_page_index", 1)
-    cover_page_index = int(cover_page_index_raw) if cover_page_index_raw else 1
+    if isinstance(cover_page_index_raw, int):
+        cover_page_index = cover_page_index_raw
+    elif isinstance(cover_page_index_raw, str):
+        stripped_cover = cover_page_index_raw.strip()
+        cover_page_index = int(stripped_cover) if stripped_cover else 1
+    else:
+        cover_page_index = 1
     cover_files = get_page_files(work_id, cover_page_index)
     cover_image_name = str(cover_files["image"]).strip() if cover_files else ""
     work_id_quoted = quote(work_id, safe="")

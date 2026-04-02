@@ -443,6 +443,167 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     assert metadata_toml.exists()
 
 
+def test_tag_suggestions_use_usage_then_seed_popularity(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+    _seed_work(repository)
+
+    repository.update_work_metadata(
+        "work-1",
+        {
+            "title": "Updated Title",
+            "summary": "Updated Summary",
+            "rating": "Teen And Up Audiences",
+            "warnings": ["No Archive Warnings Apply"],
+            "language": "en",
+            "status": "in_progress",
+            "series": "Series A",
+            "series_index": 1,
+            "published_at": "2026-03-23",
+            "fandoms": ["Fandom A"],
+            "relationships": [],
+            "characters": [],
+            "freeform_tags": ["Adventure"],
+        },
+        editor_username="alice",
+        edited_by_admin=False,
+    )
+
+    with repository.get_connection() as connection:
+        adventurous_id = repository._ensure_tag("Adventurous", "freeform", connection=connection)
+        adverb_id = repository._ensure_tag("Adverb", "freeform", connection=connection)
+        connection.execute(
+            "INSERT INTO tag_popularity (tag_id, seed_count, usage_count) VALUES (?, ?, ?)"
+            " ON CONFLICT(tag_id) DO UPDATE SET seed_count = excluded.seed_count, usage_count = excluded.usage_count",
+            (adventurous_id, 100, 0),
+        )
+        connection.execute(
+            "INSERT INTO tag_popularity (tag_id, seed_count, usage_count) VALUES (?, ?, ?)"
+            " ON CONFLICT(tag_id) DO UPDATE SET seed_count = excluded.seed_count, usage_count = excluded.usage_count",
+            (adverb_id, 50, 0),
+        )
+
+    initial_suggestions = repository.list_tag_name_suggestions("freeform", "adv", limit=3)
+    assert initial_suggestions == ["Adventure", "Adventurous", "Adverb"]
+
+    with repository.get_connection() as connection:
+        adventure_row = connection.execute(
+            """
+            SELECT tp.usage_count
+            FROM tag_popularity AS tp
+            JOIN tags AS t ON t.id = tp.tag_id
+            WHERE t.slug = 'adventure'
+            """
+        ).fetchone()
+    assert adventure_row is not None
+    assert int(adventure_row["usage_count"]) == 1
+
+    repository.update_work_metadata(
+        "work-1",
+        {
+            "title": "Updated Title",
+            "summary": "Updated Summary",
+            "rating": "Teen And Up Audiences",
+            "warnings": ["No Archive Warnings Apply"],
+            "language": "en",
+            "status": "in_progress",
+            "series": "Series A",
+            "series_index": 1,
+            "published_at": "2026-03-23",
+            "fandoms": ["Fandom A"],
+            "relationships": [],
+            "characters": [],
+            "freeform_tags": ["Adventure", "Adventurous"],
+        },
+        editor_username="alice",
+        edited_by_admin=False,
+    )
+
+    with repository.get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT t.slug, tp.usage_count
+            FROM tag_popularity AS tp
+            JOIN tags AS t ON t.id = tp.tag_id
+            WHERE t.slug IN ('adventure', 'adventurous')
+            ORDER BY t.slug ASC
+            """
+        ).fetchall()
+    assert len(rows) == 2
+    assert int(rows[0]["usage_count"]) == 1
+    assert int(rows[1]["usage_count"]) == 1
+
+
+def test_backfill_tag_usage_counts_and_popularity_report(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = _init_repository_module(monkeypatch, tmp_path)
+    _seed_work(repository, work_id="work-1")
+    _seed_work(repository, work_id="work-2")
+
+    repository.update_work_metadata(
+        "work-1",
+        {
+            "title": "Updated Title",
+            "summary": "Updated Summary",
+            "rating": "Teen And Up Audiences",
+            "warnings": ["No Archive Warnings Apply"],
+            "language": "en",
+            "status": "in_progress",
+            "series": "Series A",
+            "series_index": 1,
+            "published_at": "2026-03-23",
+            "fandoms": ["Fandom A"],
+            "relationships": [],
+            "characters": [],
+            "freeform_tags": ["Adventure"],
+        },
+        editor_username="alice",
+        edited_by_admin=False,
+    )
+    repository.update_work_metadata(
+        "work-2",
+        {
+            "title": "Updated Title 2",
+            "summary": "Updated Summary 2",
+            "rating": "Teen And Up Audiences",
+            "warnings": ["No Archive Warnings Apply"],
+            "language": "en",
+            "status": "in_progress",
+            "series": "Series A",
+            "series_index": 1,
+            "published_at": "2026-03-23",
+            "fandoms": ["Fandom A"],
+            "relationships": [],
+            "characters": [],
+            "freeform_tags": ["Adventure", "Adventurous"],
+        },
+        editor_username="alice",
+        edited_by_admin=False,
+    )
+
+    with repository.get_connection() as connection:
+        adventurous_id = repository._ensure_tag("Adventurous", "freeform", connection=connection)
+        connection.execute(
+            "INSERT INTO tag_popularity (tag_id, seed_count, usage_count) VALUES (?, ?, ?)"
+            " ON CONFLICT(tag_id) DO UPDATE SET seed_count = excluded.seed_count, usage_count = excluded.usage_count",
+            (adventurous_id, 999, 0),
+        )
+
+    updated_total = repository.backfill_tag_usage_counts_from_work_tags()
+    assert updated_total >= 2
+
+    rows = repository.list_top_tag_popularity(limit=5, tag_type="freeform", query="adv")
+    assert len(rows) >= 2
+    assert rows[0]["name"] == "Adventurous"
+    assert rows[0]["seed_count"] == 999
+    assert rows[0]["usage_count"] == 1
+    assert rows[0]["effective_popularity"] == 1000
+
+
 def test_chapters_progress_and_delete_work_cleanup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

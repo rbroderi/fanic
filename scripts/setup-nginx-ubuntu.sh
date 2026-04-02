@@ -112,7 +112,7 @@ STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
 if [[ "${NO_PROMPT}" != "true" ]]; then
   echo
   echo "FANIC nginx setup for Ubuntu"
-  echo "This config serves /cbz, /fanart, and /static from storage and proxies all other routes to WSGI."
+  echo "This config serves /cbz and /static from storage and proxies all other routes to WSGI."
   echo
 
   LISTEN_PORT="$(prompt_default "Local listen port" "${LISTEN_PORT}")"
@@ -132,8 +132,9 @@ STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
 CBZ_DIR="${STORAGE_ROOT}/cbz"
 STATIC_DIR="${STORAGE_ROOT}/static"
 FANART_DIR="${STORAGE_ROOT}/fanart"
+WORKS_DIR="${STORAGE_ROOT}/works"
 
-for dir_path in "${CBZ_DIR}" "${STATIC_DIR}" "${FANART_DIR}"; do
+for dir_path in "${CBZ_DIR}" "${STATIC_DIR}" "${FANART_DIR}" "${WORKS_DIR}"; do
   if [[ ! -d "${dir_path}" ]]; then
     echo "Expected directory not found: ${dir_path}" >&2
     exit 1
@@ -192,29 +193,34 @@ server {
       return 200 "User-agent: *\nDisallow: /\n";
     }
 
-    location /static/ {
-        alias ${STATIC_DIR}/;
-        try_files \$uri =404;
-        access_log off;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-
     location /cbz/ {
         alias ${CBZ_DIR}/;
         try_files \$uri =404;
         access_log off;
     }
 
-    location /fanart/images/ {
-      alias ${FANART_DIR}/;
-      try_files \$uri =404;
+    location ^~ /static/fanart/images/ {
+      alias ${FANART_DIR}/images/;
+      try_files \$uri \$uri/ =404;
       access_log off;
     }
 
-    location /fanart/thumbs/ {
-        alias ${FANART_DIR}/;
-        try_files \$uri =404;
+    location ^~ /static/fanart/thumbs/ {
+      alias ${FANART_DIR}/thumbs/;
+      try_files \$uri \$uri/ =404;
+      access_log off;
+    }
+
+    location ~ ^/static/([^/]+)/(pages|thumbs)/(.*)$ {
+      alias ${WORKS_DIR}/\$1/\$2/\$3;
+      access_log off;
+    }
+
+    location /static/ {
+      alias ${STATIC_DIR}/;
+      try_files \$uri =404;
         access_log off;
+      add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
     location / {
@@ -256,7 +262,9 @@ echo "Setup complete"
 echo "repo root: ${REPO_ROOT}"
 echo "serving /cbz from: ${CBZ_DIR}"
 echo "serving /static from: ${STATIC_DIR}"
-echo "serving /fanart from: ${FANART_DIR}"
+echo "serving /static/fanart/images from: ${FANART_DIR}/images"
+echo "serving /static/fanart/thumbs from: ${FANART_DIR}/thumbs"
+echo "serving /static/{work_id}/(pages|thumbs) from: ${WORKS_DIR}/{work_id}/..."
 echo "proxying dynamic routes to: http://${WSGI_HOST}:${WSGI_PORT}"
 echo "open: http://127.0.0.1:${LISTEN_PORT}"
 echo

@@ -67,9 +67,10 @@ def test_reports_route_renders_report_rows_for_admin(
         status: str,
         start_date: str,
         end_date: str,
+        source_path: str = "/dmca",
         limit: int = 250,
     ) -> list[dict[str, object]]:
-        _ = (work_id, issue_type, status, start_date, end_date, limit)
+        _ = (work_id, issue_type, status, start_date, end_date, source_path, limit)
         return [
             {
                 "id": 1,

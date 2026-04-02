@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from tempfile import mkdtemp
+from typing import cast
 
 from fanic.cylinder_sites.common import MAX_CBZ_UPLOAD_BYTES
 from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
@@ -50,6 +51,22 @@ def _has_selected_file(upload: object | None) -> bool:
         return False
     filename = getattr(upload, "filename", None)
     return isinstance(filename, str) and bool(filename.strip())
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int) or isinstance(value, float):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return float(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:
@@ -551,9 +568,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         except ModerationBlockedError as exc:
             moderation = exc.moderation
             reasons_obj = moderation.get("reasons")
-            reasons: list[str] = []
+            blocked_reasons: list[str] = []
             if isinstance(reasons_obj, list):
-                reasons = [str(reason) for reason in reasons_obj]
+                blocked_reasons = [str(reason) for reason in cast(list[object], reasons_obj)]
 
             return _render_editor_result(
                 request,
@@ -577,11 +594,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         "style": str(moderation.get("style", "unknown")),
                         "style_debug": moderation.get("style_debug", {}),
                         "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(
-                            moderation.get("nsfw_score", 0.0) if moderation.get("nsfw_score", 0.0) else 0.0
-                        ),
+                        "nsfw_score": _as_float(moderation.get("nsfw_score", 0.0)),
                         "nsfw_confidences": moderation.get("nsfw_confidences", {}),
-                        "reasons": reasons,
+                        "reasons": blocked_reasons,
                     },
                 },
             )
@@ -689,7 +704,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             reasons_obj = moderation.get("reasons")
             reasons: list[str] = []
             if isinstance(reasons_obj, list):
-                reasons = [str(reason) for reason in reasons_obj]
+                reasons = [str(reason) for reason in cast(list[object], reasons_obj)]
 
             return _render_editor_result(
                 request,
@@ -713,9 +728,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                         "style": str(moderation.get("style", "unknown")),
                         "style_debug": moderation.get("style_debug", {}),
                         "style_confidences": moderation.get("style_confidences", {}),
-                        "nsfw_score": float(
-                            moderation.get("nsfw_score", 0.0) if moderation.get("nsfw_score", 0.0) else 0.0
-                        ),
+                        "nsfw_score": _as_float(moderation.get("nsfw_score", 0.0)),
                         "nsfw_confidences": moderation.get("nsfw_confidences", {}),
                         "reasons": reasons,
                     },
@@ -829,13 +842,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 raise ValueError("Invalid ordered_filenames_json")
             if not isinstance(chapter_members, dict):
                 raise ValueError("Invalid chapter_members_json")
+            ordered_filenames_list = cast(list[object], ordered_filenames)
+            chapter_members_map = cast(dict[object, object], chapter_members)
 
             result = editor_reorder_gallery(
                 work_id=editor_state["editor_work_id"],
-                ordered_filenames=[str(name) for name in ordered_filenames],
+                ordered_filenames=[str(name) for name in ordered_filenames_list],
                 chapter_members={
-                    str(chapter_id): [str(name) for name in members]
-                    for chapter_id, members in chapter_members.items()
+                    str(chapter_id): [str(name) for name in cast(list[object], members)]
+                    for chapter_id, members in chapter_members_map.items()
                     if isinstance(members, list)
                 },
                 uploader_username=username,

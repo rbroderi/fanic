@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 from PIL import Image
@@ -18,7 +19,20 @@ from fanic.settings import get_settings
 _SETTINGS = get_settings()
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
-THUMBNAIL_MAX_DIMENSIONS = tuple(getattr(_SETTINGS, "thumbnail_max_dimensions", (720, 720)))
+
+
+def _resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
+    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
+    if isinstance(dims_obj, tuple):
+        dims_tuple = cast(tuple[object, ...], dims_obj)
+        if len(dims_tuple) == 2:
+            dim_w_obj, dim_h_obj = dims_tuple
+            if isinstance(dim_w_obj, int) and isinstance(dim_h_obj, int):
+                return (dim_w_obj, dim_h_obj)
+    return (720, 720)
+
+
+THUMBNAIL_MAX_DIMENSIONS = _resolve_thumbnail_dimensions(_SETTINGS)
 MAX_UPLOAD_IMAGE_PIXELS = int(getattr(_SETTINGS, "max_upload_image_pixels", 40000000))
 
 

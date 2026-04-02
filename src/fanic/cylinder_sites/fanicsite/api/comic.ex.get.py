@@ -1,5 +1,8 @@
 import json
+from collections.abc import Mapping
+from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED
 from zipfile import ZipFile
@@ -33,7 +36,7 @@ from fanic.settings import CBZ_DIR
 from fanic.utils import slugify
 
 
-def _can_view_work(request: RequestLike, work: dict[str, object]) -> bool:
+def _can_view_work(request: RequestLike, work: Mapping[str, object]) -> bool:
     return can_view_work(current_user(request), work)
 
 
@@ -44,7 +47,7 @@ def _csv_join(values: list[str]) -> str:
 def _split_csv_field(value: object) -> list[str]:
     if isinstance(value, list):
         normalized: list[str] = []
-        for item in value:
+        for item in cast(list[object], value):
             text = str(item).strip()
             if text:
                 normalized.append(text)
@@ -53,17 +56,6 @@ def _split_csv_field(value: object) -> list[str]:
     if not text_value:
         return []
     return [part.strip() for part in text_value.split(",") if part.strip()]
-
-
-def _dedupe_preserve_order(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
 
 
 def _split_int(value: object, default: int) -> int:
@@ -88,7 +80,7 @@ def _map_fanic_rating_to_comicinfo_age_rating(value: str) -> str:
     return age_rating_map.get(normalized, "Unknown")
 
 
-def _fanic_scaninformation(work: dict[str, object]) -> str:
+def _fanic_scaninformation(work: Mapping[str, object]) -> str:
     fanic_meta: dict[str, object] = {}
 
     work_id = str(work.get("id", "") if work.get("id", "") else "").strip()
@@ -116,23 +108,27 @@ def _fanic_scaninformation(work: dict[str, object]) -> str:
     return f"fanic_meta={json.dumps(fanic_meta, ensure_ascii=True)}"
 
 
-def _extract_tag_names(work: dict[str, object], tag_type: str) -> list[str]:
+def _extract_tag_names(work: Mapping[str, object], tag_type: str) -> list[str]:
     tags_obj = work.get("tags")
     if not isinstance(tags_obj, list):
         return []
     names: list[str] = []
-    for tag in tags_obj:
+    for tag in cast(list[object], tags_obj):
         if not isinstance(tag, dict):
             continue
-        if str(tag.get("type", "")) != tag_type:
+        tag_map = cast(dict[str, object], tag)
+        if str(tag_map.get("type", "")) != tag_type:
             continue
-        name = str(tag.get("name", "")).strip()
+        name = str(tag_map.get("name", "")).strip()
         if name:
             names.append(name)
     return names
 
 
-def _build_comicinfo_xml(work: dict[str, object], pages: list[dict[str, object]]) -> str:
+def _build_comicinfo_xml(
+    work: Mapping[str, object],
+    pages: Sequence[Mapping[str, object]],
+) -> str:
     root = ET.Element("ComicInfo")
 
     def add_text_element(name: str, value: str) -> None:
@@ -236,16 +232,16 @@ def _build_comicinfo_xml(work: dict[str, object], pages: list[dict[str, object]]
 
 
 def _chapter_members_with_fallback(
-    chapter: dict[str, object],
+    chapter: Mapping[str, object],
     page_order: list[str],
 ) -> list[str]:
-    chapter_id = int(chapter.get("id", 0) if chapter.get("id", 0) else 0)
+    chapter_id = _split_int(chapter.get("id", 0), 0)
     members = list_work_chapter_members(chapter_id)
     if members:
         return [name for name in members if name in page_order]
 
-    start_page = int(chapter.get("start_page", 1) if chapter.get("start_page", 1) else 1)
-    end_page = int(chapter.get("end_page", start_page) if chapter.get("end_page", start_page) else start_page)
+    start_page = _split_int(chapter.get("start_page", 1), 1)
+    end_page = _split_int(chapter.get("end_page", start_page), start_page)
     start_page = max(1, min(start_page, len(page_order) if len(page_order) else 1))
     end_page = max(
         start_page,
@@ -265,12 +261,12 @@ def _safe_filename(name: str, fallback: str) -> str:
     return safe if safe else fallback
 
 
-def _current_export_key(work_id: str, work: dict[str, object]) -> str:
+def _current_export_key(work_id: str, work: Mapping[str, object]) -> str:
     versions = list_work_versions(work_id, limit=1)
     if versions:
         return f"version:{str(versions[0].get('version_id', ''))}"
     updated_at = str(work.get("updated_at", ""))
-    page_count = int(work.get("page_count", 0) if work.get("page_count", 0) else 0)
+    page_count = _split_int(work.get("page_count", 0), 0)
     return f"legacy:{updated_at}:{page_count}"
 
 
@@ -287,7 +283,7 @@ def _read_cache_meta(cache_path: Path) -> dict[str, object] | None:
         return None
     if not isinstance(raw, dict):
         return None
-    return raw
+    return cast(dict[str, object], raw)
 
 
 def _write_cache_meta(cache_path: Path, payload: dict[str, object]) -> None:
@@ -297,14 +293,18 @@ def _write_cache_meta(cache_path: Path, payload: dict[str, object]) -> None:
     )
 
 
-def _resolve_archive_path(work_id: str, work: dict[str, object]) -> Path:
+def _resolve_archive_path(work_id: str, work: Mapping[str, object]) -> Path:
     cbz_path = str(work.get("cbz_path", "") if work.get("cbz_path", "") else "").strip()
     if cbz_path:
         return Path(cbz_path)
     return CBZ_DIR / f"{work_id}.cbz"
 
 
-def _build_cbz_export(work_id: str, work: dict[str, object], archive_path: Path) -> None:
+def _build_cbz_export(
+    work_id: str,
+    work: Mapping[str, object],
+    archive_path: Path,
+) -> None:
     pages = list_work_page_rows(work_id)
     if not pages:
         raise ValueError("Work has no pages to export")
@@ -315,7 +315,7 @@ def _build_cbz_export(work_id: str, work: dict[str, object], archive_path: Path)
     if chapters:
         assigned: set[str] = set()
         for chapter in chapters:
-            chapter_index = int(chapter.get("chapter_index", 0) if chapter.get("chapter_index", 0) else 0)
+            chapter_index = _split_int(chapter.get("chapter_index", 0), 0)
             chapter_title = str(chapter.get("title", "Chapter")).strip()
             title = chapter_title if chapter_title else "Chapter"
             folder_name = _chapter_folder_name(chapter_index, title)
@@ -332,7 +332,7 @@ def _build_cbz_export(work_id: str, work: dict[str, object], archive_path: Path)
         archive.writestr("ComicInfo.xml", _build_comicinfo_xml(work, pages))
 
         for page in pages:
-            page_index = int(page.get("page_index", 0) if page.get("page_index", 0) else 0)
+            page_index = _split_int(page.get("page_index", 0), 0)
             image_filename = str(page.get("image_filename", "") if page.get("image_filename", "") else "").strip()
             if not image_filename:
                 continue
@@ -358,7 +358,7 @@ def _build_cbz_export(work_id: str, work: dict[str, object], archive_path: Path)
             archive.write(source_path, arcname=arcname)
 
 
-def _ensure_download_archive(work_id: str, work: dict[str, object]) -> Path:
+def _ensure_download_archive(work_id: str, work: Mapping[str, object]) -> Path:
     archive_path = _resolve_archive_path(work_id, work)
     current_key = _current_export_key(work_id, work)
     cache_path = _cache_meta_path(archive_path)
@@ -391,19 +391,17 @@ def _version_page_files(
     if not isinstance(pages_obj, list):
         return None
 
-    for page in pages_obj:
+    for page in cast(list[object], pages_obj):
         if not isinstance(page, dict):
             continue
-        page_index_obj = page.get("page_index", 0)
-        try:
-            candidate_index = int(page_index_obj)
-        except (TypeError, ValueError):
-            continue
+        page_map = cast(dict[str, object], page)
+        page_index_obj = page_map.get("page_index", 0)
+        candidate_index = _split_int(page_index_obj, -1)
         if candidate_index != page_index:
             continue
 
-        image_name = str(page.get("image_filename", "") if page.get("image_filename", "") else "").strip()
-        thumb_name = str(page.get("thumb_filename", "") if page.get("thumb_filename", "") else "").strip()
+        image_name = str(page_map.get("image_filename", "") if page_map.get("image_filename", "") else "").strip()
+        thumb_name = str(page_map.get("thumb_filename", "") if page_map.get("thumb_filename", "") else "").strip()
         return {"image": image_name, "thumb": thumb_name}
 
     return None

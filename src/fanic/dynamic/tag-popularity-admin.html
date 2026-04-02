@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tag Popularity | FANIC Admin</title>
+    __SITE_HEAD_ASSETS__
+  </head>
+  <body>
+    __SITE_HEADER_HTML__
+
+    <main class="layout">
+      <section class="card">
+        <h2>Tag Popularity Report</h2>
+        <p class="profile-meta">
+          Effective popularity = <code>seed_count + usage_count</code>. Showing __TAG_POPULARITY_COUNT__ row(s).
+        </p>
+
+        <form method="get" action="/admin/tag-popularity" class="upload-form">
+          <label for="tagTypeFilter">Tag type</label>
+          <select id="tagTypeFilter" name="type">
+            <option value="">All</option>
+            __TAG_POPULARITY_TYPE_OPTIONS__
+          </select>
+
+          <label for="tagQueryFilter">Name or slug contains</label>
+          <input id="tagQueryFilter" name="q" type="text" value="__TAG_POPULARITY_QUERY__" />
+
+          <label for="tagLimitFilter">Result limit</label>
+          <input id="tagLimitFilter" name="limit" type="number" min="1" max="250" value="__TAG_POPULARITY_LIMIT__" />
+
+          <button type="submit">Apply filters</button>
+        </form>
+      </section>
+
+      <section class="card table-scroll-x">
+        <table class="report-table report-table-full">
+          <thead>
+            <tr>
+              <th class="text-left">Name</th>
+              <th class="text-left">Slug</th>
+              <th class="text-left">Type</th>
+              <th class="text-right">Attached Works</th>
+              <th class="text-right">Seed Count</th>
+              <th class="text-right">Usage Count</th>
+              <th class="text-right">Effective</th>
+            </tr>
+          </thead>
+          <tbody>
+            __TAG_POPULARITY_ROWS_HTML__
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    __SITE_COMMON_SCRIPTS__
+  </body>
+</html>

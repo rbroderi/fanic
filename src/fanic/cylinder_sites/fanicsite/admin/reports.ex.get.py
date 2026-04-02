@@ -173,7 +173,7 @@ def _report_rows_html(
                 <p><strong>Claimed URL:</strong> <a href="{claimed_url}" target="_blank" rel="noopener noreferrer">{claimed_url}</a></p>
                 <p><strong>Evidence:</strong> {evidence_html}</p>
                 <p><strong>Details:</strong><br />{details}</p>
-                <form class="upload-form" method="post" action="/admin/reports" style="margin-top:0.75rem;">
+                <form class="upload-form with-top-gap" method="post" action="/admin/reports">
                 <input type="hidden" name="report_id" value="{report_id}" />
                 <input type="hidden" name="report_work_id" value="{report_work_id}" />
                 <input type="hidden" name="work_id" value="{escape(filter_work_id)}" />
@@ -187,7 +187,7 @@ def _report_rows_html(
                 <button type="submit" name="report_action" value="mark-false" class="button-muted">Mark false</button>
                 <button type="submit" name="report_action" value="mark-research" class="button-muted">Mark more research needed</button>
                 {promote_button_html}
-                <button type="submit" name="report_action" value="remove" class="button-danger" onclick="return confirm('Remove this report item?');">Remove item</button>
+                <button type="submit" name="report_action" value="remove" class="button-danger" data-confirm-message="Remove this report item?">Remove item</button>
                 </form>
                 </article>
                 """
@@ -213,22 +213,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     end_date = request.args.get("end_date", "").strip()
     status_replacements = _status_replacements(msg)
 
-    report_kwargs: dict[str, str] = {
-        "work_id": work_id,
-        "issue_type": issue_type,
-        "status": status,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
     source_path = _source_path_for_tab(tab)
-    reports: list[ContentReportRow]
-    try:
-        reports = list_content_reports(
-            **report_kwargs,
-            source_path=source_path,
-        )
-    except TypeError:
-        reports = list_content_reports(**report_kwargs)
+    reports: list[ContentReportRow] = list_content_reports(
+        work_id=work_id,
+        issue_type=issue_type,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        source_path=source_path,
+    )
 
     issue_options_html = (
         feedback_category_options_html(issue_type) if tab == "feedback" else report_issue_options_html(issue_type)

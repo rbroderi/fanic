@@ -18,6 +18,7 @@ from typing import Protocol
 from typing import cast
 from typing import runtime_checkable
 from urllib.parse import parse_qs
+from urllib.parse import urlsplit
 from wsgiref.types import WSGIApplication
 
 import cylinder
@@ -192,6 +193,50 @@ def _underage_restriction_middleware(app: WSGIApplication) -> WSGIApplication:
 def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
     settings = get_settings()
     add_hsts = settings.require_https_effective
+    media_base_url = str(getattr(settings, "media_base_url", "")).strip()
+
+    script_sources: list[str] = ["'self'", "https://static.cloudflareinsights.com"]
+    connect_sources: list[str] = [
+        "'self'",
+        "https://static.cloudflareinsights.com",
+        "https://cloudflareinsights.com",
+    ]
+
+    if media_base_url:
+        parsed = urlsplit(media_base_url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            media_origin = f"{parsed.scheme}://{parsed.netloc}"
+            if media_origin not in script_sources:
+                script_sources.append(media_origin)
+            if media_origin not in connect_sources:
+                connect_sources.append(media_origin)
+
+            # When deployed behind host aliases, allow both apex and www to avoid false CSP reports.
+            if media_origin == "https://fanic.media":
+                script_sources.append("https://www.fanic.media")
+                connect_sources.append("https://www.fanic.media")
+            elif media_origin == "https://www.fanic.media":
+                script_sources.append("https://fanic.media")
+                connect_sources.append("https://fanic.media")
+
+    script_sources = list(dict.fromkeys(script_sources))
+    connect_sources = list(dict.fromkeys(connect_sources))
+
+    csp_value = "; ".join(
+        [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+            "form-action 'self'",
+            f"script-src {' '.join(script_sources)} 'unsafe-inline'",
+            f"script-src-elem {' '.join(script_sources)} 'unsafe-inline'",
+            "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+            "img-src 'self' data: blob: https:",
+            "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+            f"connect-src {' '.join(connect_sources)}",
+        ]
+    )
 
     def secured_app(
         environ: dict[str, object],
@@ -210,6 +255,7 @@ def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
                     ("X-Frame-Options", "DENY"),
                     ("Referrer-Policy", "strict-origin-when-cross-origin"),
                     ("Permissions-Policy", "camera=(), microphone=(), geolocation=()"),
+                    ("Content-Security-Policy", csp_value),
                 ]
             )
             if add_hsts:
@@ -282,23 +328,24 @@ def _invite_page_response(
     status: str = "200 OK",
 ) -> list[bytes]:
     safe_next_url = escape(next_url)
-    error_html = f'<p style="color:#b00020; margin:0 0 0.85rem 0;">{escape(error_message)}</p>' if error_message else ""
+    error_html = f'<p class="invite-error">{escape(error_message)}</p>' if error_message else ""
     body_text = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Alpha Access Required</title></head>"
-        '<body style="font-family:Arial,sans-serif;background:#f7f7f8;margin:0;padding:2rem;">'
-        '<main style="max-width:460px;margin:10vh auto;background:#fff;padding:1.2rem;'
-        'border:1px solid #ddd;border-radius:8px;">'
-        '<h1 style="margin-top:0;">Private Alpha</h1>'
-        '<p style="margin-top:0;">Enter your invite code to continue.</p>'
+        "<title>Alpha Access Required</title>"
+        '<link rel="stylesheet" href="/static/styles.css" />'
+        "</head>"
+        '<body class="alpha-invite-page">'
+        '<main class="alpha-invite-card">'
+        "<h1>Private Alpha</h1>"
+        "<p>Enter your invite code to continue.</p>"
         f"{error_html}"
         f'<form method="post" action="{ALPHA_INVITE_PATH}">'
         f'<input type="hidden" name="next" value="{safe_next_url}">'
         '<label for="inviteCode">Invite code</label>'
         '<input id="inviteCode" name="invite_code" type="password" required '
-        'style="display:block;width:100%;margin:.45rem 0 1rem;padding:.55rem;">'
-        '<button type="submit" style="padding:.55rem .95rem;">Unlock</button>'
+        'class="alpha-invite-input">'
+        '<button type="submit" class="alpha-invite-button">Unlock</button>'
         "</form></main></body></html>"
     )
     body = body_text.encode("utf-8")
@@ -390,6 +437,11 @@ def create_app() -> WSGIApplication:
 def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perms: str = "660") -> int:
     settings = get_settings()
     app = create_app()
+    threads = 4
+    connection_limit = 1000
+    recv_bytes = 65536
+    channel_timeout = 120
+    max_request_body_size = settings.max_cbz_upload_bytes + 1024 * 1024
 
     def _shutdown_handler(signum: int, _frame: object) -> None:
         name = signal.Signals(signum).name
@@ -399,13 +451,6 @@ def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perm
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _shutdown_handler)
 
-    waitress_kwargs: dict[str, object] = {
-        "threads": 4,
-        "connection_limit": 1000,
-        "recv_bytes": 65536,
-        "channel_timeout": 120,
-        "max_request_body_size": settings.max_cbz_upload_bytes + 1024 * 1024,
-    }
     if unix_socket:
         socket_path = Path(unix_socket).expanduser().resolve()
         socket_path.parent.mkdir(parents=True, exist_ok=True)
@@ -414,14 +459,32 @@ def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perm
                 socket_path.unlink()
             else:
                 raise ValueError(f"Unix socket path exists and is not a socket: {socket_path}")
-        waitress_kwargs["unix_socket"] = str(socket_path)
-        waitress_kwargs["unix_socket_perms"] = unix_socket_perms
-    else:
-        waitress_kwargs["host"] = host
-        waitress_kwargs["port"] = port
+        try:
+            waitress.serve(
+                app,
+                threads=threads,
+                connection_limit=connection_limit,
+                recv_bytes=recv_bytes,
+                channel_timeout=channel_timeout,
+                max_request_body_size=max_request_body_size,
+                unix_socket=str(socket_path),
+                unix_socket_perms=unix_socket_perms,
+            )
+        except KeyboardInterrupt:
+            print("Shutting down gracefully...", flush=True)
+        return OK
 
     try:
-        waitress.serve(app, **waitress_kwargs)
+        waitress.serve(
+            app,
+            threads=threads,
+            connection_limit=connection_limit,
+            recv_bytes=recv_bytes,
+            channel_timeout=channel_timeout,
+            max_request_body_size=max_request_body_size,
+            host=host,
+            port=port,
+        )
     except KeyboardInterrupt:
         print("Shutting down gracefully...", flush=True)
     return OK

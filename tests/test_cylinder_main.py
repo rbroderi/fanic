@@ -596,3 +596,51 @@ def test_create_app_alpha_invite_gate_accepts_code_and_allows_access(
     assert captured_status["value"] == "200 OK"
     assert called["base_app"] is True
     assert response_chunks == [b"ok"]
+
+
+def test_security_headers_middleware_keeps_style_strict_and_allows_inline_script_elem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_headers: dict[str, str] = {}
+
+    class _Settings:
+        require_https_effective: bool = False
+
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+
+    def base_app(
+        environ: dict[str, object],
+        start_response: Callable[..., object],
+    ) -> list[bytes]:
+        _ = environ
+        start_response("200 OK", [("Content-Type", "text/plain")])
+        return [b"ok"]
+
+    wrapped = cylinder_main._security_headers_middleware(base_app)
+
+    def fake_start_response(
+        status: str,
+        headers: list[tuple[str, str]],
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None] | None = None,
+    ) -> Callable[[bytes], object]:
+        _ = (status, exc_info)
+        captured_headers.clear()
+        captured_headers.update({key: value for key, value in headers})
+        return _write_response_chunk
+
+    response_chunks = list(
+        wrapped(
+            {
+                "PATH_INFO": "/",
+                "REQUEST_METHOD": "GET",
+            },
+            cast(StartResponse, fake_start_response),
+        )
+    )
+
+    csp_value = captured_headers["Content-Security-Policy"]
+    assert "script-src-elem 'self' https://static.cloudflareinsights.com 'unsafe-inline'" in csp_value
+    assert "script-src 'self' https://static.cloudflareinsights.com 'unsafe-inline'" in csp_value
+    assert "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com" in csp_value
+    assert "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'" not in csp_value
+    assert response_chunks == [b"ok"]

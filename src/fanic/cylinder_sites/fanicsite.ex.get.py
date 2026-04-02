@@ -50,7 +50,7 @@ def _work_grid_html(
         delete_html = ""
         if can_delete:
             delete_html = """
-        <form method=\"post\" action=\"/comic/{work_id}/delete\" class=\"admin-delete-form\" onsubmit=\"return confirm('Delete this comic? This cannot be undone.');\">
+                <form method=\"post\" action=\"/comic/{work_id}/delete\" class=\"admin-delete-form\" data-confirm-message=\"Delete this comic? This cannot be undone.\">
           <button type=\"submit\" class=\"icon-delete-button\" title=\"Delete comic\" aria-label=\"Delete comic\">
             <i class=\"fa-solid fa-trash\" aria-hidden=\"true\"></i>
           </button>
@@ -62,7 +62,7 @@ def _work_grid_html(
       <article class="card work-card">
         {delete_html}
                 <a href="{work_href}">
-          <img class="work-cover" src="{cover_src}" alt="{title} cover" loading="lazy" />
+                <img class="work-cover" src="{cover_src}" alt="{title} cover" loading="lazy" />
         </a>
                 <h3><a href="{work_href}">{title}</a></h3>
         <p class="work-meta">{rating_html} | {status} | {page_count} pages</p>
@@ -117,13 +117,16 @@ def _fanart_items_html(
         rating_html = rating_badge_html(row.get("rating", "Not Rated"))
         created_at = escape(str(row.get("created_at", "")))
         image_name = str(row.get("image_filename", "")).strip().lstrip("/")
-        claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else viewer_href
+        thumb_name = str(row.get("thumb_filename", "")).strip().lstrip("/")
+        direct_image_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else ""
+        direct_thumb_url = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else ""
+        claimed_url = direct_image_url if direct_image_url else direct_thumb_url if direct_thumb_url else viewer_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
             f"&work_title={quote(title_raw, safe='')}"
             f"&claimed_url={quote(claimed_url, safe='')}"
         )
-        thumb_name = str(row.get("thumb_filename", "")).strip().lstrip("/")
+        hotlink_href = f"/fanart/file/{safe_item_id}"
         if thumb_name:
             thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}"
         else:
@@ -133,7 +136,7 @@ def _fanart_items_html(
         if can_delete:
             delete_html = (
                 f'<form method="post" action="/fanart/{safe_profile_key}/{safe_item_id}/delete?next={home_fanart_next}" '
-                'class="admin-delete-form" onsubmit="return confirm(\'Delete this fanart? This cannot be undone.\');">'
+                'class="admin-delete-form" data-confirm-message="Delete this fanart? This cannot be undone.">'
                 '<button type="submit" class="icon-delete-button" title="Delete fanart" aria-label="Delete fanart">'
                 '<i class="fa-solid fa-trash" aria-hidden="true"></i>'
                 "</button>"
@@ -151,7 +154,7 @@ def _fanart_items_html(
                 <h3><a href="{uploader_profile_href}">@{safe_display_name}</a></h3>
         <p class="work-meta">{rating_html} | {created_at}</p>
         <p>{summary}</p>
-        <p><a href="{report_href}">Report</a></p>
+        <p><a href="{hotlink_href}" target="_blank" rel="noopener noreferrer">Get link</a> | <a href="{report_href}">Report</a></p>
       </article>
     '''
         )
@@ -181,7 +184,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     }
     username = current_user(request)
     can_delete = role_for_user(username) in {"superadmin", "admin"}
-    query_string = urlencode(request.args)
+    query_string = urlencode({"view": view, **filters})
     back_href = f"{request.path}?{query_string}" if query_string else request.path
 
     work_grid_html = ""

@@ -13,7 +13,7 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
-def test_render_html_template_injects_custom_theme_style(
+def test_render_html_template_injects_custom_theme_stylesheet_link(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
@@ -52,6 +52,4 @@ def test_render_html_template_injects_custom_theme_style(
     assert response.headers["Cache-Control"] == "no-store, max-age=0"
     assert response.headers["Pragma"] == "no-cache"
     assert response.headers["Expires"] == "0"
-    assert "customThemeOverrides" in html
-    assert "--accent: #268bd2;" in html
-    assert "--accent: #b58900;" in html
+    assert '<link rel="stylesheet" href="/theme/custom.css" />' in html

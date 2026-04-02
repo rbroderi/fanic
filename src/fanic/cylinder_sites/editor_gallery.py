@@ -1,18 +1,30 @@
 import re
+from collections.abc import Mapping
+from collections.abc import Sequence
 from html import escape
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import quote
-
-if TYPE_CHECKING:
-    from _typeshed import ConvertibleToInt
-else:
-    type ConvertibleToInt = int | str | bytes
 
 from fanic.cylinder_sites.common import media_url
 from fanic.repository import list_work_chapter_members
 
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
+
+
+def _to_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return int(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def _natural_filename_sort_key(filename: str) -> tuple[object, ...]:
@@ -26,11 +38,11 @@ def _natural_filename_sort_key(filename: str) -> tuple[object, ...]:
     return tuple(key)
 
 
-def _chapter_seed_members_from_range(page_order: list[str], chapter: dict[str, ConvertibleToInt]) -> list[str]:
+def _chapter_seed_members_from_range(page_order: list[str], chapter: Mapping[str, object]) -> list[str]:
     start_page_raw = chapter.get("start_page", 1)
-    start_page = int(start_page_raw if start_page_raw else 1)
+    start_page = _to_int(start_page_raw, 1)
     end_page_raw = chapter.get("end_page", start_page)
-    end_page = int(end_page_raw if end_page_raw else start_page)
+    end_page = _to_int(end_page_raw, start_page)
     page_order_len_or_one = len(page_order) if len(page_order) else 1
     start_page = max(1, min(start_page, page_order_len_or_one))
     end_page = max(
@@ -42,7 +54,7 @@ def _chapter_seed_members_from_range(page_order: list[str], chapter: dict[str, C
 
 def _page_thumb_button_html(
     work_id: str,
-    page_by_filename: dict[str, dict[str, ConvertibleToInt]],
+    page_by_filename: dict[str, Mapping[str, object]],
     image_filename: str,
 ) -> str:
     page = page_by_filename.get(image_filename)
@@ -50,12 +62,12 @@ def _page_thumb_button_html(
         return ""
 
     page_index_raw = page.get("page_index", 0)
-    page_index = int(page_index_raw if page_index_raw else 0)
+    page_index = _to_int(page_index_raw, 0)
     thumb_obj = page.get("thumb_filename")
     image_obj = page.get("image_filename", "")
-    thumb_name = str(thumb_obj).strip() if thumb_obj else ""
+    thumb_name = str(thumb_obj).strip().lstrip("/") if thumb_obj else ""
     if not thumb_name:
-        thumb_name = str(image_obj).strip()
+        thumb_name = str(image_obj).strip().lstrip("/")
     work_id_url = quote(work_id, safe="")
     thumb_url = media_url(f"/static/{work_id_url}/thumbs/{quote(thumb_name, safe='/')}")
     safe_name = escape(image_filename)
@@ -72,8 +84,8 @@ def _page_thumb_button_html(
 
 def render_editor_page_gallery_html(
     work_id: str,
-    pages: list[dict[str, ConvertibleToInt]],
-    chapters: list[dict[str, ConvertibleToInt]],
+    pages: Sequence[Mapping[str, object]],
+    chapters: Sequence[Mapping[str, object]],
 ) -> str:
     if not work_id:
         return ""
@@ -83,12 +95,12 @@ def render_editor_page_gallery_html(
     ordered_pages = sorted(
         pages,
         key=lambda page: (
-            int(page.get("page_index", 0) if page.get("page_index", 0) else 0),
+            _to_int(page.get("page_index", 0), 0),
             _natural_filename_sort_key(str(page.get("image_filename", ""))),
         ),
     )
 
-    page_by_filename: dict[str, dict[str, ConvertibleToInt]] = {}
+    page_by_filename: dict[str, Mapping[str, object]] = {}
     page_order: list[str] = []
     for page in ordered_pages:
         image_filename = str(page.get("image_filename", "")).strip()
@@ -102,9 +114,9 @@ def render_editor_page_gallery_html(
 
     for chapter in chapters:
         chapter_id_raw = chapter.get("id", 0)
-        chapter_id = int(chapter_id_raw if chapter_id_raw else 0)
+        chapter_id = _to_int(chapter_id_raw, 0)
         chapter_index_raw = chapter.get("chapter_index", 0)
-        chapter_index = int(chapter_index_raw if chapter_index_raw else 0)
+        chapter_index = _to_int(chapter_index_raw, 0)
         title = escape(str(chapter.get("title", "Untitled Chapter")))
         members = list_work_chapter_members(chapter_id)
         if not members:
@@ -142,7 +154,7 @@ def render_editor_page_gallery_html(
 
 def render_editor_chapters_html(
     work_id: str,
-    chapters: list[dict[str, ConvertibleToInt]],
+    chapters: Sequence[Mapping[str, object]],
     *,
     form_action: str,
     action_field_name: str,
@@ -155,26 +167,27 @@ def render_editor_chapters_html(
     if not chapters:
         return '<p class="profile-meta">No chapters yet.</p>'
 
-    confirm_attr = (
-        f" onsubmit=\"return confirm('{escape(delete_confirm_message)}');\"" if delete_confirm_message else ""
-    )
+    confirm_attr = f' data-confirm-message="{escape(delete_confirm_message)}"' if delete_confirm_message else ""
 
     rows: list[str] = []
     for chapter in chapters:
         chapter_id_raw = chapter.get("id", 0)
-        chapter_id = int(chapter_id_raw if chapter_id_raw else 0)
+        chapter_id = _to_int(chapter_id_raw, 0)
         chapter_index_raw = chapter.get("chapter_index", 0)
-        chapter_index = int(chapter_index_raw if chapter_index_raw else 0)
+        chapter_index = _to_int(chapter_index_raw, 0)
         title = escape(str(chapter.get("title", "Untitled Chapter")))
         start_page_raw = chapter.get("start_page", 1)
-        start_page = int(start_page_raw if start_page_raw else 1)
+        start_page = _to_int(start_page_raw, 1)
         end_page_raw = chapter.get("end_page", start_page)
-        end_page = int(end_page_raw if end_page_raw else start_page)
+        end_page = _to_int(end_page_raw, start_page)
         form_action_esc = escape(form_action)
         action_field_esc = escape(action_field_name)
         update_action_esc = escape(update_action_value)
         delete_action_esc = escape(delete_action_value)
         work_id_esc = escape(work_id)
+        title_input_id = f"chapter-title-{chapter_id}"
+        start_input_id = f"chapter-start-{chapter_id}"
+        end_input_id = f"chapter-end-{chapter_id}"
         rows.append(
             f"""
             <article class="card info-card editor-row">
@@ -183,12 +196,12 @@ def render_editor_chapters_html(
                     <input type="hidden" name="{action_field_esc}" value="{update_action_esc}" />
                     <input type="hidden" name="editor_work_id" value="{work_id_esc}" />
                     <input type="hidden" name="chapter_id" value="{chapter_id}" />
-                    <label>Title</label>
-                    <input type="text" name="chapter_title" value="{title}" required />
-                    <label>Start page</label>
-                    <input type="number" name="chapter_start_page" min="1" value="{start_page}" required />
-                    <label>End page</label>
-                    <input type="number" name="chapter_end_page" min="1" value="{end_page}" required />
+                    <label for="{title_input_id}">Title</label>
+                    <input id="{title_input_id}" type="text" name="chapter_title" value="{title}" required />
+                    <label for="{start_input_id}">Start page</label>
+                    <input id="{start_input_id}" type="number" name="chapter_start_page" min="1" value="{start_page}" required />
+                    <label for="{end_input_id}">End page</label>
+                    <input id="{end_input_id}" type="number" name="chapter_end_page" min="1" value="{end_page}" required />
                     <button type="submit">Update chapter</button>
                 </form>
                 <form class="upload-form" method="post" action="{form_action_esc}"{confirm_attr}>

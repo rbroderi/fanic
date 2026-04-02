@@ -161,6 +161,15 @@ class FanartGalleryRow(TypedDict):
     updated_at: str
 
 
+class FanartCommentRow(TypedDict):
+    id: int
+    fanart_item_id: str
+    username: str
+    commenter_display_name: NotRequired[str]
+    body: str
+    created_at: str
+
+
 def _normalize_user_role(role: object) -> UserRole:
     normalized = str(role).strip().lower()
     if normalized == "superadmin":
@@ -506,7 +515,7 @@ def _local_user_by_email(email: str) -> LocalUserRow | None:
     }
 
 
-def _next_available_username(seed: str) -> str:
+def _next_available_username(seed: str) -> str:  # pyright: ignore[reportUnusedFunction]
     base = slugify(seed)
     if not base:
         base = "user"
@@ -934,6 +943,17 @@ class ContentReportRow(TypedDict):
     created_at: str
 
 
+class TagPopularityRow(TypedDict):
+    tag_id: int
+    slug: str
+    name: str
+    type: str
+    attached_works: int
+    seed_count: int
+    usage_count: int
+    effective_popularity: int
+
+
 def _versions_dir_for_work(work_id: str) -> Path:
     return WORKS_DIR / work_id / "versions"
 
@@ -1226,6 +1246,69 @@ def add_work_comment(
             (work_id, username, chapter_number, body),
         )
     sync_work_metadata_toml(work_id)
+
+
+def add_fanart_comment(
+    fanart_item_id: str,
+    username: str,
+    body: str,
+) -> None:
+    normalized_item_id = fanart_item_id.strip()
+    normalized_username = username.strip()
+    normalized_body = body.strip()
+    if not normalized_item_id:
+        raise ValueError("fanart_item_id must not be empty")
+    if not normalized_username:
+        raise ValueError("username must not be empty")
+    if not normalized_body:
+        raise ValueError("body must not be empty")
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO fanart_comments (fanart_item_id, username, body)
+            VALUES (?, ?, ?)
+            """,
+            (normalized_item_id, normalized_username, normalized_body),
+        )
+
+
+def list_fanart_comments(fanart_item_id: str) -> list[FanartCommentRow]:
+    normalized_item_id = fanart_item_id.strip()
+    if not normalized_item_id:
+        return []
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                c.id,
+                c.fanart_item_id,
+                c.username,
+                COALESCE(NULLIF(u.display_name, ''), c.username) AS commenter_display_name,
+                c.body,
+                c.created_at
+            FROM fanart_comments c
+            LEFT JOIN users u ON lower(u.username) = lower(c.username)
+            WHERE c.fanart_item_id = ?
+            ORDER BY c.created_at DESC, c.id DESC
+            """,
+            (normalized_item_id,),
+        ).fetchall()
+
+    comments: list[FanartCommentRow] = []
+    for row in rows:
+        comments.append(
+            {
+                "id": int(row["id"]),
+                "fanart_item_id": str(row["fanart_item_id"]),
+                "username": str(row["username"]),
+                "commenter_display_name": str(row["commenter_display_name"]),
+                "body": str(row["body"]),
+                "created_at": str(row["created_at"]),
+            }
+        )
+    return comments
 
 
 def add_dmca_report(
@@ -2537,6 +2620,155 @@ def list_tag_names(tag_type: str, limit: int = 200) -> list[str]:
     return [str(row["name"]) for row in rows]
 
 
+def list_tag_name_suggestions(
+    tag_type: str,
+    query: str,
+    *,
+    limit: int = 12,
+) -> list[str]:
+    if limit < 1:
+        return []
+
+    normalized_query = query.strip().lower()
+    with get_connection() as connection:
+        if normalized_query:
+            like_query = f"%{normalized_query}%"
+            prefix_query = f"{normalized_query}%"
+            rows = connection.execute(
+                """
+                                SELECT t.name
+                                FROM tags AS t
+                                LEFT JOIN tag_popularity AS tp ON tp.tag_id = t.id
+                                WHERE t.type = ?
+                                    AND lower(t.name) LIKE ?
+                ORDER BY
+                                    CASE WHEN lower(t.name) LIKE ? THEN 0 ELSE 1 END,
+                                    COALESCE(tp.usage_count, 0) DESC,
+                                    COALESCE(tp.seed_count, 0) DESC,
+                                    length(t.name) ASC,
+                                    t.name COLLATE NOCASE ASC
+                LIMIT ?
+                """,
+                (tag_type, like_query, prefix_query, int(limit)),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                                SELECT t.name
+                                FROM tags AS t
+                                LEFT JOIN tag_popularity AS tp ON tp.tag_id = t.id
+                                WHERE t.type = ?
+                                ORDER BY
+                                    COALESCE(tp.usage_count, 0) DESC,
+                                    COALESCE(tp.seed_count, 0) DESC,
+                                    t.name COLLATE NOCASE ASC
+                LIMIT ?
+                """,
+                (tag_type, int(limit)),
+            ).fetchall()
+    return [str(row["name"]) for row in rows]
+
+
+def list_top_tag_popularity(
+    *,
+    limit: int = 50,
+    tag_type: str = "",
+    query: str = "",
+) -> list[TagPopularityRow]:
+    if limit < 1:
+        return []
+
+    where: list[str] = []
+    params: list[object] = []
+
+    normalized_type = tag_type.strip().lower()
+    if normalized_type:
+        where.append("t.type = ?")
+        params.append(normalized_type)
+
+    normalized_query = query.strip().lower()
+    if normalized_query:
+        where.append("(lower(t.name) LIKE ? OR lower(t.slug) LIKE ?)")
+        like_value = f"%{normalized_query}%"
+        params.extend([like_value, like_value])
+
+    sql = """
+        SELECT
+            t.id AS tag_id,
+            t.slug AS slug,
+            t.name AS name,
+            t.type AS type,
+            COALESCE(tp.seed_count, 0) AS seed_count,
+            COALESCE(tp.usage_count, 0) AS usage_count,
+            (
+                SELECT COUNT(*)
+                FROM work_tags AS wt
+                WHERE wt.tag_id = t.id
+            ) AS attached_works
+        FROM tags AS t
+        LEFT JOIN tag_popularity AS tp ON tp.tag_id = t.id
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += """
+        ORDER BY
+            (COALESCE(tp.seed_count, 0) + COALESCE(tp.usage_count, 0)) DESC,
+            COALESCE(tp.usage_count, 0) DESC,
+            t.name COLLATE NOCASE ASC
+        LIMIT ?
+    """
+    params.append(int(limit))
+
+    with get_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+
+    results: list[TagPopularityRow] = []
+    for row in rows:
+        seed_count = int(row["seed_count"])
+        usage_count = int(row["usage_count"])
+        results.append(
+            {
+                "tag_id": int(row["tag_id"]),
+                "slug": str(row["slug"]),
+                "name": str(row["name"]),
+                "type": str(row["type"]),
+                "attached_works": int(row["attached_works"]),
+                "seed_count": seed_count,
+                "usage_count": usage_count,
+                "effective_popularity": seed_count + usage_count,
+            }
+        )
+    return results
+
+
+def backfill_tag_usage_counts_from_work_tags() -> int:
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO tag_popularity (tag_id, seed_count, usage_count)
+            SELECT
+                t.id,
+                COALESCE(tp.seed_count, 0),
+                COALESCE(usage_counts.usage_count, 0)
+            FROM tags AS t
+            LEFT JOIN tag_popularity AS tp ON tp.tag_id = t.id
+            LEFT JOIN (
+                SELECT wt.tag_id AS tag_id, COUNT(*) AS usage_count
+                FROM work_tags AS wt
+                GROUP BY wt.tag_id
+            ) AS usage_counts ON usage_counts.tag_id = t.id
+            ON CONFLICT(tag_id) DO UPDATE SET
+                seed_count = excluded.seed_count,
+                usage_count = excluded.usage_count,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        )
+        row = connection.execute("SELECT COUNT(*) AS total FROM tags").fetchone()
+    if not row:
+        return 0
+    return int(row["total"])
+
+
 def upsert_work(work: dict[str, object]) -> None:
     warnings_value = work.get("warnings", "No Archive Warnings Apply")
     if isinstance(warnings_value, list):
@@ -2706,20 +2938,42 @@ def replace_work_pages(work_id: str, pages: list[WorkPageRow]) -> None:
     sync_work_metadata_toml(work_id)
 
 
-def _ensure_tag(name: str, tag_type: str) -> int:
+def _ensure_tag(
+    name: str,
+    tag_type: str,
+    *,
+    connection: sqlite3.Connection | None = None,
+) -> int:
     slug = slugify(name)
-    with get_connection() as connection:
-        existing = connection.execute("SELECT id FROM tags WHERE slug = ?", (slug,)).fetchone()
-        if existing:
-            return int(existing["id"])
+    if connection is None:
+        with get_connection() as managed_connection:
+            return _ensure_tag(name, tag_type, connection=managed_connection)
 
-        cursor = connection.execute(
-            "INSERT INTO tags (slug, name, type) VALUES (?, ?, ?)",
-            (slug, name, tag_type),
+    existing = connection.execute("SELECT id FROM tags WHERE slug = ?", (slug,)).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    cursor = connection.execute(
+        "INSERT INTO tags (slug, name, type) VALUES (?, ?, ?)",
+        (slug, name, tag_type),
+    )
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to insert tag")
+    return int(cursor.lastrowid)
+
+
+def _increment_tag_usage_counts(connection: sqlite3.Connection, tag_ids: set[int]) -> None:
+    for tag_id in tag_ids:
+        connection.execute(
+            """
+            INSERT INTO tag_popularity (tag_id, usage_count)
+            VALUES (?, 1)
+            ON CONFLICT(tag_id) DO UPDATE SET
+                usage_count = tag_popularity.usage_count + 1,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (tag_id,),
         )
-        if cursor.lastrowid is None:
-            raise RuntimeError("Failed to insert tag")
-        return int(cursor.lastrowid)
 
 
 def replace_work_tags(work_id: str, metadata: dict[str, object]) -> None:
@@ -2744,19 +2998,31 @@ def replace_work_tags(work_id: str, metadata: dict[str, object]) -> None:
             if isinstance(warning, str) and warning:
                 tag_pairs.append((warning, "archive_warning"))
 
+    unique_tag_pairs = list(dict.fromkeys(tag_pairs))
+
     with get_connection() as connection:
+        existing_rows = connection.execute(
+            "SELECT tag_id FROM work_tags WHERE work_id = ?",
+            (work_id,),
+        ).fetchall()
+        existing_tag_ids = {int(row["tag_id"]) for row in existing_rows}
+
         connection.execute(
             "DELETE FROM work_tags WHERE work_id = ?",
             (work_id,),
         )
 
-    for name, tag_type in tag_pairs:
-        tag_id = _ensure_tag(name, tag_type)
-        with get_connection() as connection:
+        new_tag_ids: set[int] = set()
+        for name, tag_type in unique_tag_pairs:
+            tag_id = _ensure_tag(name, tag_type, connection=connection)
+            new_tag_ids.add(tag_id)
             connection.execute(
                 "INSERT OR IGNORE INTO work_tags (work_id, tag_id) VALUES (?, ?)",
                 (work_id, tag_id),
             )
+
+        added_tag_ids = new_tag_ids - existing_tag_ids
+        _increment_tag_usage_counts(connection, added_tag_ids)
     sync_work_metadata_toml(work_id)
 
 

@@ -51,7 +51,7 @@ if (-not $StorageRoot) {
 if (-not $NoPrompt) {
     Write-Host ""
     Write-Host "FANIC nginx setup for Windows"
-    Write-Host "This installs nginx, serves /cbz, /fanart, and /static from storage, and proxies all other routes to WSGI."
+    Write-Host "This installs nginx, serves /cbz and /static from storage, and proxies all other routes to WSGI."
     Write-Host ""
 
     $NginxVersion = Prompt-Default -Message "nginx version" -Default $NginxVersion
@@ -71,6 +71,7 @@ $StorageRoot = (Resolve-Path $StorageRoot).Path
 $CbzDir = Join-Path $StorageRoot "cbz"
 $DynamicStaticDir = Join-Path $StorageRoot "static"
 $FanartDir = Join-Path $StorageRoot "fanart"
+$WorksDir = Join-Path $StorageRoot "works"
 if (-not (Test-Path $CbzDir)) {
     throw "Expected cbz file directory was not found: $CbzDir"
 }
@@ -79,6 +80,9 @@ if (-not (Test-Path $DynamicStaticDir)) {
 }
 if (-not (Test-Path $FanartDir)) {
     throw "Expected fanart file directory was not found: $FanartDir"
+}
+if (-not (Test-Path $WorksDir)) {
+    throw "Expected works file directory was not found: $WorksDir"
 }
 
 $nginxZipUrl = "https://nginx.org/download/nginx-$NginxVersion.zip"
@@ -129,6 +133,7 @@ if (Test-Path $confPath) {
 $dynamicPathNginx = To-NginxPath -PathValue ((Resolve-Path $DynamicStaticDir).Path)
 $cbzPathNginx = To-NginxPath -PathValue ((Resolve-Path $CbzDir).Path)
 $fanartPathNginx = To-NginxPath -PathValue ((Resolve-Path $FanartDir).Path)
+$worksPathNginx = To-NginxPath -PathValue ((Resolve-Path $WorksDir).Path)
 $nginxPrefix = To-NginxPath -PathValue ((Resolve-Path $NginxRoot).Path)
 if (-not $nginxPrefix.EndsWith("/")) {
     $nginxPrefix = "$nginxPrefix/"
@@ -187,15 +192,20 @@ http {
             access_log off;
         }
 
-        location /fanart/images/ {
-            alias $fanartPathNginx/;
-            try_files `$uri =404;
+        location ^~ /static/fanart/images/ {
+            alias $fanartPathNginx/images/;
+            try_files `$uri `$uri/ =404;
             access_log off;
         }
 
-        location /fanart/thumbs/ {
-            alias $fanartPathNginx/;
-            try_files `$uri =404;
+        location ^~ /static/fanart/thumbs/ {
+            alias $fanartPathNginx/thumbs/;
+            try_files `$uri `$uri/ =404;
+            access_log off;
+        }
+
+        location ~ ^/static/([^/]+)/(pages|thumbs)/(.*)$ {
+            alias $worksPathNginx/`$1/`$2/`$3;
             access_log off;
         }
 
@@ -249,7 +259,9 @@ Write-Host "Setup complete"
 Write-Host "nginx root: $NginxRoot"
 Write-Host "serving /cbz from: $CbzDir"
 Write-Host "serving /static from: $DynamicStaticDir"
-Write-Host "serving /fanart from: $FanartDir"
+Write-Host "serving /static/fanart/images from: $FanartDir\images"
+Write-Host "serving /static/fanart/thumbs from: $FanartDir\thumbs"
+Write-Host "serving /static/{work_id}/(pages|thumbs) from: $WorksDir\{work_id}\..."
 Write-Host "proxying dynamic routes to: http://${WsgiHost}:${WsgiPort}"
 Write-Host "open: http://127.0.0.1:$ListenPort"
 Write-Host ""

@@ -5,6 +5,7 @@ from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
+from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.editor_metadata import render_options_html
 
 
@@ -55,20 +56,23 @@ def render_upload_page(
 ) -> ResponseLike:
     work_upload_msg = request.args.get("msg", "").strip()
     status = _status_for_work_upload_message(work_upload_msg)
+    replacements = {
+        "__UPLOAD_STATUS_TEXT__": status.text,
+        "__UPLOAD_STATUS_CLASS__": status.css_class,
+        "__UPLOAD_STATUS_HIDDEN_ATTR__": status.hidden_attr,
+        "__TITLE__": escape(request.args.get("title", "").strip()),
+        "__SUMMARY__": escape(request.args.get("summary", "").strip()),
+        "__FANDOM__": escape(request.args.get("fandom", "").strip()),
+        "__RATING_OPTIONS_HTML__": render_options_html(
+            RATING_CHOICES,
+            request.args.get("rating", "Not Rated").strip(),
+        ),
+    }
+    replacements.update(render_common_tag_datalist_replacements())
+
     return render_html_template(
         request,
         response,
         "fanart-upload.html",
-        {
-            "__UPLOAD_STATUS_TEXT__": status.text,
-            "__UPLOAD_STATUS_CLASS__": status.css_class,
-            "__UPLOAD_STATUS_HIDDEN_ATTR__": status.hidden_attr,
-            "__TITLE__": escape(request.args.get("title", "").strip()),
-            "__SUMMARY__": escape(request.args.get("summary", "").strip()),
-            "__FANDOM__": escape(request.args.get("fandom", "").strip()),
-            "__RATING_OPTIONS_HTML__": render_options_html(
-                RATING_CHOICES,
-                request.args.get("rating", "Not Rated").strip(),
-            ),
-        },
+        replacements,
     )

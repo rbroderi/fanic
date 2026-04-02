@@ -20,7 +20,8 @@
           <textarea id="fanartSummary" name="summary" rows="5" maxlength="8000" required>__SUMMARY__</textarea>
 
           <label for="fanartFandom">Fandom</label>
-          <input id="fanartFandom" type="text" name="fandom" maxlength="220" value="__FANDOM__" />
+          <input id="fanartFandom" type="text" name="fandom" maxlength="220" value="__FANDOM__" list="fandomSuggestions" data-tag-autocomplete="1" data-tag-type="fandom" />
+          <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
 
           <label for="fanartRating">Rating</label>
           <select id="fanartRating" name="rating">
@@ -38,6 +39,7 @@
         </form>
       </section>
     </main>
+    <script src="/static/tag-autocomplete.js"></script>
     __SITE_COMMON_SCRIPTS__
   </body>
 </html>

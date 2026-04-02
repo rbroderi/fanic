@@ -164,6 +164,7 @@ def test_home_route_renders_fanart_tab(
     assert b'class="admin-delete-form"' in result.data
     assert b"/fanart/AliceArtist/fanart-1/delete?next=%2F%3Fview%3Dfanart" in result.data
     assert b"/static/fanart/thumbs/_objects/ab/thumb.avif" in result.data
+    assert b'/fanart/file/fanart-1" target="_blank" rel="noopener noreferrer">Get link</a>' in result.data
     assert (
         b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
         in result.data
@@ -304,6 +305,7 @@ def test_fanart_route_gallery_and_media(
     monkeypatch.setattr(module, "list_fanart_galleries_by_uploader", lambda *_: [])
     monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
     monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: set())
+    monkeypatch.setattr(module, "list_fanart_comments", lambda *_: [])
     monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
 
@@ -336,7 +338,7 @@ def test_fanart_route_gallery_and_media(
     assert rendered["__GALLERY_DOWNLOAD_CBZ_HREF__"] == "/fanart/alice/download/cbz"
     assert "/static/fanart/thumbs/_objects/aa/thumb.avif" in rendered["grid"]
     assert "/fanart/download/_objects/aa/image.avif" in rendered["grid"]
-    assert 'data-copy-url="/static/fanart/images/_objects/aa/image.avif"' in rendered["grid"]
+    assert 'href="/fanart/file/art-1" target="_blank" rel="noopener noreferrer">Get link</a>' in rendered["grid"]
     assert "/static/citrus.svg" in rendered["grid"]
     assert "fandom: Skyverse" in rendered["grid"]
     assert 'class="admin-delete-form"' in rendered["grid"]
@@ -363,12 +365,35 @@ def test_fanart_route_gallery_and_media(
     assert rendered["__READER_REPORT_WORK_TITLE__"] == "@AliceArtist fanart"
     assert rendered["__READER_REPORT_CLAIMED_URL__"].endswith("/static/fanart/images/_objects/aa/image.avif")
     assert "Copyright infringement (DMCA)" in rendered["__REPORT_ISSUE_OPTIONS_HTML__"]
+    assert rendered["__READER_META_SECTION_HIDDEN_ATTR__"] == ""
+    assert "title: Sky" in rendered["__READER_META_LINE__"]
+    assert rendered["__READER_META_SUMMARY__"] == "Color test"
+    assert "No comments yet." in rendered["__READER_FANART_COMMENTS_HTML__"]
+    assert rendered["__READER_COMMENT_FORM_ACTION__"] == "/fanart/alice/reader/comments"
+    assert rendered["__READER_FANART_ITEM_ID__"] == "art-1"
+    assert rendered["__READER_FANART_NEXT_HREF__"] == "/fanart/alice/reader?item_id=art-1"
 
     media_request = dummy_request(path="/fanart/thumbs/_objects/aa/thumb.avif")
     media_response = dummy_response()
     media_result = module.main(media_request, media_response)
 
     assert media_result.status_code == 404
+
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item",
+        lambda *_: {
+            "id": "art-1",
+            "image_filename": "_objects/aa/image.avif",
+            "thumb_filename": "_objects/aa/thumb.avif",
+        },
+    )
+    file_request = dummy_request(path="/fanart/file/art-1")
+    file_response = dummy_response()
+    file_result = module.main(file_request, file_response)
+
+    assert file_result.status_code == 302
+    assert file_result.headers["Location"] == "/static/fanart/images/_objects/aa/image.avif"
 
     image_file = tmp_path / "image.avif"
     image_file.write_bytes(b"image")
@@ -498,6 +523,7 @@ def test_fanart_route_gallery_grouping_filter(
         },
     )
     monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: {"art-2"})
+    monkeypatch.setattr(module, "list_fanart_comments", lambda *_: [])
     monkeypatch.setattr(module, "current_user", lambda *_: "alice")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
 
@@ -548,6 +574,7 @@ def test_fanart_route_gallery_grouping_filter(
     assert len(reader_bootstrap["pages"]) == 1
     assert reader_bootstrap["pages"][0]["id"] == "art-2"
     assert rendered["__READER_WORK_HREF__"] == "/fanart/alice?gallery=sketches"
+    assert rendered["__READER_FANART_NEXT_HREF__"] == "/fanart/alice/reader?item_id=art-2&amp;gallery=sketches"
 
 
 def test_fanart_download_filename_uses_display_name_fallback(
@@ -640,6 +667,7 @@ def test_fanart_reader_normalizes_legacy_image_filename_urls(
         ],
     )
     monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
+    monkeypatch.setattr(module, "list_fanart_comments", lambda *_: [])
 
     rendered: dict[str, str] = {}
 
@@ -669,6 +697,88 @@ def test_fanart_reader_normalizes_legacy_image_filename_urls(
     page = reader_bootstrap["pages"][0]
     assert page["image_url"].endswith("/static/fanart/images/_objects/aa/image.avif")
     assert page["download_url"] == "/fanart/download/_objects/aa/image.avif?item_id=art-1"
+
+
+def test_fanart_reader_renders_comments_markup(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
+        "fanicsite_fanart_ex_get_reader_comments_test",
+    )
+
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        lambda *_args, **_kwargs: [
+            {
+                "id": "art-1",
+                "uploader_username": "alice",
+                "uploader_display_name": "AliceArtist",
+                "title": "Sky",
+                "summary": "Color test",
+                "fandom": "Skyverse",
+                "rating": "General Audiences",
+                "image_filename": "_objects/aa/image.avif",
+                "thumb_filename": "_objects/aa/thumb.avif",
+                "width": 1000,
+                "height": 800,
+                "created_at": "2026-03-22T00:00:00Z",
+                "updated_at": "2026-03-22T00:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
+    monkeypatch.setattr(
+        module,
+        "list_fanart_comments",
+        lambda *_: [
+            {
+                "id": "c1",
+                "fanart_item_id": "art-1",
+                "username": "bob",
+                "commenter_display_name": "BobArtist",
+                "body": "Great colors",
+                "created_at": "2026-03-22T01:00:00Z",
+            }
+        ],
+    )
+
+    rendered: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = request
+        rendered["template"] = template_name
+        rendered.update(replacements)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    reader_request = dummy_request(
+        path="/fanart/alice/reader",
+        args={"item_id": "art-1", "msg": "comment-saved"},
+    )
+    reader_response = dummy_response()
+    reader_result = module.main(reader_request, reader_response)
+
+    assert reader_result.status_code == 200
+    assert rendered["template"] == "reader.html"
+    assert "BobArtist" in rendered["__READER_FANART_COMMENTS_HTML__"]
+    assert "Great colors" in rendered["__READER_FANART_COMMENTS_HTML__"]
+    assert rendered["__READER_COMMENT_STATUS_TEXT__"] == "Comment posted."
+    assert rendered["__READER_COMMENT_STATUS_CLASS__"] == "success"
+    assert rendered["__READER_COMMENT_STATUS_HIDDEN_ATTR__"] == ""
 
 
 def test_work_detail_route_renders_work_page(
@@ -795,7 +905,7 @@ def test_work_edit_route_renders_editor_with_success_status(
 
     def fake_list_work_page_rows(work_id: str) -> list[dict[str, Any]]:
         _ = work_id
-        return [{"page_number": 1, "filename": "p1.jpg"}]
+        return [{"page_number": 1, "filename": "p1.jpg", "thumb_filename": "p1-thumb.avif"}]
 
     def fake_list_work_chapters(work_id: str) -> list[dict[str, Any]]:
         _ = work_id
@@ -810,7 +920,8 @@ def test_work_edit_route_renders_editor_with_success_status(
         pages: list[dict[str, Any]],
         chapters: list[dict[str, Any]],
     ) -> str:
-        _ = (work_id, pages, chapters)
+        _ = (work_id, chapters)
+        rendered["gallery_thumb_filename"] = str(pages[0].get("thumb_filename", "")) if pages else ""
         return "<div>gallery</div>"
 
     def fake_render_editor_chapters_html(
@@ -875,6 +986,7 @@ def test_work_edit_route_renders_editor_with_success_status(
     assert rendered["status_text"] == "Page uploaded."
     assert rendered["status_class"] == "success"
     assert rendered["gallery"] == "<div>gallery</div>"
+    assert rendered["gallery_thumb_filename"] == "p1-thumb.avif"
 
 
 def test_work_edit_route_renders_explicit_rating_lock_error(

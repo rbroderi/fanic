@@ -183,7 +183,11 @@ SITE_HEAD_ASSETS_HTML = (
     '    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />\n'
     '    <link rel="stylesheet" href="/static/styles.css" />'
 )
-SITE_COMMON_SCRIPTS_HTML = '<script src="/static/user-menu.js?v=20260329-logged-out-page"></script>'
+SITE_COMMON_SCRIPTS_HTML = (
+    '<script src="/static/user-menu.js?v=20260329-logged-out-page"></script>'
+    '<script src="/static/confirm-actions.js?v=20260401-csp"></script>'
+    '<script src="/static/queued-images.js?v=20260401-queue"></script>'
+)
 
 THEME_VAR_ALLOWLIST = {
     "bg",
@@ -1131,9 +1135,11 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     is_admin = role in {"superadmin", "admin"}
     reports_current_attr = ' aria-current="page"' if request.path == "/admin/reports" else ""
     users_current_attr = ' aria-current="page"' if request.path == "/admin/users" else ""
+    tags_current_attr = ' aria-current="page"' if request.path == "/admin/tag-popularity" else ""
     admin_reports_link = (
         f'<a href="/admin/reports"{reports_current_attr}>Reports</a>'
         f'<a href="/admin/users"{users_current_attr}>Users</a>'
+        f'<a href="/admin/tag-popularity"{tags_current_attr}>Tag Popularity</a>'
         if is_admin
         else ""
     )
@@ -1252,8 +1258,11 @@ def _extract_theme_overrides(toml_text: str) -> dict[str, dict[str, str]]:
     return result
 
 
-def _custom_theme_style_tag(request: RequestLike) -> str:
+def custom_theme_css_text(request: RequestLike) -> str:
     username = current_user(request)
+    if not username:
+        return ""
+
     preference = get_user_theme_preference(username)
     if not preference["enabled"]:
         return ""
@@ -1271,7 +1280,7 @@ def _custom_theme_style_tag(request: RequestLike) -> str:
     if not light_pairs and not dark_pairs:
         return ""
 
-    css_chunks: list[str] = ['<style id="customThemeOverrides">\n']
+    css_chunks: list[str] = []
     if light_pairs:
         css_chunks.append(":root {\n")
         for name, value in light_pairs.items():
@@ -1282,7 +1291,6 @@ def _custom_theme_style_tag(request: RequestLike) -> str:
         for name, value in dark_pairs.items():
             css_chunks.append(f"  --{name}: {value};\n")
         css_chunks.append("}\n")
-    css_chunks.append("</style>")
     return "".join(css_chunks)
 
 
@@ -1320,9 +1328,10 @@ def render_html_template(
     for marker, value in merged.items():
         html = html.replace(marker, value)
 
-    custom_theme_style = _custom_theme_style_tag(request)
-    if custom_theme_style and "</head>" in html:
-        html = html.replace("</head>", f"{custom_theme_style}\n  </head>", 1)
+    custom_theme_css = custom_theme_css_text(request)
+    if custom_theme_css and "</head>" in html:
+        custom_theme_link = '<link rel="stylesheet" href="/theme/custom.css" />'
+        html = html.replace("</head>", f"{custom_theme_link}\n  </head>", 1)
 
     # Add the global footer to styled site pages without editing each template.
     if "/static/styles.css" in html and "</body>" in html:

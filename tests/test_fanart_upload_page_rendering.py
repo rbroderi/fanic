@@ -27,3 +27,25 @@ def test_fanart_upload_get_accepts_trailing_slash(
     result = module.main(request, response)
 
     assert result.status_code == 200
+
+
+def test_fanart_upload_page_renders_fandom_autocomplete(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart/upload.ex.get.py",
+        "fanicsite_fanart_upload_ex_get_autocomplete_test",
+    )
+
+    request = dummy_request(path="/fanart/upload", args={})
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 200
+    html = result.data.decode("utf-8")
+    assert 'data-tag-autocomplete="1"' in html
+    assert 'data-tag-type="fandom"' in html
+    assert '<datalist id="fandomSuggestions">' in html
+    assert '<script src="/static/tag-autocomplete.js"></script>' in html

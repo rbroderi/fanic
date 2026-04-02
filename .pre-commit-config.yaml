@@ -9,9 +9,9 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-      - id: sync-static-to-storage
-        name: sync-static-to-storage
-        entry: bash scripts/sync-static-from-storage.sh
+      - id: sync-static-from-storage
+        name: sync-static-from-storage
+        entry: bash static/sync-from-storage.sh
         language: system
         pass_filenames: false
         always_run: true
@@ -34,6 +34,14 @@ repos:
       - id: ruff-ci
         name: ruff-precommit
         entry: just ruff-precommit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: basedpyright
+        name: basedpyright
+        entry: uvx basedpyright
         language: system
         pass_filenames: false
         always_run: true

@@ -29,7 +29,7 @@
           </select>
 
           <label for="warnings">Warnings (comma-separated)</label>
-          <input id="warnings" name="warnings" type="text" value="__EDIT_WARNINGS__" list="warningSuggestions" />
+          <input id="warnings" name="warnings" type="text" value="__EDIT_WARNINGS__" list="warningSuggestions" data-tag-autocomplete="1" data-tag-type="archive_warning" />
 
           <label for="status">Status</label>
           <select id="status" name="status">
@@ -50,16 +50,16 @@
           <input id="published_at" name="published_at" type="date" value="__EDIT_PUBLISHED_AT__" />
 
           <label for="fandoms">Fandoms (comma-separated)</label>
-          <input id="fandoms" name="fandoms" type="text" value="__EDIT_FANDOMS__" list="fandomSuggestions" />
+          <input id="fandoms" name="fandoms" type="text" value="__EDIT_FANDOMS__" list="fandomSuggestions" data-tag-autocomplete="1" data-tag-type="fandom" />
 
           <label for="relationships">Relationships (comma-separated)</label>
-          <input id="relationships" name="relationships" type="text" value="__EDIT_RELATIONSHIPS__" list="relationshipSuggestions" />
+          <input id="relationships" name="relationships" type="text" value="__EDIT_RELATIONSHIPS__" list="relationshipSuggestions" data-tag-autocomplete="1" data-tag-type="relationship" />
 
           <label for="characters">Characters (comma-separated)</label>
-          <input id="characters" name="characters" type="text" value="__EDIT_CHARACTERS__" list="characterSuggestions" />
+          <input id="characters" name="characters" type="text" value="__EDIT_CHARACTERS__" list="characterSuggestions" data-tag-autocomplete="1" data-tag-type="character" />
 
           <label for="freeform_tags">Freeform Tags (comma-separated)</label>
-          <input id="freeform_tags" name="freeform_tags" type="text" value="__EDIT_FREEFORM_TAGS__" list="freeformSuggestions" />
+          <input id="freeform_tags" name="freeform_tags" type="text" value="__EDIT_FREEFORM_TAGS__" list="freeformSuggestions" data-tag-autocomplete="1" data-tag-type="freeform" />
 
           <datalist id="warningSuggestions">__WARNINGS_OPTIONS_HTML__</datalist>
           <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
@@ -101,7 +101,7 @@
             <button id="replaceSelectedButton" type="submit" disabled>Replace selected page</button>
           </form>
 
-          <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit" onsubmit="return confirm('Delete selected page?');">
+          <form class="upload-form" method="post" action="/comic/__WORK_ID__/edit" data-confirm-message="Delete selected page?">
             <input type="hidden" name="edit_action" value="editor-delete-page" />
             <input type="hidden" name="editor_work_id" value="__EDITOR_WORK_ID__" />
             <input id="deletePageIndex" type="hidden" name="page_index" value="" />
@@ -137,6 +137,7 @@
     </main>
 
     __SITE_COMMON_SCRIPTS__
+    <script src="/static/tag-autocomplete.js"></script>
     <script src="/static/work-edit.js"></script>
   </body>
  </html>

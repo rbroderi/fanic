@@ -12,34 +12,6 @@ from fanic.cylinder_sites.common import validate_csrf
 from fanic.settings import get_settings
 
 
-def _request_base_url(request: RequestLike) -> str:
-    host_url_raw = getattr(request, "host_url", "")
-    host_url = host_url_raw.strip() if isinstance(host_url_raw, str) else ""
-    if host_url:
-        return host_url
-
-    url_root_raw = getattr(request, "url_root", "")
-    url_root = url_root_raw.strip() if isinstance(url_root_raw, str) else ""
-    if url_root:
-        return url_root
-
-    headers = getattr(request, "headers", None)
-    if headers is None or not hasattr(headers, "get"):
-        return ""
-
-    forwarded_proto_raw = headers.get("X-Forwarded-Proto", "")
-    forwarded_proto = str(forwarded_proto_raw).split(",")[0].strip() if forwarded_proto_raw else ""
-    forwarded_host_raw = headers.get("X-Forwarded-Host", "")
-    host_header_raw = headers.get("Host", "")
-    host_source = forwarded_host_raw if forwarded_host_raw else host_header_raw
-    host = str(host_source).split(",")[0].strip() if host_source else ""
-    if not host:
-        return ""
-
-    scheme = forwarded_proto if forwarded_proto else "https"
-    return f"{scheme}://{host}/"
-
-
 def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     response.status_code = 303
     response.content_type = "text/plain; charset=utf-8"

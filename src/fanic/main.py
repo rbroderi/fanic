@@ -214,6 +214,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     restore_data.set_defaults(command="restore-data")
 
+    report_tag_popularity = subcommands.add_parser(
+        "report-tag-popularity",
+        help="Print top tags by effective popularity",
+    )
+    report_tag_popularity.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximum number of rows to print (default: 50)",
+    )
+    report_tag_popularity.add_argument(
+        "--type",
+        default="",
+        help="Optional tag type filter (freeform, fandom, relationship, etc.)",
+    )
+    report_tag_popularity.add_argument(
+        "--q",
+        default="",
+        help="Optional case-insensitive name/slug contains filter",
+    )
+    report_tag_popularity.set_defaults(command="report-tag-popularity")
+
+    backfill_tag_popularity = subcommands.add_parser(
+        "backfill-tag-popularity",
+        help="Backfill tag usage_count from current work_tags cardinality",
+    )
+    backfill_tag_popularity.set_defaults(command="backfill-tag-popularity")
+
     return parser
 
 
@@ -323,6 +351,39 @@ def main() -> int:
                 return ERROR
 
             print("Restore complete")
+            return OK
+        case "report-tag-popularity":
+            from fanic.repository import list_top_tag_popularity
+
+            _ = run_database_migrations()
+            rows = list_top_tag_popularity(
+                limit=int(args.limit),
+                tag_type=str(args.type),
+                query=str(args.q),
+            )
+            print("name\ttype\teffective\tusage\tseed\tattached\tslug")
+            for row in rows:
+                print(
+                    "\t".join(
+                        [
+                            row["name"],
+                            row["type"],
+                            str(row["effective_popularity"]),
+                            str(row["usage_count"]),
+                            str(row["seed_count"]),
+                            str(row["attached_works"]),
+                            row["slug"],
+                        ]
+                    )
+                )
+            print(f"Printed {len(rows)} row(s)")
+            return OK
+        case "backfill-tag-popularity":
+            from fanic.repository import backfill_tag_usage_counts_from_work_tags
+
+            _ = run_database_migrations()
+            updated_total = backfill_tag_usage_counts_from_work_tags()
+            print(f"Backfilled usage_count from work_tags for {updated_total} tag(s)")
             return OK
         case _:
             return ERROR

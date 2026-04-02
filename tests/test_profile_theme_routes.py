@@ -715,7 +715,7 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
     assert state["enabled"] is False
 
     get_request = dummy_request(path="/user/profile", args={})
-    assert common_module._custom_theme_style_tag(get_request) == ""
+    assert common_module.custom_theme_css_text(get_request) == ""
 
 
 def test_profile_post_onboarding_saves_display_name_and_age_gate(

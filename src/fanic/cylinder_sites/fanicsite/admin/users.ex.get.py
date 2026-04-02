@@ -98,6 +98,7 @@ def _users_rows_html(users: Sequence[LocalUserRow], *, actor_username: str, acto
         state_text = "Active" if active else "Inactive"
         target_active = "0" if active else "1"
         toggle_label = "Deactivate" if active else "Reactivate"
+        role_select_id = f"role-{safe_username}"
 
         rows.append(
             dedent(
@@ -109,8 +110,8 @@ def _users_rows_html(users: Sequence[LocalUserRow], *, actor_username: str, acto
                 <form class="upload-form" method="post" action="/admin/users">
                 <input type="hidden" name="target_username" value="{safe_username}" />
                 <input type="hidden" name="user_action" value="set-role" />
-                <label>Role</label>
-                <select name="role"{role_select_disabled}>
+                <label for="{role_select_id}">Role</label>
+                <select id="{role_select_id}" name="role"{role_select_disabled}>
                 {_role_options_html(role)}
                 </select>
                 <button type="submit">Save role</button>
@@ -124,7 +125,7 @@ def _users_rows_html(users: Sequence[LocalUserRow], *, actor_username: str, acto
                 <form class="upload-form" method="post" action="/admin/users">
                 <input type="hidden" name="target_username" value="{safe_username}" />
                 <input type="hidden" name="user_action" value="remove" />
-                <button type="submit" class="button-danger" onclick="return confirm('Remove this user account?');"{remove_disabled}>Remove user</button>
+                <button type="submit" class="button-danger" data-confirm-message="Remove this user account?"{remove_disabled}>Remove user</button>
                 </form>
                 </article>
                 """

@@ -403,3 +403,130 @@ def test_fanart_gallery_delete_admin_can_delete_for_owner(
     assert result.headers["Location"] == "/fanart/alice?msg=gallery-deleted"
     assert captured["uploader_username"] == "alice"
     assert captured["gallery_id"] == "gallery-1"
+
+
+def test_fanart_reader_comment_requires_login(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_reader_comment_login_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "current_user", lambda *_: None)
+
+    request = dummy_request(
+        path="/fanart/alice/reader/comments",
+        method="POST",
+        form={
+            "fanart_item_id": "art-1",
+            "comment_body": "Nice",
+            "next": "/fanart/alice/reader?item_id=art-1",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice/reader?item_id=art-1&msg=login-required"
+
+
+def test_fanart_reader_comment_rejects_empty_body(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_reader_comment_empty_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item",
+        lambda *_: {
+            "id": "art-1",
+            "uploader_username": "alice",
+        },
+    )
+
+    request = dummy_request(
+        path="/fanart/alice/reader/comments",
+        method="POST",
+        form={
+            "fanart_item_id": "art-1",
+            "comment_body": "   ",
+            "next": "/fanart/alice/reader?item_id=art-1",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice/reader?item_id=art-1&msg=comment-empty"
+
+
+def test_fanart_reader_comment_redirects_with_success(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_reader_comment_success_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
+    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item",
+        lambda *_: {
+            "id": "art-1",
+            "uploader_username": "alice",
+        },
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_add_fanart_comment(item_id: str, username: str, body: str) -> dict[str, str]:
+        captured["item_id"] = item_id
+        captured["username"] = username
+        captured["body"] = body
+        return {"id": "comment-1"}
+
+    monkeypatch.setattr(module, "add_fanart_comment", fake_add_fanart_comment)
+
+    request = dummy_request(
+        path="/fanart/alice/reader/comments",
+        method="POST",
+        form={
+            "fanart_item_id": "art-1",
+            "comment_body": "Great shot",
+            "next": "/fanart/alice/reader?item_id=art-1",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/fanart/alice/reader?item_id=art-1&msg=comment-saved"
+    assert captured == {
+        "item_id": "art-1",
+        "username": "bob",
+        "body": "Great shot",
+    }

@@ -143,10 +143,9 @@ def test_route_helpers_and_user_menu(
     monkeypatch.setattr(module, "current_user", fake_current_user_admin)
     monkeypatch.setattr(module, "role_for_user", _role_superadmin)
     logged_in_admin = module.user_menu_replacements(request)
-    assert (
-        logged_in_admin["__ADMIN_REPORTS_LINK__"]
-        == '<a href="/admin/reports">Reports</a><a href="/admin/users">Users</a>'
-    )
+    admin_links_html = logged_in_admin["__ADMIN_REPORTS_LINK__"]
+    assert '<a href="/admin/reports">Reports</a>' in admin_links_html
+    assert '<a href="/admin/users">Users</a>' in admin_links_html
 
     monkeypatch.setattr(module, "current_user", fake_current_user_logged_out)
     monkeypatch.setattr(module, "role_for_user", _role_guest)
@@ -196,17 +195,16 @@ def test_theme_override_parsing_and_style_tag(
         "get_user_theme_preference",
         fake_get_theme_preference_valid,
     )
-    style_tag = module._custom_theme_style_tag(req)
-    assert "customThemeOverrides" in style_tag
-    assert "--accent: #268bd2;" in style_tag
-    assert "--accent: #b58900;" in style_tag
+    css_text = module.custom_theme_css_text(req)
+    assert "--accent: #268bd2;" in css_text
+    assert "--accent: #b58900;" in css_text
 
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
         fake_get_theme_preference_invalid,
     )
-    assert module._custom_theme_style_tag(req) == ""
+    assert module.custom_theme_css_text(req) == ""
 
 
 def test_session_and_upload_helpers(
@@ -319,6 +317,32 @@ def test_session_and_upload_helpers(
     thumb_path = module.thumb_file_for("w1", "t1.jpg")
     assert page_path.parts[-3:] == ("w1", "pages", "p1.jpg")
     assert thumb_path.parts[-3:] == ("w1", "thumbs", "t1.jpg")
+
+
+def test_editor_gallery_uses_direct_thumb_src(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/editor_gallery.py",
+        "editor_gallery_deferred_thumb_test",
+    )
+    monkeypatch.setattr(module, "list_work_chapter_members", lambda *_: [])
+
+    html = module.render_editor_page_gallery_html(
+        "work-1",
+        [
+            {
+                "page_index": 1,
+                "image_filename": "_objects/aa/page.avif",
+                "thumb_filename": "_objects/aa/thumb.avif",
+            }
+        ],
+        [],
+    )
+
+    assert '/static/work-1/thumbs/_objects/aa/thumb.avif"' in html
+    assert 'data-thumb-src="' not in html
 
 
 def test_log_path_resolution_uses_log_suffix(

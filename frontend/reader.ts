@@ -13,7 +13,14 @@ function readBootstrap() {
   try {
     return JSON.parse(node.textContent);
   } catch {
-    return null;
+    // Some proxies/security layers can HTML-escape embedded JSON text.
+    try {
+      const decoder = document.createElement("textarea");
+      decoder.innerHTML = node.textContent;
+      return JSON.parse(decoder.value);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -66,12 +73,31 @@ const reportImageButton = document.getElementById("reportImageButton");
 const reportModal = document.getElementById("reportModal");
 const reportModalCancel = document.getElementById("reportModalCancel");
 const downloadImageLink = document.getElementById("downloadImageLink") as HTMLAnchorElement | null;
+const openImageLink = document.getElementById("openImageLink") as HTMLAnchorElement | null;
 const readerReportClaimedUrl = document.getElementById(
   "readerReportClaimedUrl",
 ) as HTMLInputElement | null;
 const readerReportWorkTitle = document.getElementById(
   "readerReportWorkTitle",
 ) as HTMLInputElement | null;
+
+if (!state.pages.length) {
+  const initialImage = readerImage?.getAttribute("src")?.trim() || "";
+  const initialThumb =
+    thumbs?.querySelector<HTMLImageElement>(".thumb")?.getAttribute("src")?.trim() || initialImage;
+  if (initialImage) {
+    state.pages = [
+      {
+        index: 1,
+        image_url: initialImage,
+        thumb_url: initialThumb,
+        width: null,
+        height: null,
+      },
+    ];
+    state.index = 1;
+  }
+}
 let thumbObserver: IntersectionObserver | null = null;
 let mobileObserver: IntersectionObserver | null = null;
 let activeMediaRequests = 0;
@@ -493,6 +519,28 @@ function updateDownloadLinkForCurrentPage() {
   downloadImageLink.href = downloadUrl;
 }
 
+function updateOpenImageLinkForCurrentPage() {
+  if (!openImageLink) {
+    return;
+  }
+
+  const page = state.pages[state.index - 1];
+  if (!page) {
+    return;
+  }
+
+  const imageUrl = typeof page.image_url === "string" ? page.image_url.trim() : "";
+  const thumbUrl = typeof page.thumb_url === "string" ? page.thumb_url.trim() : "";
+  const resolvedUrl = imageUrl ? imageUrl : thumbUrl;
+  if (!resolvedUrl) {
+    openImageLink.hidden = true;
+    return;
+  }
+
+  openImageLink.hidden = false;
+  openImageLink.href = resolvedUrl;
+}
+
 function openReportModal() {
   if (!reportModal) {
     return;
@@ -515,17 +563,42 @@ function renderPage(index) {
   if (!page) {
     return;
   }
+  const primaryImageUrl = typeof page.image_url === "string" ? page.image_url.trim() : "";
+  const fallbackThumbUrl = typeof page.thumb_url === "string" ? page.thumb_url.trim() : "";
+  if (!primaryImageUrl) {
+    return;
+  }
+
   state.index = index;
   state.panX = 0;
   state.panY = 0;
   readerImage.classList.remove("visible");
-  readerImage.src = page.image_url;
-  readerImage.onload = () => readerImage.classList.add("visible");
+
+  let usedFallback = false;
+  readerImage.onload = () => {
+    readerImage.classList.add("visible");
+    if (usedFallback) {
+      counter.textContent = `Page ${state.index} / ${state.pages.length} (full image unavailable)`;
+      return;
+    }
+    counter.textContent = `Page ${state.index} / ${state.pages.length}`;
+  };
+  readerImage.onerror = () => {
+    if (!usedFallback && fallbackThumbUrl) {
+      usedFallback = true;
+      readerImage.src = fallbackThumbUrl;
+      return;
+    }
+    readerImage.classList.add("visible");
+    counter.textContent = `Page ${state.index} / ${state.pages.length} (image failed to load)`;
+  };
+  readerImage.src = primaryImageUrl;
   counter.textContent = `Page ${state.index} / ${state.pages.length}`;
   syncChapterSelection();
   saveProgress();
   updateReportFieldsForCurrentPage();
   updateDownloadLinkForCurrentPage();
+  updateOpenImageLinkForCurrentPage();
 
   for (let offset = -1; offset <= 2; offset += 1) {
     loadThumbByIndex(state.index + offset);
@@ -735,10 +808,6 @@ function renderMobileList() {
 }
 
 async function init() {
-  if (!state.pages.length) {
-    return;
-  }
-
   const title = typeof bootstrap?.title === "string" ? bootstrap.title : "FANIC Reader";
   document.title = `${title} - FANIC Reader`;
 
@@ -762,11 +831,15 @@ async function init() {
     downloadImageLink.hidden = true;
   }
 
+  bindControls();
+  if (!state.pages.length) {
+    return;
+  }
+
   renderSidebar();
   renderMobileList();
   renderChapterSelector();
   applyZoom();
-  bindControls();
 
   const initialIndex = Math.min(Math.max(state.index || 1, 1), state.pages.length || 1);
   renderPage(initialIndex);

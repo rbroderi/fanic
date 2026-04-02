@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS work_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS tag_popularity (
+    tag_id INTEGER PRIMARY KEY,
+    seed_count INTEGER NOT NULL DEFAULT 0,
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS pages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_id TEXT NOT NULL,
@@ -179,6 +187,15 @@ CREATE TABLE IF NOT EXISTS work_comments (
     FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS fanart_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fanart_item_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (fanart_item_id) REFERENCES fanart_items(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS work_kudos (
     work_id TEXT NOT NULL,
     username TEXT NOT NULL,
@@ -228,12 +245,15 @@ CREATE INDEX IF NOT EXISTS idx_works_slug ON works(slug);
 CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type);
 CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_tags_tag ON work_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_tag_popularity_usage_seed
+ON tag_popularity(usage_count DESC, seed_count DESC);
 CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
 CREATE INDEX IF NOT EXISTS idx_fanart_items_uploader_created_at ON fanart_items(uploader_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fanart_galleries_uploader_created_at ON fanart_galleries(uploader_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_gallery_position ON fanart_gallery_items(gallery_id, position ASC, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_fanart_item ON fanart_gallery_items(fanart_item_id);
 CREATE INDEX IF NOT EXISTS idx_work_comments_work ON work_comments(work_id);
+CREATE INDEX IF NOT EXISTS idx_fanart_comments_item ON fanart_comments(fanart_item_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at);

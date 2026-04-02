@@ -5,6 +5,8 @@
  */
 
 (function () {
+  const MAX_PARALLEL_THUMB_LOADS = 6;
+
   const ratingSelect = document.getElementById("rating");
   if (ratingSelect && ratingSelect instanceof HTMLSelectElement) {
     let previousRating = ratingSelect.value;
@@ -58,6 +60,43 @@
   let draggedCard: HTMLElement | null = null;
   let baselineSignature = "";
   let orderIsDirty = false;
+
+  function scheduleThumbnailLoads() {
+    const thumbImages = Array.from(
+      gallery.querySelectorAll<HTMLImageElement>("img[data-thumb-src]"),
+    );
+    if (thumbImages.length === 0) {
+      return;
+    }
+
+    let nextIndex = 0;
+    let activeLoads = 0;
+
+    const loadNext = () => {
+      while (activeLoads < MAX_PARALLEL_THUMB_LOADS && nextIndex < thumbImages.length) {
+        const image = thumbImages[nextIndex];
+        nextIndex += 1;
+
+        const source = image.dataset.thumbSrc ? image.dataset.thumbSrc : "";
+        if (!source) {
+          continue;
+        }
+
+        activeLoads += 1;
+        const complete = () => {
+          activeLoads -= 1;
+          loadNext();
+        };
+
+        image.addEventListener("load", complete, { once: true });
+        image.addEventListener("error", complete, { once: true });
+        image.src = source;
+        image.removeAttribute("data-thumb-src");
+      }
+    };
+
+    loadNext();
+  }
 
   function pageCards() {
     return Array.from(gallery.querySelectorAll<HTMLElement>(".page-thumb-card"));
@@ -258,5 +297,6 @@
     });
   }
 
+  scheduleThumbnailLoads();
   captureGalleryState();
 })();

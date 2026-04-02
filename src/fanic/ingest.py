@@ -51,7 +51,20 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 _SETTINGS = get_settings()
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
-THUMBNAIL_MAX_DIMENSIONS = tuple(getattr(_SETTINGS, "thumbnail_max_dimensions", (720, 720)))
+
+
+def _resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
+    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
+    if isinstance(dims_obj, tuple):
+        dims_tuple = cast(tuple[object, ...], dims_obj)
+        if len(dims_tuple) == 2:
+            dim_w_obj, dim_h_obj = dims_tuple
+            if isinstance(dim_w_obj, int) and isinstance(dim_h_obj, int):
+                return (dim_w_obj, dim_h_obj)
+    return (720, 720)
+
+
+THUMBNAIL_MAX_DIMENSIONS = _resolve_thumbnail_dimensions(_SETTINGS)
 MAX_INGEST_PAGES = int(getattr(_SETTINGS, "max_ingest_pages", 2000))
 MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_member_uncompressed_bytes", 134217728))
 MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_total_uncompressed_bytes", 2147483648))
@@ -59,7 +72,7 @@ MAX_UPLOAD_IMAGE_PIXELS = int(getattr(_SETTINGS, "max_upload_image_pixels", 4000
 USER_PAGE_SOFT_CAP = int(getattr(_SETTINGS, "user_page_soft_cap", 2000))
 USER_PAGE_QUALITY_RAMP_MULTIPLIER = float(getattr(_SETTINGS, "user_page_quality_ramp_multiplier", 1.5))
 
-type ComicInfoValue = str | list[str]
+type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
 
 
@@ -578,7 +591,9 @@ def parse_comicinfo_xml(xml_text: str) -> ComicInfoMetadata:
                     metadata["cover_page_index"] = meta_cover_value
                 creators_obj = parsed_meta.get("creators", [])
                 if isinstance(creators_obj, list):
-                    creators_list = [str(value).strip() for value in creators_obj if str(value).strip()]
+                    creators_list = [
+                        str(value).strip() for value in cast(list[object], creators_obj) if str(value).strip()
+                    ]
                     if creators_list:
                         metadata["creators"] = _dedupe_preserve_order(creators_list)
 

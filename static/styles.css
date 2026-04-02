@@ -31,6 +31,193 @@
   --home-fanart-bg-glow-2: hsl(from var(--bg-glow-2) calc(h + 180) s l);
 }
 
+.tag-autocomplete-wrap {
+  position: relative;
+}
+
+.tag-autocomplete-menu {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.tag-autocomplete-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.tag-autocomplete-item:hover,
+.tag-autocomplete-item-active {
+  background: rgba(255, 165, 0, 0.14);
+}
+
+.report-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+}
+
+.report-modal[hidden] {
+  display: none;
+}
+
+.report-modal-card {
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.modal-action-row {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.inline-action-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dmca-attest-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.dmca-attest-checkbox {
+  margin-top: 0.2rem;
+}
+
+.table-scroll-x {
+  overflow-x: auto;
+}
+
+.report-table-full {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.with-top-gap {
+  margin-top: 0.75rem;
+}
+
+.faq-shell {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.faq-shell h1,
+.faq-shell h2 {
+  margin: 0 0 0.75rem;
+}
+
+.faq-intro {
+  margin: 0 0 1.25rem;
+}
+
+.faq-item + .faq-item {
+  margin-top: 1.25rem;
+}
+
+.faq-item p {
+  margin: 0.5rem 0 0;
+}
+
+.faq-note {
+  margin-top: 1.25rem;
+  padding: 0.875rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--paper) 88%, white 12%);
+}
+
+.terms-shell {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.terms-shell h1,
+.terms-shell h2,
+.terms-shell h3 {
+  margin: 0 0 0.75rem;
+}
+
+.terms-shell section + section {
+  margin-top: 1.25rem;
+}
+
+.terms-shell p,
+.terms-shell li {
+  margin: 0.5rem 0 0;
+}
+
+.terms-shell ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.alpha-invite-page {
+  background: #f7f7f8;
+  font-family: Arial, sans-serif;
+  padding: 2rem;
+}
+
+.alpha-invite-card {
+  max-width: 460px;
+  margin: 10vh auto;
+  background: #fff;
+  padding: 1.2rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.alpha-invite-card h1,
+.alpha-invite-card p {
+  margin-top: 0;
+}
+
+.invite-error {
+  color: #b00020;
+  margin: 0 0 0.85rem;
+}
+
+.alpha-invite-input {
+  display: block;
+  width: 100%;
+  margin: 0.45rem 0 1rem;
+  padding: 0.55rem;
+}
+
+.alpha-invite-button {
+  padding: 0.55rem 0.95rem;
+}
+
 :root[data-theme="dark"] {
   --bg: #14191f;
   --paper: #1d252e;

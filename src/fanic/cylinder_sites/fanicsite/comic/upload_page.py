@@ -1,13 +1,9 @@
 import json
+from collections.abc import Mapping
+from collections.abc import Sequence
 from html import escape
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import cast
-
-if TYPE_CHECKING:
-    from _typeshed import ConvertibleToInt
-else:
-    type ConvertibleToInt = int | str | bytes
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
@@ -50,8 +46,8 @@ def render_upload_page(
     editor_rating: str = "Not Rated",
     editor_status: str = "in_progress",
     editor_language: str = "en",
-    editor_pages: list[dict[str, ConvertibleToInt]] | None = None,
-    editor_chapters: list[dict[str, ConvertibleToInt]] | None = None,
+    editor_pages: Sequence[Mapping[str, object]] | None = None,
+    editor_chapters: Sequence[Mapping[str, object]] | None = None,
     upload_status_text: str = "",
     upload_status_kind: str = "",
     ingest_status: str = "",
@@ -63,8 +59,8 @@ def render_upload_page(
     logged_in = user is not None
 
     data = metadata if metadata else {}
-    pages: list[dict[str, ConvertibleToInt]] = editor_pages if editor_pages else []
-    chapters: list[dict[str, ConvertibleToInt]] = editor_chapters if editor_chapters else []
+    pages: Sequence[Mapping[str, object]] = editor_pages if editor_pages else []
+    chapters: Sequence[Mapping[str, object]] = editor_chapters if editor_chapters else []
     resolved_form_action = form_action.strip() if form_action.strip() else request.path
     if resolved_form_action != "/comic/upload":
         resolved_form_action = "/comic/upload"

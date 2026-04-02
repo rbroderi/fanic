@@ -49,3 +49,4 @@ static/*.js.map
 # Notebook checkpoints
 .ipynb_checkpoints/
 tmp/
+tags-*

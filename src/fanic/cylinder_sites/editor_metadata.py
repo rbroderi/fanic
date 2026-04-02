@@ -1,6 +1,7 @@
 from enum import StrEnum
 from html import escape
 
+from fanic.repository import list_tag_name_suggestions
 from fanic.repository import list_tag_names
 
 
@@ -29,7 +30,11 @@ def render_options_html(names: list[str], selected: str) -> str:
 
 
 def render_tag_datalist_options_html(tag_type: str) -> str:
-    return "".join(f'<option value="{escape(name)}"></option>' for name in list_tag_names(tag_type))
+    # Use popularity-ranked seeds so fallback autocomplete includes common tags.
+    names = list_tag_name_suggestions(tag_type, "", limit=400)
+    if not names:
+        names = list_tag_names(tag_type)
+    return "".join(f'<option value="{escape(name)}"></option>' for name in names)
 
 
 def render_common_tag_datalist_replacements() -> dict[str, str]:

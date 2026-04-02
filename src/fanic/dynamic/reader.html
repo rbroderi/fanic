@@ -5,32 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>__READER_TITLE__ - FANIC Reader</title>
     __SITE_HEAD_ASSETS__
-    <style>
-      .report-modal {
-        position: fixed;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        background: rgba(0, 0, 0, 0.6);
-        z-index: 50;
-      }
-
-      .report-modal[hidden] {
-        display: none;
-      }
-
-      .report-modal-card {
-        width: min(520px, 94vw);
-        max-height: 88vh;
-        overflow: auto;
-      }
-    </style>
   </head>
   <body>
     __SITE_HEADER_HTML__
 
     <main class="viewer-shell">
-      <aside class="sidebar" id="thumbs"></aside>
+      <aside class="sidebar" id="thumbs">
+        <img class="thumb thumb-ready" src="__READER_INITIAL_THUMB_SRC__" alt="Initial thumbnail" data-index="1" />
+      </aside>
       <section class="reader-stage">
         <div class="reader-ui">
           <div class="reader-nav-group">
@@ -58,6 +40,9 @@
           <div __READER_DOWNLOAD_HIDDEN_ATTR__>
             <a id="downloadImageLink" href="__READER_DOWNLOAD_HREF__">__READER_DOWNLOAD_LABEL__</a>
           </div>
+          <div>
+            <a id="openImageLink" href="__READER_DIRECT_IMAGE_HREF__" target="_blank" rel="noopener noreferrer">Get link</a>
+          </div>
           <div __READER_REPORT_HIDDEN_ATTR__>
             <button id="reportImageButton" type="button">Report</button>
           </div>
@@ -68,12 +53,39 @@
             </button>
           </div>
         </div>
-        <img id="readerImage" class="reader-image" alt="Comic page" />
+        <img id="readerImage" class="reader-image visible" src="__READER_INITIAL_IMAGE_SRC__" alt="Comic page" />
         <div class="reader-hit left" id="hitLeft"></div>
         <div class="reader-hit right" id="hitRight"></div>
       </section>
       <section class="mobile-list" id="mobileList"></section>
     </main>
+
+    <section class="layout" __READER_META_SECTION_HIDDEN_ATTR__>
+      <section class="card info-card">
+        <h3>Image Metadata</h3>
+        <p class="work-meta">__READER_META_LINE__</p>
+        <p>__READER_META_SUMMARY__</p>
+        <p class="status-text __READER_COMMENT_STATUS_CLASS__" __READER_COMMENT_STATUS_HIDDEN_ATTR__>
+          __READER_COMMENT_STATUS_TEXT__
+        </p>
+      </section>
+
+      <section class="card info-card">
+        <h3>Leave a comment</h3>
+        <form method="post" action="__READER_COMMENT_FORM_ACTION__" class="upload-form">
+          <input type="hidden" name="fanart_item_id" value="__READER_FANART_ITEM_ID__" />
+          <input type="hidden" name="next" value="__READER_FANART_NEXT_HREF__" />
+          <label for="fanartCommentBody">Comment</label>
+          <textarea id="fanartCommentBody" name="comment_body" rows="4" required></textarea>
+          <button type="submit">Post comment</button>
+        </form>
+      </section>
+
+      <section class="comments-list">
+        <h3>Comments</h3>
+        __READER_FANART_COMMENTS_HTML__
+      </section>
+    </section>
 
     <div id="bookmarkDialog" class="bookmark-dialog" hidden>
       <div class="bookmark-dialog-card" role="dialog" aria-modal="true" aria-labelledby="bookmarkDialogTitle">
@@ -103,7 +115,7 @@
             __REPORT_ISSUE_OPTIONS_HTML__
           </select>
 
-          <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-top: 0.75rem;">
+          <div class="modal-action-row">
             <button type="submit">Continue to report form</button>
             <button id="reportModalCancel" type="button">Cancel</button>
           </div>
@@ -111,7 +123,7 @@
       </section>
     </div>
 
-    <script id="readerBootstrap" type="application/json">__READER_BOOTSTRAP_JSON__</script>
+    <template id="readerBootstrap">__READER_BOOTSTRAP_JSON__</template>
     __SITE_COMMON_SCRIPTS__
     <script src="__READER_SCRIPT_SRC__"></script>
   </body>

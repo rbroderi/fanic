@@ -150,6 +150,41 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         ON fanart_gallery_items(fanart_item_id)
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fanart_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fanart_item_id TEXT NOT NULL,
+            username TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (fanart_item_id) REFERENCES fanart_items(id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_comments_item
+        ON fanart_comments(fanart_item_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tag_popularity (
+            tag_id INTEGER PRIMARY KEY,
+            seed_count INTEGER NOT NULL DEFAULT 0,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tag_popularity_usage_seed
+        ON tag_popularity(usage_count DESC, seed_count DESC)
+        """
+    )
 
     run_runtime_migrations(connection, _table_exists)
 

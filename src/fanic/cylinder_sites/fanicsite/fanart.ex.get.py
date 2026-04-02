@@ -19,13 +19,16 @@ from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import send_file
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.report_issues import report_issue_options_html
+from fanic.repository import FanartCommentRow
 from fanic.repository import FanartGalleryRow
 from fanic.repository import FanartItemRow
 from fanic.repository import fanart_file_for
 from fanic.repository import get_fanart_gallery_by_slug
+from fanic.repository import get_fanart_item
 from fanic.repository import get_fanart_item_by_image_filename
 from fanic.repository import get_local_user
 from fanic.repository import get_local_user_by_display_name
+from fanic.repository import list_fanart_comments
 from fanic.repository import list_fanart_galleries_by_uploader
 from fanic.repository import list_fanart_gallery_item_ids
 from fanic.repository import list_fanart_items_by_uploader
@@ -37,6 +40,14 @@ def _redirect(response: ResponseLike, location: str) -> ResponseLike:
     response.content_type = "text/plain; charset=utf-8"
     response.headers["Location"] = location
     response.set_data(f"See Other: {location}")
+    return response
+
+
+def _redirect_found(response: ResponseLike, location: str) -> ResponseLike:
+    response.status_code = 302
+    response.content_type = "text/plain; charset=utf-8"
+    response.headers["Location"] = location
+    response.set_data(f"Found: {location}")
     return response
 
 
@@ -89,20 +100,22 @@ def _work_grid_html(
         download_href = (
             f"/fanart/download/{quote(image_name, safe='/')}?item_id={safe_work_id}" if image_name else reader_href
         )
-        claimed_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else reader_href
+        direct_image_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else ""
+        direct_thumb_url = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else ""
+        claimed_url = direct_image_url if direct_image_url else direct_thumb_url if direct_thumb_url else reader_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
             f"&work_title={quote(title_raw, safe='')}"
             f"&claimed_url={quote(claimed_url, safe='')}"
         )
-        hotlink_href = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else reader_href
+        hotlink_href = f"/fanart/file/{safe_work_id}"
 
         thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else "/static/logo.png"
 
         delete_html = ""
         if can_delete:
             delete_html = f"""
-                <form method="post" action="/fanart/{safe_owner}/{safe_work_id}/delete" class="admin-delete-form" onsubmit="return confirm('Delete this fanart? This cannot be undone.');">
+                                <form method="post" action="/fanart/{safe_owner}/{safe_work_id}/delete" class="admin-delete-form" data-confirm-message="Delete this fanart? This cannot be undone.">
           <button type="submit" class="icon-delete-button" title="Delete fanart" aria-label="Delete fanart">
             <i class="fa-solid fa-trash" aria-hidden="true"></i>
           </button>
@@ -114,12 +127,12 @@ def _work_grid_html(
       <article class="card work-card">
         {delete_html}
                 <a href="{reader_href}">
-          <img class="work-cover" src="{thumb_src}" alt="{title}" loading="lazy" />
+                <img class="work-cover" src="{thumb_src}" alt="{title}" loading="lazy" />
         </a>
                 <h3><a href="{reader_href}">{title}</a></h3>
                 <p class="work-meta">{rating_html} | {escape(size_text)}{fandom_html} | {created_at}</p>
-        <p>{summary}</p>
-                                                <p><a href="{download_href}">Download</a> | <a href="#" data-copy-url="{hotlink_href}">Get link</a> | <a href="{report_href}">Report</a></p>
+                <p>{summary}</p>
+                                                                                                <p><a href="{download_href}">Download</a> | <a href="{hotlink_href}" target="_blank" rel="noopener noreferrer">Get link</a> | <a href="{report_href}">Report</a></p>
       </article>
     '''
         )
@@ -137,7 +150,9 @@ def _gallery_links_html(
     links = [f'<a href="/fanart/{safe_owner}"{all_current}>All fanart</a>']
     for gallery in galleries:
         slug = str(gallery.get("slug", "")).strip()
-        name = escape(str(gallery.get("name", "Untitled")))
+        if not slug:
+            continue
+        name = escape(str(gallery.get("name", "Gallery")))
         count = int(gallery.get("item_count", 0))
         current = ' aria-current="page"' if slug == active_gallery_slug else ""
         links.append(f'<a href="/fanart/{safe_owner}?gallery={quote(slug, safe="")}"{current}>{name} ({count})</a>')
@@ -189,9 +204,10 @@ def _gallery_manage_form_html(
                 continue
             title = escape(str(work.get("title", "Untitled")))
             checked_attr = " checked" if item_id in selected_item_ids else ""
+            checkbox_id = f"gallery-item-{escape(item_id)}"
             lines.append(
-                '<label class="checkbox-inline">'
-                f'<input type="checkbox" name="gallery_item_id" value="{escape(item_id)}"{checked_attr} /> '
+                f'<label class="checkbox-inline" for="{checkbox_id}">'
+                f'<input id="{checkbox_id}" type="checkbox" name="gallery_item_id" value="{escape(item_id)}"{checked_attr} /> '
                 f"{title}"
                 "</label>"
             )
@@ -201,7 +217,7 @@ def _gallery_manage_form_html(
     lines.append("</form>")
     delete_confirm_attr = ""
     if gallery_item_count > 0:
-        delete_confirm_attr = " onsubmit=\"return confirm('This gallery has assigned images. Deleting it will move all items to Ungrouped. Continue?')\""
+        delete_confirm_attr = ' data-confirm-message="This gallery has assigned images. Deleting it will move all items to Ungrouped. Continue?"'
     lines.append(
         f'<form method="post" action="/fanart/{safe_owner}/galleries/delete"{delete_confirm_attr}>'
         f'<input type="hidden" name="gallery_slug" value="{gallery_slug}" />'
@@ -340,6 +356,37 @@ def _owner_profile_key(work_owner_username: str) -> str:
     return work_owner_username
 
 
+def _fanart_comment_status(msg: str) -> tuple[str, str, str]:
+    normalized_msg = msg.strip()
+    match normalized_msg:
+        case "comment-saved":
+            return ("Comment posted.", "success", "")
+        case "comment-empty":
+            return ("Comment cannot be empty.", "error", "")
+        case "login-required":
+            return ("Login required before commenting.", "error", "")
+        case _:
+            return ("", "", "hidden")
+
+
+def _fanart_comments_html(comments: list[FanartCommentRow]) -> str:
+    if not comments:
+        return '<p class="profile-meta">No comments yet.</p>'
+
+    rendered: list[str] = []
+    for comment in comments:
+        display_name = escape(str(comment.get("commenter_display_name", comment["username"])))
+        created_at = escape(str(comment["created_at"]))
+        body = escape(str(comment["body"])).replace("\n", "<br />")
+        rendered.append(
+            '<article class="card comment-card">'
+            f'<p class="comment-meta"><strong>{display_name}</strong> | {created_at}</p>'
+            f"<p>{body}</p>"
+            "</article>"
+        )
+    return "".join(rendered)
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tail = route_tail(request, ["fanart"])
     if tail is None:
@@ -374,6 +421,31 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         download_response = send_file(response, path, filename=download_filename)
         download_response.headers["Cache-Control"] = "no-store"
         return download_response
+
+    if len(tail) == 2 and tail[0] == "file":
+        item_id = tail[1].strip()
+        if not item_id:
+            return text_error(response, "Not found", 404)
+
+        item = get_fanart_item(item_id)
+        if item is None:
+            return text_error(response, "Not found", 404)
+
+        image_name = str(item.get("image_filename", "")).strip().lstrip("/")
+        if image_name:
+            return _redirect_found(
+                response,
+                f"/static/fanart/images/{quote(image_name, safe='/')}",
+            )
+
+        thumb_name = str(item.get("thumb_filename", "")).strip().lstrip("/")
+        if thumb_name:
+            return _redirect_found(
+                response,
+                f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}",
+            )
+
+        return text_error(response, "Not found", 404)
 
     if len(tail) == 3 and tail[1] == "download" and tail[2] == "cbz":
         work_owner_key = tail[0].strip()
@@ -536,6 +608,66 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if active_gallery_slug:
             reader_work_href = f"{reader_work_href}?gallery={quote(active_gallery_slug, safe='')}"
 
+        requested_item_id = request.args.get("item_id", "").strip()
+        selected_item: FanartItemRow | None = None
+        if requested_item_id:
+            for work in works:
+                if str(work.get("id", "")).strip() == requested_item_id:
+                    selected_item = work
+                    break
+        if selected_item is None and works:
+            selected_item = works[0]
+
+        fanart_item_id = ""
+        fanart_meta_line = ""
+        fanart_meta_summary = ""
+        fanart_comments_markup = '<p class="profile-meta">No comments yet.</p>'
+        if selected_item is not None:
+            fanart_item_id = str(selected_item.get("id", "")).strip()
+            title_text = str(selected_item.get("title", "Untitled")).strip()
+            rating_text = str(selected_item.get("rating", "Not Rated")).strip()
+            fandom_text = str(selected_item.get("fandom", "")).strip()
+            width_obj = selected_item.get("width")
+            height_obj = selected_item.get("height")
+            dimensions = ""
+            if width_obj is not None and height_obj is not None:
+                dimensions = f"{int(width_obj)}x{int(height_obj)}"
+            meta_parts: list[str] = [f"title: {title_text}", f"rating: {rating_text}"]
+            if fandom_text:
+                meta_parts.append(f"fandom: {fandom_text}")
+            if dimensions:
+                meta_parts.append(f"size: {dimensions}")
+            fanart_meta_line = " | ".join(meta_parts)
+            summary_text = str(selected_item.get("summary", "")).strip()
+            fanart_meta_summary = summary_text if summary_text else "No summary provided."
+            if fanart_item_id:
+                fanart_comments = list_fanart_comments(fanart_item_id)
+                fanart_comments_markup = _fanart_comments_html(fanart_comments)
+
+        comment_text, comment_class, comment_hidden_attr = _fanart_comment_status(request.args.get("msg", ""))
+        query_parts: list[str] = []
+        if requested_item_id:
+            query_parts.append(f"item_id={quote(requested_item_id, safe='')}")
+        if active_gallery_slug:
+            query_parts.append(f"gallery={quote(active_gallery_slug, safe='')}")
+        next_href = f"/fanart/{quote(work_owner_profile_key, safe='')}/reader"
+        if query_parts:
+            next_href = f"{next_href}?{'&'.join(query_parts)}"
+
+        reader_direct_image_href = initial_claimed_url
+        if not reader_direct_image_href and fanart_item_id:
+            reader_direct_image_href = f"/fanart/file/{quote(fanart_item_id, safe='')}"
+
+        reader_initial_thumb_href = ""
+        if isinstance(pages_obj, list):
+            pages = cast(list[dict[str, object]], pages_obj)
+            page_pos = selected_index - 1
+            if page_pos >= 0 and page_pos < len(pages):
+                thumb_url_obj = pages[page_pos].get("thumb_url", "")
+                reader_initial_thumb_href = str(thumb_url_obj).strip()
+        if not reader_initial_thumb_href:
+            reader_initial_thumb_href = reader_direct_image_href
+
         return render_html_template(
             request,
             response,
@@ -546,6 +678,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__READER_BACK_LABEL__": "Back to search",
                 "__READER_WORK_HREF__": escape(reader_work_href),
                 "__READER_WORK_LABEL__": "Gallery",
+                "__READER_DIRECT_IMAGE_HREF__": escape(reader_direct_image_href),
+                "__READER_INITIAL_IMAGE_SRC__": escape(reader_direct_image_href),
+                "__READER_INITIAL_THUMB_SRC__": escape(reader_initial_thumb_href),
                 "__READER_DOWNLOAD_HIDDEN_ATTR__": "",
                 "__READER_DOWNLOAD_HREF__": "#",
                 "__READER_DOWNLOAD_LABEL__": "Download",
@@ -556,8 +691,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__READER_REPORT_CLAIMED_URL__": escape(initial_claimed_url),
                 "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
                 "__READER_BOOKMARK_HIDDEN_ATTR__": "hidden",
+                "__READER_META_SECTION_HIDDEN_ATTR__": "",
+                "__READER_META_LINE__": escape(fanart_meta_line),
+                "__READER_META_SUMMARY__": escape(fanart_meta_summary),
+                "__READER_COMMENT_STATUS_TEXT__": escape(comment_text),
+                "__READER_COMMENT_STATUS_CLASS__": escape(comment_class),
+                "__READER_COMMENT_STATUS_HIDDEN_ATTR__": comment_hidden_attr,
+                "__READER_COMMENT_FORM_ACTION__": f"/fanart/{quote(work_owner_profile_key, safe='')}/reader/comments",
+                "__READER_FANART_ITEM_ID__": escape(fanart_item_id),
+                "__READER_FANART_NEXT_HREF__": escape(next_href),
+                "__READER_FANART_COMMENTS_HTML__": fanart_comments_markup,
                 "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-                "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260330-download-click-fix",
+                "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix3",
             },
         )
 

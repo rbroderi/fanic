@@ -138,6 +138,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         ensure_ascii=True,
     ).replace("<", "\\u003c")
 
+    reader_direct_image_href = ""
+    reader_initial_thumb_href = ""
+    if reader_pages:
+        image_url_obj = reader_pages[0].get("image_url", "")
+        reader_direct_image_href = str(image_url_obj).strip()
+        thumb_url_obj = reader_pages[0].get("thumb_url", "")
+        reader_initial_thumb_href = str(thumb_url_obj).strip()
+    if not reader_initial_thumb_href:
+        reader_initial_thumb_href = reader_direct_image_href
+
     return render_html_template(
         request,
         response,
@@ -148,6 +158,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__READER_BACK_LABEL__": "Back to search",
             "__READER_WORK_HREF__": escape(work_href),
             "__READER_WORK_LABEL__": "Work",
+            "__READER_DIRECT_IMAGE_HREF__": escape(reader_direct_image_href),
+            "__READER_INITIAL_IMAGE_SRC__": escape(reader_direct_image_href),
+            "__READER_INITIAL_THUMB_SRC__": escape(reader_initial_thumb_href),
             "__READER_DOWNLOAD_HIDDEN_ATTR__": "hidden",
             "__READER_DOWNLOAD_HREF__": "#",
             "__READER_DOWNLOAD_LABEL__": "Download",
@@ -158,7 +171,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__READER_REPORT_CLAIMED_URL__": f"/comic/{escape(work_id)}",
             "__REPORT_ISSUE_OPTIONS_HTML__": report_issue_options_html("copyright-dmca"),
             "__READER_BOOKMARK_HIDDEN_ATTR__": "",
+            "__READER_META_SECTION_HIDDEN_ATTR__": "hidden",
+            "__READER_META_LINE__": "",
+            "__READER_META_SUMMARY__": "",
+            "__READER_COMMENT_STATUS_TEXT__": "",
+            "__READER_COMMENT_STATUS_CLASS__": "",
+            "__READER_COMMENT_STATUS_HIDDEN_ATTR__": "hidden",
+            "__READER_COMMENT_FORM_ACTION__": "#",
+            "__READER_FANART_ITEM_ID__": "",
+            "__READER_FANART_NEXT_HREF__": "",
+            "__READER_FANART_COMMENTS_HTML__": "",
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260330-download-click-fix",
+            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix3",
         },
     )
