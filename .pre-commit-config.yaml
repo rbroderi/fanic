@@ -39,6 +39,38 @@ repos:
         files: ^(src|tests)/.*\.py$
         stages: [pre-commit]
 
+      - id: pycln
+        name: pycln
+        entry: uvx pycln src tests
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: vulture
+        name: vulture
+        entry: uvx vulture src --min-confidence 80 --ignore-names dst,secure,httponly,samesite
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: deptry
+        name: deptry
+        entry: uvx deptry . --known-first-party fanic --ignore DEP002 --package-module-name-map open-clip-torch=open_clip,pillow-avif-plugin=pillow_avif|pillow_avif_plugin,pillow=PIL
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: refurb
+        name: refurb
+        entry: uvx ruff check --select FURB --ignore FURB110 src tests
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: ruff-ci
         name: ruff-precommit
         entry: just ruff-precommit

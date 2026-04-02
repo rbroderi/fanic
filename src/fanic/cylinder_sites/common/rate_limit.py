@@ -254,7 +254,7 @@ def begin_comic_ingest_session(
         return True, 0, 0
 
     timeout_seconds = wait_timeout_seconds if wait_timeout_seconds is not None else COMIC_INGEST_QUEUE_WAIT_SECONDS
-    timeout_seconds = timeout_seconds if timeout_seconds >= 0 else 0
+    timeout_seconds = max(timeout_seconds, 0)
     deadline = time.time() + timeout_seconds
 
     queue_state = _comic_ingest_state
