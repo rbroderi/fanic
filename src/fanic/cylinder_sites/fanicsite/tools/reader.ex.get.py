@@ -1,5 +1,5 @@
-from base64 import b64encode
 import json
+from base64 import b64encode
 from collections.abc import Sequence
 from html import escape
 from typing import Any

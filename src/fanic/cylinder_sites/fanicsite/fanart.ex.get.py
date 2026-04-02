@@ -1,6 +1,6 @@
 import json
-from collections.abc import Sequence
 from base64 import b64encode
+from collections.abc import Sequence
 from html import escape
 from io import BytesIO
 from pathlib import Path
