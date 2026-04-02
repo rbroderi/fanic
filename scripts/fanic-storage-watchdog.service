@@ -1,0 +1,35 @@
+[Unit]
+Description=FANIC storage watchdog (inotify)
+After=local-fs.target network.target
+
+[Service]
+Type=simple
+User=fanic
+Group=fanic
+WorkingDirectory=/opt/fanic
+EnvironmentFile=-/etc/fanic/fanic.env
+Environment=FANIC_WATCH_PATH=/mnt/storage
+Environment=FANIC_WATCH_LOG=/var/log/fanic/storage-watch.log
+ExecStart=/opt/fanic/scripts/watch-storage-inotify.sh
+Restart=always
+RestartSec=2
+UMask=0027
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+SystemCallArchitectures=native
+NoNewPrivileges=true
+ReadWritePaths=/mnt/storage /var/log/fanic
+
+[Install]
+WantedBy=multi-user.target

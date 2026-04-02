@@ -50,6 +50,9 @@ def test_startup_invokes_dependencies_in_order(monkeypatch: pytest.MonkeyPatch) 
         calls.append("moderation")
         return {"requested": False, "nsfw_ready": False, "style_ready": False}
 
+    def fake_warn_on_fanart_storage_mismatch() -> None:
+        calls.append("fanart-health")
+
     monkeypatch.setattr(cylinder_main, "ensure_storage_dirs", fake_ensure_storage_dirs)
     monkeypatch.setattr(cylinder_main, "initialize_database", fake_initialize_database)
     monkeypatch.setattr(
@@ -57,10 +60,15 @@ def test_startup_invokes_dependencies_in_order(monkeypatch: pytest.MonkeyPatch) 
         "initialize_moderation_models",
         fake_initialize_moderation_models,
     )
+    monkeypatch.setattr(
+        cylinder_main,
+        "_warn_on_fanart_storage_mismatch",
+        fake_warn_on_fanart_storage_mismatch,
+    )
 
     cylinder_main.startup()
 
-    assert calls == ["storage", "db", "moderation"]
+    assert calls == ["storage", "db", "fanart-health", "moderation"]
 
 
 def test_create_app_calls_startup_and_cylinder_get_app(

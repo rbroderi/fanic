@@ -433,3 +433,64 @@ uv run pytest --cov
 ```
 
 Example files live in `examples/`, including `examples/ComicInfo.xml` and `examples/theme_example.toml`.
+
+## Storage Watchdog (Linux)
+
+To track file additions and deletions under `/mnt/storage`, use the inotify watchdog script:
+
+```bash
+scripts/watch-storage-inotify.sh
+```
+
+The script logs to `/var/log/fanic/storage-watch.log` by default and watches recursively for:
+
+- create
+- delete
+- moved_to
+- moved_from
+
+You can override defaults with environment variables:
+
+- `FANIC_WATCH_PATH` (default: `/mnt/storage`)
+- `FANIC_WATCH_LOG` (default: `/var/log/fanic/storage-watch.log`)
+
+Run as a persistent systemd service:
+
+```bash
+sudo cp scripts/fanic-storage-watchdog.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fanic-storage-watchdog.service
+sudo systemctl status fanic-storage-watchdog.service
+sudo tail -f /var/log/fanic/storage-watch.log
+```
+
+Install dependency if missing:
+
+```bash
+sudo apt-get update && sudo apt-get install -y inotify-tools
+```
+
+### Process Attribution With auditd
+
+`inotifywait` tells you what path changed, but not which process/user caused it.
+For process attribution under `/mnt/storage`, install `auditd` rules:
+
+```bash
+sudo apt-get update && sudo apt-get install -y auditd audispd-plugins
+sudo bash scripts/setup-auditd-storage-watch.sh --watch-path /mnt/storage --key fanic_storage
+```
+
+Query recent attributed events:
+
+```bash
+sudo bash scripts/query-auditd-storage.sh fanic_storage recent
+```
+
+Or directly with `ausearch`:
+
+```bash
+sudo ausearch -k fanic_storage -i --start recent
+```
+
+This captures writes/attribute changes (including create/delete/rename activity)
+and includes process metadata (pid, executable, uid, auid).

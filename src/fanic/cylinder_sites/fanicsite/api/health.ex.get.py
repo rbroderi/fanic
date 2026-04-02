@@ -3,6 +3,7 @@ from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import json_response
 from fanic.cylinder_sites.common.responses import text_error
 from fanic.db import get_connection
+from fanic.storage_health import get_fanart_storage_health
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -16,9 +17,35 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     except Exception:
         db_ok = False
 
-    status_code = 200 if db_ok else 503
+    fanart_storage = "unknown"
+    fanart_payload: dict[str, object] = {}
+    if db_ok:
+        try:
+            fanart_health = get_fanart_storage_health(max_rows_to_check=50)
+            fanart_storage = fanart_health.status
+            fanart_payload = {
+                "fanart_storage": fanart_storage,
+                "fanart_db_items": fanart_health.db_items,
+                "fanart_checked_items": fanart_health.checked_items,
+                "fanart_missing_images": fanart_health.missing_image_files,
+                "fanart_missing_thumbs": fanart_health.missing_thumb_files,
+                "fanart_image_dir_exists": fanart_health.image_dir_exists,
+                "fanart_thumb_dir_exists": fanart_health.thumb_dir_exists,
+            }
+        except Exception:
+            fanart_storage = "down"
+            fanart_payload = {"fanart_storage": fanart_storage}
+    else:
+        fanart_payload = {"fanart_storage": fanart_storage}
+
+    status_code = 200 if db_ok and fanart_storage != "down" else 503
     return json_response(
         response,
-        {"ok": db_ok, "service": "fanic", "db": "up" if db_ok else "down"},
+        {
+            "ok": db_ok and fanart_storage != "down",
+            "service": "fanic",
+            "db": "up" if db_ok else "down",
+            **fanart_payload,
+        },
         status_code,
     )

@@ -35,6 +35,7 @@ from fanic.repository.users import get_user_role
 from fanic.repository.users import user_is_under_18
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
+from fanic.storage_health import get_fanart_storage_health
 
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
 CYLINDER_SITES_DIR: Final[Path] = PACKAGE_ROOT / "cylinder_sites"
@@ -69,11 +70,37 @@ def _build_cylinder_log_handler() -> logging.FileHandler:
     return logging.FileHandler(log_path, encoding="utf-8")
 
 
+def _warn_on_fanart_storage_mismatch() -> None:
+    try:
+        health = get_fanart_storage_health(max_rows_to_check=50)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Fanart storage health check failed: %s", exc)
+        return
+
+    if health.status == "up":
+        return
+
+    logging.getLogger(__name__).warning(
+        (
+            "Fanart storage health=%s db_items=%s checked_items=%s "
+            "missing_images=%s missing_thumbs=%s image_dir_exists=%s thumb_dir_exists=%s"
+        ),
+        health.status,
+        health.db_items,
+        health.checked_items,
+        health.missing_image_files,
+        health.missing_thumb_files,
+        health.image_dir_exists,
+        health.thumb_dir_exists,
+    )
+
+
 def startup() -> None:
     settings = get_settings()
     settings.validate_production_settings()
     ensure_storage_dirs()
     initialize_database()
+    _warn_on_fanart_storage_mismatch()
     _ = initialize_moderation_models()
 
 
