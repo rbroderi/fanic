@@ -107,9 +107,7 @@ def _load_tags_from_csv(
                 stats["rows_excluded_type"] += 1
                 continue
 
-            canonical_text = (
-                (row.get("canonical") if row.get("canonical") else "").strip().lower()
-            )
+            canonical_text = (row.get("canonical") if row.get("canonical") else "").strip().lower()
             is_canonical = canonical_text == "true"
             if canonical_only and not is_canonical:
                 stats["rows_non_canonical"] += 1
@@ -141,9 +139,7 @@ def _load_tags_from_csv(
             if candidate.ao3_count > existing.ao3_count:
                 by_slug[tag_slug] = candidate
                 continue
-            if candidate.ao3_count == existing.ao3_count and len(candidate.name) > len(
-                existing.name
-            ):
+            if candidate.ao3_count == existing.ao3_count and len(candidate.name) > len(existing.name):
                 by_slug[tag_slug] = candidate
 
     tags = sorted(by_slug.values(), key=lambda item: item.slug)
@@ -215,9 +211,7 @@ def _write_sql(output_path: Path, tags: list[CanonicalTag]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Convert AO3 tag CSV dumps into Fanic-ready JSON + SQL outputs"
-    )
+    parser = argparse.ArgumentParser(description="Convert AO3 tag CSV dumps into Fanic-ready JSON + SQL outputs")
     parser.add_argument(
         "--source",
         type=Path,
