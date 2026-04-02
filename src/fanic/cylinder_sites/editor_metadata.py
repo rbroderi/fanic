@@ -1,8 +1,8 @@
 from enum import StrEnum
 from html import escape
 
-from fanic.repository import list_tag_name_suggestions
-from fanic.repository import list_tag_names
+from fanic.repository.tags import list_tag_name_suggestions
+from fanic.repository.tags import list_tag_names
 
 
 class RatingChoice(StrEnum):

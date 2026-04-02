@@ -46,7 +46,7 @@ def test_json_and_text_helpers(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_response: Callable[[], ResponseLike],
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_helpers_test")
+    module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_helpers_test")
 
     json_result = module.json_response(dummy_response(), {"ok": True}, 201)
     assert json_result.status_code == 201
@@ -64,29 +64,30 @@ def test_send_file_and_safe_static_path(
     dummy_response: Callable[[], ResponseLike],
     tmp_path: Path,
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_send_file_test")
+    responses_module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_send_file_test")
+    security_module = load_route_module("src/fanic/cylinder_sites/common/security.py", "common_send_file_security_test")
 
-    missing = module.send_file(dummy_response(), tmp_path / "missing.txt")
+    missing = responses_module.send_file(dummy_response(), tmp_path / "missing.txt")
     assert missing.status_code == 404
     assert missing.data == b"Not found"
 
     test_file = tmp_path / "demo.txt"
     test_file.write_text("hello", encoding="utf-8")
-    sent = module.send_file(dummy_response(), test_file, filename="download.txt")
+    sent = responses_module.send_file(dummy_response(), test_file, filename="download.txt")
     assert sent.status_code == 200
     assert sent.data == b"hello"
     assert sent.headers["Content-Disposition"] == 'attachment; filename="download.txt"'
 
-    safe_path = module.safe_static_path("styles.css")
+    safe_path = security_module.safe_static_path("styles.css")
     assert safe_path is not None
     assert safe_path.name == "styles.css"
 
-    fanart_safe_path = module.safe_static_path("fanart/images/example.avif")
+    fanart_safe_path = security_module.safe_static_path("fanart/images/example.avif")
     assert fanart_safe_path is not None
-    assert fanart_safe_path == (module.FANART_DIR / "images" / "example.avif").resolve()
+    assert fanart_safe_path == (security_module.FANART_DIR / "images" / "example.avif").resolve()
 
-    assert module.safe_static_path("../../escape.txt") is None
-    assert module.safe_static_path("fanart/../../escape.txt") is None
+    assert security_module.safe_static_path("../../escape.txt") is None
+    assert security_module.safe_static_path("fanart/../../escape.txt") is None
 
 
 def test_route_helpers_and_user_menu(
@@ -94,7 +95,11 @@ def test_route_helpers_and_user_menu(
     dummy_request: Callable[..., Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_route_helpers_test")
+    responses_module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_route_helpers_test")
+    security_module = load_route_module(
+        "src/fanic/cylinder_sites/common/security.py",
+        "common_route_helpers_security_test",
+    )
 
     def fake_current_user_logged_in(req: Any) -> str:
         _ = req
@@ -109,19 +114,19 @@ def test_route_helpers_and_user_menu(
         return None
 
     request = dummy_request(path="/comic/abc", args={})
-    assert module.path_parts(request) == ["comic", "abc"]
-    assert module.route_tail(request, ["comic"]) == ["abc"]
-    assert module.route_tail(request, ["comic", "abc", "extra"]) is None
-    assert module.route_tail(request, ["reader"]) is None
+    assert security_module.path_parts(request) == ["comic", "abc"]
+    assert security_module.route_tail(request, ["comic"]) == ["abc"]
+    assert security_module.route_tail(request, ["comic", "abc", "extra"]) is None
+    assert security_module.route_tail(request, ["reader"]) is None
 
-    monkeypatch.setattr(module, "current_user", fake_current_user_logged_in)
+    monkeypatch.setattr(responses_module, "current_user", fake_current_user_logged_in)
     monkeypatch.setattr(
-        module,
+        responses_module,
         "role_for_user",
         _role_for_alice_or_guest,
     )
     monkeypatch.setattr(
-        module,
+        responses_module,
         "get_local_user",
         lambda _username: {
             "username": "alice",
@@ -134,22 +139,22 @@ def test_route_helpers_and_user_menu(
             "created_at": "2026-03-22T00:00:00Z",
         },
     )
-    logged_in = module.user_menu_replacements(request)
+    logged_in = responses_module.user_menu_replacements(request)
     assert logged_in["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == "hidden"
     assert logged_in["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == ""
     assert logged_in["__ADMIN_REPORTS_LINK__"] == ""
     assert logged_in["__USER_MENU_STATUS__"] == "Logged in as AliceDisplay."
 
-    monkeypatch.setattr(module, "current_user", fake_current_user_admin)
-    monkeypatch.setattr(module, "role_for_user", _role_superadmin)
-    logged_in_admin = module.user_menu_replacements(request)
+    monkeypatch.setattr(responses_module, "current_user", fake_current_user_admin)
+    monkeypatch.setattr(responses_module, "role_for_user", _role_superadmin)
+    logged_in_admin = responses_module.user_menu_replacements(request)
     admin_links_html = logged_in_admin["__ADMIN_REPORTS_LINK__"]
     assert '<a href="/admin/reports">Reports</a>' in admin_links_html
     assert '<a href="/admin/users">Users</a>' in admin_links_html
 
-    monkeypatch.setattr(module, "current_user", fake_current_user_logged_out)
-    monkeypatch.setattr(module, "role_for_user", _role_guest)
-    logged_out = module.user_menu_replacements(request)
+    monkeypatch.setattr(responses_module, "current_user", fake_current_user_logged_out)
+    monkeypatch.setattr(responses_module, "role_for_user", _role_guest)
+    logged_out = responses_module.user_menu_replacements(request)
     assert logged_out["__USER_MENU_LOGIN_HIDDEN_ATTR__"] == ""
     assert logged_out["__USER_MENU_PROFILE_HIDDEN_ATTR__"] == "hidden"
     assert logged_out["__ADMIN_REPORTS_LINK__"] == ""
@@ -160,7 +165,7 @@ def test_theme_override_parsing_and_style_tag(
     dummy_request: Callable[..., Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_theme_parse_test")
+    module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_theme_parse_test")
 
     def fake_current_user(req: Any) -> str:
         _ = req
@@ -212,7 +217,11 @@ def test_session_and_upload_helpers(
     dummy_request: Callable[..., Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_session_upload_test")
+    session_module = load_route_module("src/fanic/cylinder_sites/common/session.py", "common_session_upload_test")
+    responses_module = load_route_module(
+        "src/fanic/cylinder_sites/common/responses.py",
+        "common_session_upload_responses_test",
+    )
 
     def fake_jwt_encode(header: object, payload: object, secret: object) -> bytes:
         _ = (header, payload, secret)
@@ -238,30 +247,30 @@ def test_session_and_upload_helpers(
         _ = token
         return "alice"
 
-    monkeypatch.setattr(module.time, "time", lambda: 1_000)
-    monkeypatch.setattr(module, "JWT_ENCODE", fake_jwt_encode)
+    monkeypatch.setattr(session_module.time, "time", lambda: 1_000)
+    monkeypatch.setattr(session_module, "JWT_ENCODE", fake_jwt_encode)
     monkeypatch.setattr(
-        module,
+        session_module,
         "JWT_DECODE",
         fake_jwt_decode_ok,
     )
 
-    token = module.encode_session("alice")
+    token = session_module.encode_session("alice")
     assert token == "tok"
-    assert module.decode_session(token) == "alice"
+    assert session_module.decode_session(token) == "alice"
 
-    monkeypatch.setattr(module, "JWT_DECODE", fake_jwt_decode_bad_exp)
-    assert module.decode_session("tok") is None
+    monkeypatch.setattr(session_module, "JWT_DECODE", fake_jwt_decode_bad_exp)
+    assert session_module.decode_session("tok") is None
 
-    monkeypatch.setattr(module, "JWT_DECODE", fake_jwt_decode_expired)
-    assert module.decode_session("tok") is None
+    monkeypatch.setattr(session_module, "JWT_DECODE", fake_jwt_decode_expired)
+    assert session_module.decode_session("tok") is None
 
-    monkeypatch.setattr(module, "JWT_DECODE", fake_jwt_decode_missing_sub)
-    assert module.decode_session("tok") is None
+    monkeypatch.setattr(session_module, "JWT_DECODE", fake_jwt_decode_missing_sub)
+    assert session_module.decode_session("tok") is None
 
-    req = dummy_request(path="/", args={}, cookies={module.SESSION_COOKIE_NAME: "tok"})
-    monkeypatch.setattr(module, "decode_session", fake_decode_session)
-    assert module.current_user(req) == "alice"
+    req = dummy_request(path="/", args={}, cookies={session_module.SESSION_COOKIE_NAME: "tok"})
+    monkeypatch.setattr(session_module, "decode_session", fake_decode_session)
+    assert session_module.current_user(req) == "alice"
 
     class CookieResponse:
         def __init__(self) -> None:
@@ -286,12 +295,12 @@ def test_session_and_upload_helpers(
             self.delete_calls.append(key)
 
     cookie_response = CookieResponse()
-    module.set_login_cookie(cookie_response, "alice")
-    module.clear_login_cookie(cookie_response)
-    assert cookie_response.cookie_calls[0][0] == module.SESSION_COOKIE_NAME
+    session_module.set_login_cookie(cookie_response, "alice")
+    session_module.clear_login_cookie(cookie_response)
+    assert cookie_response.cookie_calls[0][0] == session_module.SESSION_COOKIE_NAME
     assert cookie_response.delete_calls == [
-        module.SESSION_COOKIE_NAME,
-        module.CSRF_COOKIE_NAME,
+        session_module.SESSION_COOKIE_NAME,
+        session_module.CSRF_COOKIE_NAME,
     ]
 
     captured: dict[str, Path | None] = {"metadata": None}
@@ -300,21 +309,21 @@ def test_session_and_upload_helpers(
         captured["metadata"] = metadata_path
         return {"work_id": "w1", "cbz_path": str(cbz_path)}
 
-    monkeypatch.setattr(module, "ingest_cbz", fake_ingest_cbz)
+    monkeypatch.setattr(responses_module, "ingest_cbz", fake_ingest_cbz)
     cbz_upload = UploadLike("upload.cbz", "cbz")
     metadata_upload = UploadLike("meta.json", "{}")
 
-    result_with_metadata = module.save_uploaded_ingest(cbz_upload, metadata_upload)
+    result_with_metadata = responses_module.save_uploaded_ingest(cbz_upload, metadata_upload)
     assert result_with_metadata["work_id"] == "w1"
     assert captured["metadata"] is not None
 
     captured["metadata"] = None
-    result_without_metadata = module.save_uploaded_ingest(cbz_upload, None)
+    result_without_metadata = responses_module.save_uploaded_ingest(cbz_upload, None)
     assert result_without_metadata["work_id"] == "w1"
     assert captured["metadata"] is None
 
-    page_path = module.page_file_for("w1", "p1.jpg")
-    thumb_path = module.thumb_file_for("w1", "t1.jpg")
+    page_path = responses_module.page_file_for("w1", "p1.jpg")
+    thumb_path = responses_module.thumb_file_for("w1", "t1.jpg")
     assert page_path.parts[-3:] == ("w1", "pages", "p1.jpg")
     assert thumb_path.parts[-3:] == ("w1", "thumbs", "t1.jpg")
 
@@ -348,7 +357,10 @@ def test_editor_gallery_uses_direct_thumb_src(
 def test_log_path_resolution_uses_log_suffix(
     load_route_module: Callable[[str, str], ModuleType],
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_log_path_suffix_test")
+    module = load_route_module(
+        "src/fanic/cylinder_sites/common/logging_utils.py",
+        "common_log_path_suffix_test",
+    )
 
     with_default_template = module._resolve_log_path("logs/%TIMESTAMP%")
     assert with_default_template.suffix == ".log"
@@ -364,7 +376,10 @@ def test_comic_ingest_queue_helpers(
     load_route_module: Callable[[str, str], ModuleType],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = load_route_module("src/fanic/cylinder_sites/common.py", "common_comic_ingest_queue_test")
+    module = load_route_module(
+        "src/fanic/cylinder_sites/common/rate_limit.py",
+        "common_comic_ingest_queue_test",
+    )
 
     monkeypatch.setattr(module, "COMIC_INGEST_MAX_CONCURRENT", 1)
     monkeypatch.setattr(module, "COMIC_INGEST_QUEUE_WAIT_SECONDS", 0)

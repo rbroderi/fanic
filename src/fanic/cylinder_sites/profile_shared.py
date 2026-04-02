@@ -4,9 +4,9 @@ from html import escape
 from typing import Literal
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import STATIC_ROOT
-from fanic.repository import list_fanart_galleries_by_uploader
-from fanic.repository import list_fanart_gallery_item_ids
+from fanic.cylinder_sites.common.responses import STATIC_ROOT
+from fanic.repository.fanart import list_fanart_galleries_by_uploader
+from fanic.repository.fanart import list_fanart_gallery_item_ids
 
 
 def render_profile_shared_sections(replacements: dict[str, str]) -> str:

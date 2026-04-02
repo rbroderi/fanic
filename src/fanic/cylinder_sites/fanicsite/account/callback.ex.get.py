@@ -4,26 +4,19 @@ from typing import cast
 
 from fanic.auth0_client import auth0_config_from_settings
 from fanic.auth0_client import build_oauth_client
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import clear_auth0_oauth_cookie
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import log_exception
-from fanic.cylinder_sites.common import read_auth0_oauth_state
-from fanic.cylinder_sites.common import set_login_cookie
-from fanic.cylinder_sites.common import text_error
-from fanic.repository import get_auth_identity
-from fanic.repository import get_or_create_user_for_auth0_identity
-from fanic.repository import user_requires_onboarding
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.auth0_oauth import clear_auth0_oauth_cookie
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.logging_utils import log_exception
+from fanic.cylinder_sites.common.auth0_oauth import read_auth0_oauth_state
+from fanic.cylinder_sites.common.session import set_login_cookie
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.repository.users import get_auth_identity
+from fanic.repository.users import get_or_create_user_for_auth0_identity
+from fanic.repository.users import user_requires_onboarding
 from fanic.settings import get_settings
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
 
 
 def _is_non_json_auth_provider_response(exc: Exception) -> bool:

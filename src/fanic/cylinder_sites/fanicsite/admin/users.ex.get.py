@@ -2,50 +2,41 @@ from collections.abc import Sequence
 from html import escape
 from textwrap import dedent
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.user_roles import ManagedUserRole
 from fanic.cylinder_sites.user_roles import is_privileged_role
-from fanic.repository import LocalUserRow
-from fanic.repository import count_local_users
-from fanic.repository import list_local_users
+from fanic.repository.users import LocalUserRow
+from fanic.repository.users import count_local_users
+from fanic.repository.users import list_local_users
 
 USERS_PER_PAGE = 50
 
 
 def _status_replacements(msg: str) -> StatusReplacements:
-    match msg:
-        case "created":
-            return status_visible("User created.", "success")
-        case "updated":
-            return status_visible("User updated.", "success")
-        case "removed":
-            return status_visible("User removed.", "success")
-        case "invalid":
-            return status_visible("Invalid user action.", "error")
-        case "not-found":
-            return status_visible("User not found.", "error")
-        case "exists":
-            return status_visible("Username already exists.", "error")
-        case "forbidden-action":
-            return status_visible(
-                "You do not have permission for that action.",
-                "error",
-            )
-        case "self-action-blocked":
-            return status_visible(
+    return status_for_message(
+        msg,
+        {
+            "created": status_visible("User created.", "success"),
+            "updated": status_visible("User updated.", "success"),
+            "removed": status_visible("User removed.", "success"),
+            "invalid": status_visible("Invalid user action.", "error"),
+            "not-found": status_visible("User not found.", "error"),
+            "exists": status_visible("Username already exists.", "error"),
+            "forbidden-action": status_visible("You do not have permission for that action.", "error"),
+            "self-action-blocked": status_visible(
                 "You cannot deactivate or remove your own account from this screen.",
                 "error",
-            )
-        case _:
-            return status_hidden()
+            ),
+        },
+    )
 
 
 def _role_options_html(selected_role: str) -> str:

@@ -1,7 +1,9 @@
-import fanic.cylinder_sites.common as common
+import fanic.cylinder_sites.common.responses as common
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
 
 
-def main(request: common.RequestLike, response: common.ResponseLike) -> common.ResponseLike:
+def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if request.path != "/theme/custom.css":
         return common.text_error(response, "Not found", 404)
 

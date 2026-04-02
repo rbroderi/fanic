@@ -1,15 +1,15 @@
 from html import escape
 from textwrap import dedent
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.user_roles import is_privileged_role
-from fanic.repository import TagPopularityRow
-from fanic.repository import list_top_tag_popularity
+from fanic.repository.tags import TagPopularityRow
+from fanic.repository.tags import list_top_tag_popularity
 
 _ALLOWED_TAG_TYPES = {
     "archive_warning",

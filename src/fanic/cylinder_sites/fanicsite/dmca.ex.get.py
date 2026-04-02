@@ -2,31 +2,29 @@ from html import escape
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 
 
 def _status_replacements(msg: str, report_id: str) -> StatusReplacements:
-    match msg:
-        case "submitted":
-            return status_visible(
-                "Report submitted." + (f" Reference #{escape(report_id)}." if report_id else ""),
-                "success",
-            )
-        case "invalid":
-            return status_visible(
-                "Please complete all required fields and certify your claim.",
-                "error",
-            )
-        case _:
-            return status_hidden()
+    if msg == "submitted":
+        return status_visible(
+            "Report submitted." + (f" Reference #{escape(report_id)}." if report_id else ""),
+            "success",
+        )
+    return status_for_message(
+        msg,
+        {
+            "invalid": status_visible("Please complete all required fields and certify your claim.", "error"),
+        },
+    )
 
 
 def _request_base_url(request: RequestLike) -> str:

@@ -1,6 +1,6 @@
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.fanicsite.comic.upload_page import render_upload_page
 
 

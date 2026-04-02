@@ -1,22 +1,15 @@
 from html import escape
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import text_error
-from fanic.repository import get_auth0_email_verified_for_username
-from fanic.repository import get_local_user
-from fanic.repository import user_requires_onboarding
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.repository.users import get_auth0_email_verified_for_username
+from fanic.repository.users import get_local_user
+from fanic.repository.users import user_requires_onboarding
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

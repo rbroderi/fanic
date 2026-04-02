@@ -14,6 +14,15 @@ class _UploadStub:
         Path(dst).write_bytes(b"png")
 
 
+def _patch_owner_profile_as_username(monkeypatch: Any, module: ModuleType) -> None:
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        lambda username: {"username": username, "display_name": ""},
+    )
+    monkeypatch.setattr(module, "get_local_user_by_display_name", lambda *_: None)
+
+
 def test_fanart_delete_requires_admin_role(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -58,6 +67,7 @@ def test_fanart_delete_admin_redirects_to_gallery(
         lambda *_: {"id": "fanart-1", "uploader_username": "alice"},
     )
     monkeypatch.setattr(module, "delete_fanart_item", lambda *_: True)
+    _patch_owner_profile_as_username(monkeypatch, module)
 
     request = dummy_request(path="/fanart/alice/fanart-1/delete", method="POST")
     response = dummy_response()
@@ -129,6 +139,7 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
             "rating_auto_elevated": True,
         },
     )
+    monkeypatch.setattr(module, "get_local_user", lambda *_: None)
 
     request = dummy_request(
         path="/fanart/upload",
@@ -205,6 +216,7 @@ def test_fanart_gallery_create_redirects_to_new_gallery(
             "updated_at": "",
         },
     )
+    _patch_owner_profile_as_username(monkeypatch, module)
 
     request = dummy_request(
         path="/fanart/alice/galleries/create",
@@ -256,6 +268,7 @@ def test_fanart_gallery_update_items_redirects_with_success(
         return 1
 
     monkeypatch.setattr(module, "replace_fanart_gallery_items", fake_replace_fanart_gallery_items)
+    _patch_owner_profile_as_username(monkeypatch, module)
 
     request = dummy_request(
         path="/fanart/alice/galleries/update-items",
@@ -337,6 +350,7 @@ def test_fanart_gallery_delete_redirects_to_gallery_root(
         return True
 
     monkeypatch.setattr(module, "delete_fanart_gallery", fake_delete_fanart_gallery)
+    _patch_owner_profile_as_username(monkeypatch, module)
 
     request = dummy_request(
         path="/fanart/alice/galleries/delete",
@@ -390,6 +404,7 @@ def test_fanart_gallery_delete_admin_can_delete_for_owner(
         return True
 
     monkeypatch.setattr(module, "delete_fanart_gallery", fake_delete_fanart_gallery)
+    _patch_owner_profile_as_username(monkeypatch, module)
 
     request = dummy_request(
         path="/fanart/alice/galleries/delete",

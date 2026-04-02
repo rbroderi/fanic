@@ -1,13 +1,14 @@
 from html import escape
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_hidden
+from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import text_error
 
 
 def _message_block(request: RequestLike) -> StatusReplacements:
@@ -15,45 +16,44 @@ def _message_block(request: RequestLike) -> StatusReplacements:
     retry_after = request.args.get("retry_after", "").strip()
     username = current_user(request)
 
-    match msg:
-        case "invalid":
-            return status_visible("Invalid username or password. Please try again.", "error")
-        case "success":
-            user_text = username if username else "user"
-            return status_visible(f"Success: logged in as {user_text}.", "success")
-        case "logged_out":
-            return status_visible("You have been logged out.", "info")
-        case "csrf-invalid":
-            return status_visible("Invalid CSRF token. Please retry from the form page.", "error")
-        case "https-required":
-            return status_visible("Secure HTTPS connection is required for login.", "error")
-        case "locked":
-            retry_value = retry_after if retry_after else "a few minutes"
-            return status_visible(
-                f"Too many failed login attempts. Try again in {retry_value} seconds.",
-                "error",
-            )
-        case "auth-disabled":
-            return status_visible("Auth0 login is not enabled on this deployment.", "error")
-        case "auth-email-unverified":
-            return status_visible(
+    if msg == "success":
+        user_text = username if username else "user"
+        return status_visible(f"Success: logged in as {user_text}.", "success")
+
+    if msg == "locked":
+        retry_value = retry_after if retry_after else "a few minutes"
+        return status_visible(
+            f"Too many failed login attempts. Try again in {retry_value} seconds.",
+            "error",
+        )
+
+    mapped = status_for_message(
+        msg,
+        {
+            "invalid": status_visible("Invalid username or password. Please try again.", "error"),
+            "logged_out": status_visible("You have been logged out.", "info"),
+            "csrf-invalid": status_visible("Invalid CSRF token. Please retry from the form page.", "error"),
+            "https-required": status_visible("Secure HTTPS connection is required for login.", "error"),
+            "auth-disabled": status_visible("Auth0 login is not enabled on this deployment.", "error"),
+            "auth-email-unverified": status_visible(
                 "Please verify your email address, then sign in again.",
                 "error",
-            )
-        case "auth-failed":
-            return status_visible("Authentication failed. Please try again.", "error")
-        case "auth-upstream-blocked":
-            return status_visible(
+            ),
+            "auth-failed": status_visible("Authentication failed. Please try again.", "error"),
+            "auth-upstream-blocked": status_visible(
                 "Authentication provider response was blocked or invalid. "
                 "This is often caused by proxy or WAF challenges on the auth domain.",
                 "error",
-            )
-        case "callback-invalid":
-            return status_visible("The login callback was invalid or expired. Please try again.", "error")
-        case _:
-            if username:
-                return status_visible(f"Success: logged in as {username}.", "success")
-            return status_hidden()
+            ),
+            "callback-invalid": status_visible("The login callback was invalid or expired. Please try again.", "error"),
+        },
+    )
+    if mapped.hidden_attr == "":
+        return mapped
+
+    if username:
+        return status_visible(f"Success: logged in as {username}.", "success")
+    return status_hidden()
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

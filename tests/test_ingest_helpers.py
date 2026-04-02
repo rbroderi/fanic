@@ -118,6 +118,8 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setitem(sys.modules, "fanic.settings", settings_stub)
     monkeypatch.setitem(sys.modules, "fanic.moderation", moderation_stub)
     monkeypatch.setitem(sys.modules, "fanic.repository", repository_stub)
+    monkeypatch.setitem(sys.modules, "fanic.repository.works", repository_stub)
+    monkeypatch.setitem(sys.modules, "fanic.repository.shared", repository_stub)
     monkeypatch.setitem(sys.modules, "fanic.db", db_stub)
     monkeypatch.setitem(sys.modules, "fanic.utils", utils_stub)
 

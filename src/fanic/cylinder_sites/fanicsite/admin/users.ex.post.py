@@ -3,28 +3,21 @@ from typing import cast
 
 from fanic.authorization import AdminUsersPolicy
 from fanic.authorization import AuthorizationContext
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.common import validate_csrf
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import validate_csrf
 from fanic.cylinder_sites.user_roles import ManagedUserRole
-from fanic.repository import UserRole
-from fanic.repository import create_user
-from fanic.repository import delete_user
-from fanic.repository import get_local_user
-from fanic.repository import set_user_active
-from fanic.repository import set_user_role
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
+from fanic.repository.users import UserRole
+from fanic.repository.users import create_user
+from fanic.repository.users import delete_user
+from fanic.repository.users import get_local_user
+from fanic.repository.users import set_user_active
+from fanic.repository.users import set_user_role
 
 
 def _redirect_msg(response: ResponseLike, msg: str) -> ResponseLike:

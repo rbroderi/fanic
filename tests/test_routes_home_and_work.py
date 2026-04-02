@@ -327,6 +327,7 @@ def test_fanart_route_gallery_and_media(
         return response
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    monkeypatch.setattr(module, "_owner_profile_key", lambda username: username)
 
     gallery_request = dummy_request(path="/fanart/alice", args={})
     gallery_response = dummy_response()
@@ -409,6 +410,9 @@ def test_fanart_route_gallery_and_media(
         },
     )
     monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
+    from fanic.cylinder_sites.fanicsite import fanart_get_helpers
+
+    monkeypatch.setattr(fanart_get_helpers, "fanart_file_for", lambda *_: image_file)
 
     captured: dict[str, str] = {}
 
@@ -545,6 +549,7 @@ def test_fanart_route_gallery_grouping_filter(
         return response
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    monkeypatch.setattr(module, "_owner_profile_key", lambda username: username)
 
     gallery_request = dummy_request(path="/fanart/alice", args={"gallery": "sketches"})
     gallery_response = dummy_response()
@@ -602,14 +607,7 @@ def test_fanart_download_filename_uses_display_name_fallback(
         },
     )
     monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda username: {
-            "username": username,
-            "display_name": "AliceArtist",
-        },
-    )
+    monkeypatch.setattr(module, "_owner_profile_key", lambda *_: "AliceArtist")
 
     captured: dict[str, str] = {}
 

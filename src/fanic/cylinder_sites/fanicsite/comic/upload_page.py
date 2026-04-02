@@ -5,10 +5,10 @@ from html import escape
 from typing import Any
 from typing import cast
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
 from fanic.cylinder_sites.editor_gallery import render_editor_page_gallery_html
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES

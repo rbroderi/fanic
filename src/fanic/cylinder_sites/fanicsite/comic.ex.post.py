@@ -5,20 +5,22 @@ from typing import cast
 
 from fanic.authorization import AuthorizationContext
 from fanic.authorization import ComicPolicy
-from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import begin_upload_session
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import end_upload_session
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import route_tail
-from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.common import upload_policy_error_info
-from fanic.cylinder_sites.common import validate_csrf
-from fanic.cylinder_sites.common import validate_page_upload_policy
-from fanic.cylinder_sites.common import validate_saved_upload_size
+from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.rate_limit import begin_upload_session
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.rate_limit import end_upload_session
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import upload_policy_error_info
+from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.security import validate_page_upload_policy
+from fanic.cylinder_sites.common.security import validate_saved_upload_size
+from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.ingest import editor_add_chapter
 from fanic.ingest import editor_delete_chapter
 from fanic.ingest import editor_delete_page
@@ -27,14 +29,14 @@ from fanic.ingest import editor_reorder_gallery
 from fanic.ingest import editor_replace_page_image
 from fanic.ingest import editor_update_chapter
 from fanic.ingest import ingest_editor_page
-from fanic.repository import add_work_comment
-from fanic.repository import add_work_kudo
-from fanic.repository import can_view_work
-from fanic.repository import create_notification
-from fanic.repository import create_work_version_snapshot
-from fanic.repository import delete_work
-from fanic.repository import get_work
-from fanic.repository import update_work_metadata
+from fanic.repository.works import add_work_comment
+from fanic.repository.works import add_work_kudo
+from fanic.repository.works import can_view_work
+from fanic.repository.users import create_notification
+from fanic.repository.works import create_work_version_snapshot
+from fanic.repository.works import delete_work
+from fanic.repository.works import get_work
+from fanic.repository.works import update_work_metadata
 
 
 def _csv(value: str) -> list[str]:
@@ -46,14 +48,6 @@ def _has_selected_file(upload: object | None) -> bool:
         return False
     filename = getattr(upload, "filename", None)
     return isinstance(filename, str) and bool(filename.strip())
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
 
 
 def _is_explicit_rating(value: object) -> bool:
@@ -107,7 +101,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     username = current_user(request)
     user_role = role_for_user(username)
-    is_admin = user_role in {"superadmin", "admin"}
+    is_admin = is_privileged_role(user_role)
     uploader = str(work.get("uploader_username") if work.get("uploader_username") else "")
     normalized_username = str(username if username else "")
 

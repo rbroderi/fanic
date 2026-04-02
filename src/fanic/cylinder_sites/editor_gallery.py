@@ -5,8 +5,8 @@ from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import media_url
-from fanic.repository import list_work_chapter_members
+from fanic.cylinder_sites.common.responses import media_url
+from fanic.repository.works import list_work_chapter_members
 
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
 

@@ -1,22 +1,15 @@
 import sqlite3
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import check_post_rate_limit
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.common import validate_csrf
-from fanic.repository import update_user_onboarding
-from fanic.repository import user_requires_onboarding
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.rate_limit import check_post_rate_limit
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.repository.users import update_user_onboarding
+from fanic.repository.users import user_requires_onboarding
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

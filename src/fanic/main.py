@@ -353,7 +353,7 @@ def main() -> int:
             print("Restore complete")
             return OK
         case "report-tag-popularity":
-            from fanic.repository import list_top_tag_popularity
+            from fanic.repository.tags import list_top_tag_popularity
 
             _ = run_database_migrations()
             rows = list_top_tag_popularity(
@@ -379,7 +379,7 @@ def main() -> int:
             print(f"Printed {len(rows)} row(s)")
             return OK
         case "backfill-tag-popularity":
-            from fanic.repository import backfill_tag_usage_counts_from_work_tags
+            from fanic.repository.tags import backfill_tag_usage_counts_from_work_tags
 
             _ = run_database_migrations()
             updated_total = backfill_tag_usage_counts_from_work_tags()

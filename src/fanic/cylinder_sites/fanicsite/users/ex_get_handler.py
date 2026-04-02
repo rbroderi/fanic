@@ -1,22 +1,22 @@
 from html import escape
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import route_tail
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.profile_shared import render_bookmarks_html
 from fanic.cylinder_sites.profile_shared import render_fanart_html
 from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
 from fanic.cylinder_sites.profile_shared import render_uploaded_works_html
-from fanic.repository import can_view_work
-from fanic.repository import get_local_user
-from fanic.repository import get_local_user_by_display_name
-from fanic.repository import list_fanart_items_by_uploader
-from fanic.repository import list_user_bookmarks
-from fanic.repository import list_works_by_uploader
+from fanic.repository.works import can_view_work
+from fanic.repository.users import get_local_user
+from fanic.repository.users import get_local_user_by_display_name
+from fanic.repository.fanart import list_fanart_items_by_uploader
+from fanic.repository.users import list_user_bookmarks
+from fanic.repository.works import list_works_by_uploader
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

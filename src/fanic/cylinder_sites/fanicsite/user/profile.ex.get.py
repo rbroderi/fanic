@@ -1,46 +1,30 @@
-from collections.abc import Mapping
-from collections.abc import Sequence
 from html import escape
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    recent_history_html as _recent_history_html,
+)
 from fanic.cylinder_sites.profile_shared import render_bookmarks_html
 from fanic.cylinder_sites.profile_shared import render_fanart_html
 from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
 from fanic.cylinder_sites.profile_shared import render_uploaded_works_html
-from fanic.repository import can_view_work
-from fanic.repository import get_local_user
-from fanic.repository import get_user_theme_preference
-from fanic.repository import list_fanart_items_by_uploader
-from fanic.repository import list_recent_reading_history
-from fanic.repository import list_user_bookmarks
-from fanic.repository import list_work_comments
-from fanic.repository import list_works_by_uploader
-from fanic.repository import user_prefers_explicit
-from fanic.repository import user_prefers_mature
-from fanic.repository import user_requires_onboarding
-from fanic.repository import work_kudos_count
+from fanic.repository.works import can_view_work
+from fanic.repository.users import get_local_user
+from fanic.repository.users import get_user_theme_preference
+from fanic.repository.fanart import list_fanart_items_by_uploader
+from fanic.repository.users import list_recent_reading_history
+from fanic.repository.users import list_user_bookmarks
+from fanic.repository.works import list_work_comments
+from fanic.repository.works import list_works_by_uploader
+from fanic.repository.users import user_prefers_explicit
+from fanic.repository.users import user_prefers_mature
+from fanic.repository.users import user_requires_onboarding
+from fanic.repository.works import work_kudos_count
 from fanic.settings import get_settings
-
-
-def _recent_history_html(history_rows: Sequence[Mapping[str, object]]) -> str:
-    if not history_rows:
-        return '<p class="profile-meta">No reading history yet.</p>'
-
-    items: list[str] = []
-    for row in history_rows:
-        work_id = escape(str(row.get("work_id", "")))
-        work_title = escape(str(row.get("work_title", "Untitled")))
-        page_index = escape(str(row.get("page_index", 1)))
-        updated_at = escape(str(row.get("updated_at", "")))
-        items.append(
-            f'<li><a href="/tools/reader/{work_id}">{work_title}</a> '
-            f'<span class="profile-meta">(continue at page {page_index}; last viewed {updated_at})</span></li>'
-        )
-    return '<ul class="work-links">' + "".join(items) + "</ul>"
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

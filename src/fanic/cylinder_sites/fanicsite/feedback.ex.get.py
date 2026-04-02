@@ -1,28 +1,26 @@
 from html import escape
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.feedback_categories import feedback_category_options_html
 from fanic.cylinder_sites.feedback_categories import normalize_feedback_category
 
 
 def _status_replacements(msg: str, report_id: str) -> StatusReplacements:
-    match msg:
-        case "submitted":
-            suffix = f" Reference #{escape(report_id)}." if report_id else ""
-            return status_visible(f"Feedback submitted.{suffix}", "success")
-        case "invalid":
-            return status_visible(
-                "Please complete all required fields.",
-                "error",
-            )
-        case _:
-            return status_hidden()
+    if msg == "submitted":
+        suffix = f" Reference #{escape(report_id)}." if report_id else ""
+        return status_visible(f"Feedback submitted.{suffix}", "success")
+    return status_for_message(
+        msg,
+        {
+            "invalid": status_visible("Please complete all required fields.", "error"),
+        },
+    )
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

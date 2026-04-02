@@ -6,19 +6,19 @@ from typing import Any
 from typing import cast
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import media_url
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import route_tail
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import media_url
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.report_issues import report_issue_options_html
-from fanic.repository import can_view_work
-from fanic.repository import get_manifest
-from fanic.repository import get_work
-from fanic.repository import get_work_version_manifest
-from fanic.repository import load_progress
+from fanic.repository.works import can_view_work
+from fanic.repository.works import get_manifest
+from fanic.repository.works import get_work
+from fanic.repository.works import get_work_version_manifest
+from fanic.repository.works import load_progress
 
 
 def _reader_pages_from_version_manifest(

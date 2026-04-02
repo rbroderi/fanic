@@ -20,7 +20,7 @@ def test_render_html_template_injects_custom_theme_stylesheet_link(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/common.py",
+        "src/fanic/cylinder_sites/common/responses.py",
         "fanicsite_common_test",
     )
 

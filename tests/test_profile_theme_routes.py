@@ -658,7 +658,7 @@ def test_profile_post_disabling_custom_theme_stops_override_injection(
     )
     _allow_secure_post(monkeypatch, post_module)
     common_module = load_route_module(
-        "src/fanic/cylinder_sites/common.py",
+        "src/fanic/cylinder_sites/common/responses.py",
         "fanicsite_common_disable_theme_test",
     )
 

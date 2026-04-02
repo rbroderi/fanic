@@ -22,57 +22,85 @@ from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
 from fanic.moderation import suggested_rating_for_nsfw
-from fanic.repository import WorkChapterRow
-from fanic.repository import WorkPageRow
-from fanic.repository import add_work_chapter
-from fanic.repository import count_uploaded_pages_for_user
-from fanic.repository import create_work_version_snapshot
-from fanic.repository import delete_work_chapter
-from fanic.repository import get_work
-from fanic.repository import list_work_chapter_members
-from fanic.repository import list_work_chapters
-from fanic.repository import list_work_page_image_names
-from fanic.repository import list_work_page_rows
-from fanic.repository import replace_work_chapter_members
-from fanic.repository import replace_work_pages
-from fanic.repository import replace_work_tags
-from fanic.repository import update_work_chapter
-from fanic.repository import upsert_work
+from fanic.repository.works import WorkChapterRow
+from fanic.repository.works import WorkPageRow
+from fanic.repository.works import add_work_chapter
+from fanic.repository.works import count_uploaded_pages_for_user
+from fanic.repository.works import create_work_version_snapshot
+from fanic.repository.works import delete_work_chapter
+from fanic.repository.works import get_work
+from fanic.repository.works import list_work_chapter_members
+from fanic.repository.works import list_work_chapters
+from fanic.repository.works import list_work_page_image_names
+from fanic.repository.works import list_work_page_rows
+from fanic.repository.works import replace_work_chapter_members
+from fanic.repository.works import replace_work_pages
+from fanic.repository.works import replace_work_tags
+from fanic.repository.works import update_work_chapter
+from fanic.repository.works import upsert_work
 from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
-from fanic.type_coercion import as_int
-from fanic.type_coercion import as_str
 from fanic.utils import slugify
+
+try:
+    from fanic import image_settings as _image_settings
+except Exception:
+    _image_settings = None
+
+
+def resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
+    if _image_settings is not None:
+        return _image_settings.resolve_thumbnail_dimensions(settings_obj)
+
+    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
+    if isinstance(dims_obj, tuple):
+        dims_tuple = cast(tuple[object, ...], dims_obj)
+        if len(dims_tuple) == 2:
+            width_obj, height_obj = dims_tuple
+            if isinstance(width_obj, int) and isinstance(height_obj, int):
+                return (width_obj, height_obj)
+    return (720, 720)
+
+
+def image_processing_constants(settings_obj: object) -> tuple[int, int, int]:
+    if _image_settings is not None:
+        return _image_settings.image_processing_constants(settings_obj)
+
+    image_quality_obj: object = getattr(settings_obj, "image_avif_quality", 75)
+    thumb_quality_obj: object = getattr(settings_obj, "thumbnail_avif_quality", 60)
+    max_pixels_obj: object = getattr(settings_obj, "max_upload_image_pixels", 40000000)
+    image_quality = image_quality_obj if isinstance(image_quality_obj, int) else 75
+    thumb_quality = thumb_quality_obj if isinstance(thumb_quality_obj, int) else 60
+    max_pixels = max_pixels_obj if isinstance(max_pixels_obj, int) else 40000000
+    return (image_quality, thumb_quality, max_pixels)
+
 
 Image.init()
 SUPPORTED_IMAGE_EXTENSIONS = {
     extension.lower() for extension, format_name in Image.registered_extensions().items() if format_name in Image.OPEN
 }
 _SETTINGS = get_settings()
-IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
-THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
-
-
-def _resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
-    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
-    if isinstance(dims_obj, tuple):
-        dims_tuple = cast(tuple[object, ...], dims_obj)
-        if len(dims_tuple) == 2:
-            dim_w_obj, dim_h_obj = dims_tuple
-            if isinstance(dim_w_obj, int) and isinstance(dim_h_obj, int):
-                return (dim_w_obj, dim_h_obj)
-    return (720, 720)
-
-
-THUMBNAIL_MAX_DIMENSIONS = _resolve_thumbnail_dimensions(_SETTINGS)
-MAX_INGEST_PAGES = int(getattr(_SETTINGS, "max_ingest_pages", 2000))
-MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_member_uncompressed_bytes", 134217728))
-MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = int(getattr(_SETTINGS, "max_cbz_total_uncompressed_bytes", 2147483648))
-MAX_UPLOAD_IMAGE_PIXELS = int(getattr(_SETTINGS, "max_upload_image_pixels", 40000000))
-USER_PAGE_SOFT_CAP = int(getattr(_SETTINGS, "user_page_soft_cap", 2000))
-USER_PAGE_QUALITY_RAMP_MULTIPLIER = float(getattr(_SETTINGS, "user_page_quality_ramp_multiplier", 1.5))
+THUMBNAIL_MAX_DIMENSIONS = resolve_thumbnail_dimensions(_SETTINGS)
+IMAGE_AVIF_QUALITY, THUMBNAIL_AVIF_QUALITY, MAX_UPLOAD_IMAGE_PIXELS = image_processing_constants(_SETTINGS)
+MAX_INGEST_PAGES = int(_SETTINGS.max_ingest_pages) if hasattr(_SETTINGS, "max_ingest_pages") else 2000
+MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = (
+    int(_SETTINGS.max_cbz_member_uncompressed_bytes)
+    if hasattr(_SETTINGS, "max_cbz_member_uncompressed_bytes")
+    else 134217728
+)
+MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = (
+    int(_SETTINGS.max_cbz_total_uncompressed_bytes)
+    if hasattr(_SETTINGS, "max_cbz_total_uncompressed_bytes")
+    else 2147483648
+)
+USER_PAGE_SOFT_CAP = int(_SETTINGS.user_page_soft_cap) if hasattr(_SETTINGS, "user_page_soft_cap") else 2000
+USER_PAGE_QUALITY_RAMP_MULTIPLIER = (
+    float(_SETTINGS.user_page_quality_ramp_multiplier)
+    if hasattr(_SETTINGS, "user_page_quality_ramp_multiplier")
+    else 1.5
+)
 
 type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
@@ -326,11 +354,29 @@ def _prepare_image_for_avif(image: Image.Image) -> Image.Image:
 
 
 def _as_int(value: object, default: int = 0) -> int:
-    return as_int(value, default)
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return int(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def _as_str(value: object, default: str = "") -> str:
-    return as_str(value, default)
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def _comma_split(value: str) -> list[str]:

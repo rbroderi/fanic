@@ -1,45 +1,36 @@
 from html import escape
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_visible
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
 from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.editor_metadata import render_options_html
 
 
 def _status_for_work_upload_message(msg: str) -> StatusReplacements:
-    match msg:
-        case "uploaded":
-            return status_visible("Fanart uploaded.", "success")
-        case "uploaded-rating-elevated":
-            return status_visible(
+    return status_for_message(
+        msg,
+        {
+            "uploaded": status_visible("Fanart uploaded.", "success"),
+            "uploaded-rating-elevated": status_visible(
                 "Fanart uploaded. Rating auto-elevated based on moderation detection.",
                 "success",
-            )
-        case "invalid":
-            return status_visible("Please complete all required fields.", "error")
-        case "missing-file":
-            return status_visible("Choose an image file to upload.", "error")
-        case "policy":
-            return status_visible("Upload rejected by file policy.", "error")
-        case "blocked":
-            return status_visible(
+            ),
+            "invalid": status_visible("Please complete all required fields.", "error"),
+            "missing-file": status_visible("Choose an image file to upload.", "error"),
+            "policy": status_visible("Upload rejected by file policy.", "error"),
+            "blocked": status_visible(
                 "Upload blocked by moderation policy (photorealistic images are not allowed).",
                 "error",
-            )
-        case "login-required":
-            return status_visible("Login required before uploading fanart.", "error")
-        case "terms":
-            return status_visible(
-                "You must agree to the Terms and Conditions before uploading.",
-                "error",
-            )
-        case _:
-            return status_hidden()
+            ),
+            "login-required": status_visible("Login required before uploading fanart.", "error"),
+            "terms": status_visible("You must agree to the Terms and Conditions before uploading.", "error"),
+        },
+    )
 
 
 def render_upload_page(

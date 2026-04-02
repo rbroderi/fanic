@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
 
-from fanic.repository import UserRole
+from fanic.cylinder_sites.user_roles import is_privileged_role
+from fanic.repository.users import UserRole
 
 
 class AuthorizationAction(StrEnum):
@@ -21,7 +22,7 @@ class AuthorizationAction(StrEnum):
 
 
 def _is_admin(role: UserRole) -> bool:
-    return role in {"superadmin", "admin"}
+    return is_privileged_role(role)
 
 
 def _is_owner(current_username: str, owner_username: str) -> bool:

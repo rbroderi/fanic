@@ -9,7 +9,7 @@ from wsgiref.types import WSGIApplication
 import pytest
 
 import fanic.cylinder_main as cylinder_main
-from fanic.cylinder_sites.common import SESSION_COOKIE_NAME
+from fanic.cylinder_sites.common.session import SESSION_COOKIE_NAME
 
 
 def _write_response_chunk(_: bytes) -> object:

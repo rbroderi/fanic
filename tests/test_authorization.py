@@ -5,7 +5,7 @@ from fanic.authorization import AuthorizationAction
 from fanic.authorization import AuthorizationContext
 from fanic.authorization import ComicPolicy
 from fanic.authorization import FanartPolicy
-from fanic.repository import UserRole
+from fanic.repository.users import UserRole
 
 
 def _is_allowed(

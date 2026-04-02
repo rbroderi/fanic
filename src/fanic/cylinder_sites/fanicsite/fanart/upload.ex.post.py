@@ -2,29 +2,22 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import MAX_PAGE_UPLOAD_BYTES
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import check_post_rate_limit
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.common import validate_csrf
-from fanic.cylinder_sites.common import validate_field_lengths
-from fanic.cylinder_sites.common import validate_page_upload_policy
-from fanic.cylinder_sites.common import validate_saved_upload_size
+from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.rate_limit import check_post_rate_limit
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.rate_limit import validate_field_lengths
+from fanic.cylinder_sites.common.security import validate_page_upload_policy
+from fanic.cylinder_sites.common.security import validate_saved_upload_size
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
 from fanic.fanart import ingest_fanart_image
 from fanic.ingest import ModerationBlockedError
-from fanic.repository import get_local_user
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
+from fanic.repository.users import get_local_user
 
 
 def _has_selected_file(upload: object | None) -> bool:

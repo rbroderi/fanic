@@ -2,6 +2,7 @@ import sqlite3
 from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
+from types import SimpleNamespace
 from types import TracebackType
 from typing import Literal
 from typing import cast
@@ -47,7 +48,32 @@ def _ensure_test_runtime_schema(connection: sqlite3.Connection) -> None:
 
 
 def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
-    import fanic.repository as repository
+    import fanic.repository.fanart as repository_fanart
+    import fanic.repository.social as repository_social
+    import fanic.repository.tags as repository_tags
+    import fanic.repository.users as repository_users
+    import fanic.repository.works as repository_works
+
+    repository = ModuleType("repository_api")
+    for module in (
+        repository_users,
+        repository_works,
+        repository_tags,
+        repository_fanart,
+        repository_social,
+    ):
+        for symbol, value in vars(module).items():
+            if symbol.startswith("_"):
+                continue
+            setattr(repository, symbol, value)
+
+    # Keep access to one private helper used in these tests.
+    setattr(repository, "_ensure_tag", repository_works._ensure_tag)
+    setattr(
+        repository,
+        "_modules",
+        SimpleNamespace(users=repository_users, works=repository_works),
+    )
 
     schema_path = Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
     db_path = tmp_path / "repo.sqlite3"
@@ -64,12 +90,28 @@ def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     works_dir = tmp_path / "works"
     cbz_dir = tmp_path / "cbz"
+    fanart_dir = tmp_path / "fanart"
     works_dir.mkdir(parents=True, exist_ok=True)
     cbz_dir.mkdir(parents=True, exist_ok=True)
+    fanart_dir.mkdir(parents=True, exist_ok=True)
+    (fanart_dir / "images").mkdir(parents=True, exist_ok=True)
+    (fanart_dir / "thumbs").mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(repository, "get_connection", get_test_connection)
-    monkeypatch.setattr(repository, "WORKS_DIR", works_dir)
-    monkeypatch.setattr(repository, "CBZ_DIR", cbz_dir)
+    monkeypatch.setattr(repository_users, "get_connection", get_test_connection)
+    monkeypatch.setattr(repository_works, "get_connection", get_test_connection)
+    monkeypatch.setattr(repository_tags, "get_connection", get_test_connection)
+    monkeypatch.setattr(repository_fanart, "get_connection", get_test_connection)
+    monkeypatch.setattr(repository_social, "get_connection", get_test_connection)
+
+    monkeypatch.setattr(repository_works, "WORKS_DIR", works_dir)
+    monkeypatch.setattr(repository_works, "CBZ_DIR", cbz_dir)
+    monkeypatch.setattr(repository_fanart, "FANART_DIR", fanart_dir)
+
+    setattr(repository, "get_connection", get_test_connection)
+    setattr(repository, "WORKS_DIR", works_dir)
+    setattr(repository, "CBZ_DIR", cbz_dir)
+    setattr(repository, "FANART_DIR", fanart_dir)
+    setattr(repository, "get_settings", repository_users.get_settings)
     return repository
 
 
@@ -156,7 +198,7 @@ def test_get_or_create_user_for_auth0_identity_creates_new_user_and_identity(
     class _Settings:
         auth0_superadmin_email: str = "admin@fanic.media"
 
-    monkeypatch.setattr(repository, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(repository._modules.users, "get_settings", lambda: _Settings())
 
     username = repository.get_or_create_user_for_auth0_identity(
         subject="auth0|abc123",
@@ -187,7 +229,7 @@ def test_get_or_create_user_for_auth0_identity_promotes_superadmin_email(
     class _Settings:
         auth0_superadmin_email: str = "admin@fanic.media"
 
-    monkeypatch.setattr(repository, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(repository._modules.users, "get_settings", lambda: _Settings())
 
     first_username = repository.get_or_create_user_for_auth0_identity(
         subject="auth0|super-1",
@@ -219,7 +261,7 @@ def test_get_or_create_user_for_auth0_identity_preserves_onboarding_fields(
     class _Settings:
         auth0_superadmin_email: str = "admin@fanic.media"
 
-    monkeypatch.setattr(repository, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(repository._modules.users, "get_settings", lambda: _Settings())
 
     username = repository.get_or_create_user_for_auth0_identity(
         subject="auth0|preserve-1",

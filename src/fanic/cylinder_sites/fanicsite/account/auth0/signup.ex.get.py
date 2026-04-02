@@ -4,20 +4,13 @@ from typing import cast
 from fanic.auth0_client import auth0_config_from_settings
 from fanic.auth0_client import build_oauth_client
 from fanic.auth0_client import new_code_verifier
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import set_auth0_oauth_cookie
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.auth0_oauth import set_auth0_oauth_cookie
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.settings import get_settings
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

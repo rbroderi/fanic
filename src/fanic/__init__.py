@@ -8,6 +8,5 @@ if get_settings().enable_beartype:
     logging.getLogger(__name__).info("Enabling beartype runtime type checking for fanic")
     beartype_this_package()
 
-__all__ = ["__version__"]
 
 __version__ = "0.1.0"

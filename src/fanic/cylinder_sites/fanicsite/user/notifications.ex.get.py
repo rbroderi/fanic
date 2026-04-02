@@ -2,13 +2,13 @@ from collections.abc import Sequence
 from html import escape
 from urllib.parse import quote
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import text_error
-from fanic.repository import NotificationRow
-from fanic.repository import list_user_notifications
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.repository.users import NotificationRow
+from fanic.repository.users import list_user_notifications
 
 
 def _notifications_html(rows: Sequence[NotificationRow]) -> str:

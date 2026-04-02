@@ -3,31 +3,24 @@ from urllib.parse import quote
 
 from fanic.authorization import AuthorizationContext
 from fanic.authorization import FanartPolicy
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import enforce_https_termination
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import route_tail
-from fanic.cylinder_sites.common import text_error
-from fanic.cylinder_sites.common import validate_csrf
-from fanic.repository import add_fanart_comment
-from fanic.repository import create_fanart_gallery
-from fanic.repository import delete_fanart_gallery
-from fanic.repository import delete_fanart_item
-from fanic.repository import get_fanart_gallery_by_slug
-from fanic.repository import get_fanart_item
-from fanic.repository import get_local_user
-from fanic.repository import get_local_user_by_display_name
-from fanic.repository import replace_fanart_gallery_items
-
-
-def _redirect(response: ResponseLike, location: str) -> ResponseLike:
-    response.status_code = 303
-    response.content_type = "text/plain; charset=utf-8"
-    response.headers["Location"] = location
-    response.set_data(f"See Other: {location}")
-    return response
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.repository.fanart import add_fanart_comment
+from fanic.repository.fanart import create_fanart_gallery
+from fanic.repository.fanart import delete_fanart_gallery
+from fanic.repository.fanart import delete_fanart_item
+from fanic.repository.fanart import get_fanart_gallery_by_slug
+from fanic.repository.fanart import get_fanart_item
+from fanic.repository.users import get_local_user
+from fanic.repository.users import get_local_user_by_display_name
+from fanic.repository.fanart import replace_fanart_gallery_items
 
 
 def _form_values(request: RequestLike, key: str) -> list[str]:

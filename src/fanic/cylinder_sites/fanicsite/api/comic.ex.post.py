@@ -1,9 +1,9 @@
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import json_response
-from fanic.cylinder_sites.common import route_tail
-from fanic.repository import save_progress
-from fanic.repository import upsert_user_bookmark
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import json_response
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.repository.works import save_progress
+from fanic.repository.users import upsert_user_bookmark
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

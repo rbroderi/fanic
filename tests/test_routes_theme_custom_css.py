@@ -5,6 +5,8 @@ from typing import Protocol
 
 import pytest
 
+import fanic.cylinder_sites.common.responses as common_module
+
 
 class ResponseLike(Protocol):
     status_code: int
@@ -35,12 +37,8 @@ def test_theme_custom_css_returns_css_for_enabled_theme(
             "toml_text": '[light]\naccent="#268bd2"\n[dark]\naccent="#b58900"\n',
         }
 
-    monkeypatch.setattr(module.common, "current_user", fake_current_user)
-    monkeypatch.setattr(
-        module.common,
-        "get_user_theme_preference",
-        fake_get_user_theme_preference,
-    )
+    monkeypatch.setattr(common_module, "current_user", fake_current_user)
+    monkeypatch.setattr(common_module, "get_user_theme_preference", fake_get_user_theme_preference)
 
     request = dummy_request(path="/theme/custom.css", args={})
     response = dummy_response()
@@ -75,12 +73,8 @@ def test_theme_custom_css_returns_empty_for_disabled_theme(
             "toml_text": '[light]\naccent="#268bd2"\n',
         }
 
-    monkeypatch.setattr(module.common, "current_user", fake_current_user)
-    monkeypatch.setattr(
-        module.common,
-        "get_user_theme_preference",
-        fake_get_user_theme_preference,
-    )
+    monkeypatch.setattr(common_module, "current_user", fake_current_user)
+    monkeypatch.setattr(common_module, "get_user_theme_preference", fake_get_user_theme_preference)
 
     request = dummy_request(path="/theme/custom.css", args={})
     response = dummy_response()

@@ -8,10 +8,10 @@ from base64 import urlsafe_b64decode
 from base64 import urlsafe_b64encode
 from collections.abc import Callable
 from collections.abc import Iterable
-from datetime import datetime
 from html import escape
 from http.cookies import SimpleCookie
 from pathlib import Path
+from textwrap import dedent
 from types import TracebackType
 from typing import Final
 from typing import Protocol
@@ -26,19 +26,19 @@ import waitress
 
 from fanic.authorization import AdminPathPolicy
 from fanic.authorization import AuthorizationContext
-from fanic.cylinder_sites.common import SESSION_COOKIE_NAME
-from fanic.cylinder_sites.common import decode_session
+from fanic.cylinder_sites.common.session import SESSION_COOKIE_NAME
+from fanic.cylinder_sites.common.session import decode_session
 from fanic.db import initialize_database
 from fanic.moderation import initialize_moderation_models
-from fanic.repository import get_user_role
-from fanic.repository import user_is_under_18
+from fanic.path_utils import resolve_log_path
+from fanic.repository.users import get_user_role
+from fanic.repository.users import user_is_under_18
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
 CYLINDER_SITES_DIR: Final[Path] = PACKAGE_ROOT / "cylinder_sites"
 SITE_NAME: Final[str] = "fanicsite"
-ADMIN_ROLES: Final[set[str]] = {"superadmin", "admin"}
 ALPHA_INVITE_COOKIE_NAME: Final[str] = "fanic_alpha_access"
 ALPHA_INVITE_PATH: Final[str] = "/__alpha_invite"
 UNDERAGE_ALLOWED_PATHS: Final[tuple[str, ...]] = (
@@ -62,19 +62,9 @@ class StartResponseProtocol(Protocol):
     ) -> Callable[[bytes], object]: ...
 
 
-def _resolve_log_path(template: str) -> Path:
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    resolved = template.replace("%TIMESTAMP%", timestamp).strip()
-    value = resolved if resolved else f"logs/{timestamp}.log"
-    path = Path(value).expanduser().resolve()
-    if path.suffix:
-        return path
-    return path.with_suffix(".log")
-
-
 def _build_cylinder_log_handler() -> logging.FileHandler:
     settings = get_settings()
-    log_path = _resolve_log_path(settings.log_path_template)
+    log_path = resolve_log_path(settings.log_path_template)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     return logging.FileHandler(log_path, encoding="utf-8")
 
@@ -193,7 +183,8 @@ def _underage_restriction_middleware(app: WSGIApplication) -> WSGIApplication:
 def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
     settings = get_settings()
     add_hsts = settings.require_https_effective
-    media_base_url = str(getattr(settings, "media_base_url", "")).strip()
+    media_base_url_obj = getattr(settings, "media_base_url", "")
+    media_base_url = str(media_base_url_obj).strip()
 
     script_sources: list[str] = ["'self'", "https://static.cloudflareinsights.com"]
     connect_sources: list[str] = [
@@ -329,25 +320,26 @@ def _invite_page_response(
 ) -> list[bytes]:
     safe_next_url = escape(next_url)
     error_html = f'<p class="invite-error">{escape(error_message)}</p>' if error_message else ""
-    body_text = (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Alpha Access Required</title>"
-        '<link rel="stylesheet" href="/static/styles.css" />'
-        "</head>"
-        '<body class="alpha-invite-page">'
-        '<main class="alpha-invite-card">'
-        "<h1>Private Alpha</h1>"
-        "<p>Enter your invite code to continue.</p>"
-        f"{error_html}"
-        f'<form method="post" action="{ALPHA_INVITE_PATH}">'
-        f'<input type="hidden" name="next" value="{safe_next_url}">'
-        '<label for="inviteCode">Invite code</label>'
-        '<input id="inviteCode" name="invite_code" type="password" required '
-        'class="alpha-invite-input">'
-        '<button type="submit" class="alpha-invite-button">Unlock</button>'
-        "</form></main></body></html>"
-    )
+    body_text = dedent(
+        f"""
+        <!doctype html><html lang="en"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Alpha Access Required</title>
+        <link rel="stylesheet" href="/static/styles.css" />
+        </head>
+        <body class="alpha-invite-page">
+        <main class="alpha-invite-card">
+        <h1>Private Alpha</h1>
+        <p>Enter your invite code to continue.</p>
+        {error_html}
+        <form method="post" action="{ALPHA_INVITE_PATH}">
+        <input type="hidden" name="next" value="{safe_next_url}">
+        <label for="inviteCode">Invite code</label>
+        <input id="inviteCode" name="invite_code" type="password" required class="alpha-invite-input">
+        <button type="submit" class="alpha-invite-button">Unlock</button>
+        </form></main></body></html>
+        """
+    ).strip()
     body = body_text.encode("utf-8")
     headers = [
         ("Content-Type", "text/html; charset=utf-8"),

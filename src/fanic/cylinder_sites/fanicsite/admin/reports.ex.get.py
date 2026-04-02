@@ -2,15 +2,15 @@ from html import escape
 from textwrap import dedent
 from urllib.parse import urlencode
 
-from fanic.cylinder_sites.common import RequestLike
-from fanic.cylinder_sites.common import ResponseLike
-from fanic.cylinder_sites.common import StatusReplacements
-from fanic.cylinder_sites.common import current_user
-from fanic.cylinder_sites.common import render_html_template
-from fanic.cylinder_sites.common import role_for_user
-from fanic.cylinder_sites.common import status_hidden
-from fanic.cylinder_sites.common import status_visible
-from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.protocols import StatusReplacements
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.responses import render_html_template
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.common.protocols import status_for_message
+from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.feedback_categories import feedback_category_label
 from fanic.cylinder_sites.feedback_categories import feedback_category_options_html
 from fanic.cylinder_sites.report_issues import report_issue_label
@@ -18,8 +18,8 @@ from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.cylinder_sites.report_statuses import report_status_label
 from fanic.cylinder_sites.report_statuses import report_status_options_html
 from fanic.cylinder_sites.user_roles import is_privileged_role
-from fanic.repository import ContentReportRow
-from fanic.repository import list_content_reports
+from fanic.repository.social import ContentReportRow
+from fanic.repository.social import list_content_reports
 
 
 def _report_tab(tab: str) -> str:
@@ -55,43 +55,31 @@ def _tab_filter_href(
 
 
 def _status_replacements(msg: str) -> StatusReplacements:
-    match msg:
-        case "removed":
-            return status_visible("Report removed.", "success")
-        case "marked-false":
-            return status_visible("Report marked as false report.", "success")
-        case "marked-research":
-            return status_visible(
-                "Report marked as more research needed.",
-                "success",
-            )
-        case "marked-resolved":
-            return status_visible("Report marked as resolved.", "success")
-        case "marked-reopen":
-            return status_visible("Report marked as re-open.", "success")
-        case "promoted-explicit":
-            return status_visible(
+    return status_for_message(
+        msg,
+        {
+            "removed": status_visible("Report removed.", "success"),
+            "marked-false": status_visible("Report marked as false report.", "success"),
+            "marked-research": status_visible("Report marked as more research needed.", "success"),
+            "marked-resolved": status_visible("Report marked as resolved.", "success"),
+            "marked-reopen": status_visible("Report marked as re-open.", "success"),
+            "promoted-explicit": status_visible(
                 "Work rating promoted to Explicit and report marked resolved.",
                 "success",
-            )
-        case "promote-missing-work":
-            return status_visible(
+            ),
+            "promote-missing-work": status_visible(
                 "Cannot promote rating: report is not linked to a work id.",
                 "error",
-            )
-        case "promote-work-not-found":
-            return status_visible(
+            ),
+            "promote-work-not-found": status_visible(
                 "Cannot promote rating: linked work was not found.",
                 "error",
-            )
-        case "not-found":
-            return status_visible("Report not found.", "error")
-        case "invalid-id":
-            return status_visible("Invalid report id.", "error")
-        case "invalid-action":
-            return status_visible("Invalid report action.", "error")
-        case _:
-            return status_hidden()
+            ),
+            "not-found": status_visible("Report not found.", "error"),
+            "invalid-id": status_visible("Invalid report id.", "error"),
+            "invalid-action": status_visible("Invalid report action.", "error"),
+        },
+    )
 
 
 def _report_rows_html(
