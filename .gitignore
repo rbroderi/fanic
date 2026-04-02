@@ -50,3 +50,5 @@ static/*.js.map
 .ipynb_checkpoints/
 tmp/
 tags-*
+
+fanic.db

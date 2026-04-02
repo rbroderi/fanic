@@ -1,5 +1,6 @@
 import json
 from collections.abc import Sequence
+from base64 import b64encode
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -583,6 +584,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             bootstrap,
             ensure_ascii=True,
         ).replace("<", "\\u003c")
+        bootstrap_b64 = b64encode(bootstrap_json.encode("utf-8")).decode("ascii")
 
         initial_claimed_url = ""
         selected_index_obj = bootstrap.get("page_index", 1)
@@ -702,7 +704,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "__READER_FANART_NEXT_HREF__": escape(next_href),
                 "__READER_FANART_COMMENTS_HTML__": fanart_comments_markup,
                 "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-                "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix3",
+                "__READER_BOOTSTRAP_B64__": bootstrap_b64,
+                "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix4",
             },
         )
 

@@ -5,9 +5,26 @@
  */
 
 function readBootstrap() {
+  const bootstrapFromBase64 = () => {
+    const node = document.getElementById("readerBootstrapB64") as HTMLInputElement | null;
+    if (!node) {
+      return null;
+    }
+    const encoded = node.value.trim();
+    if (!encoded) {
+      return null;
+    }
+    try {
+      const decoded = window.atob(encoded);
+      return JSON.parse(decoded);
+    } catch {
+      return null;
+    }
+  };
+
   const node = document.getElementById("readerBootstrap");
   if (!node || !node.textContent) {
-    return null;
+    return bootstrapFromBase64();
   }
 
   try {
@@ -19,7 +36,7 @@ function readBootstrap() {
       decoder.innerHTML = node.textContent;
       return JSON.parse(decoder.value);
     } catch {
-      return null;
+      return bootstrapFromBase64();
     }
   }
 }

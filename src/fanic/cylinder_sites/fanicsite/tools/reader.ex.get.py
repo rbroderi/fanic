@@ -1,3 +1,4 @@
+from base64 import b64encode
 import json
 from collections.abc import Sequence
 from html import escape
@@ -137,6 +138,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         },
         ensure_ascii=True,
     ).replace("<", "\\u003c")
+    bootstrap_b64 = b64encode(bootstrap_json.encode("utf-8")).decode("ascii")
 
     reader_direct_image_href = ""
     reader_initial_thumb_href = ""
@@ -182,6 +184,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__READER_FANART_NEXT_HREF__": "",
             "__READER_FANART_COMMENTS_HTML__": "",
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,
-            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix3",
+            "__READER_BOOTSTRAP_B64__": bootstrap_b64,
+            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix4",
         },
     )
