@@ -42,6 +42,8 @@ from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
+from fanic.type_coercion import as_int
+from fanic.type_coercion import as_str
 from fanic.utils import slugify
 
 Image.init()
@@ -324,22 +326,11 @@ def _prepare_image_for_avif(image: Image.Image) -> Image.Image:
 
 
 def _as_int(value: object, default: int = 0) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
+    return as_int(value, default)
 
 
 def _as_str(value: object, default: str = "") -> str:
-    if isinstance(value, str):
-        return value
-    if value is None:
-        return default
-    return str(value)
+    return as_str(value, default)
 
 
 def _comma_split(value: str) -> list[str]:

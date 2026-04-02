@@ -1,53 +1,45 @@
-from dataclasses import dataclass
 from html import escape
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import StatusReplacements
 from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import status_hidden
+from fanic.cylinder_sites.common import status_visible
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
 from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.editor_metadata import render_options_html
 
 
-@dataclass(frozen=True, slots=True)
-class StatusMessage:
-    text: str
-    css_class: str
-    hidden_attr: str
-
-
-def _status_for_work_upload_message(msg: str) -> StatusMessage:
+def _status_for_work_upload_message(msg: str) -> StatusReplacements:
     match msg:
         case "uploaded":
-            return StatusMessage("Fanart uploaded.", "success", "")
+            return status_visible("Fanart uploaded.", "success")
         case "uploaded-rating-elevated":
-            return StatusMessage(
+            return status_visible(
                 "Fanart uploaded. Rating auto-elevated based on moderation detection.",
                 "success",
-                "",
             )
         case "invalid":
-            return StatusMessage("Please complete all required fields.", "error", "")
+            return status_visible("Please complete all required fields.", "error")
         case "missing-file":
-            return StatusMessage("Choose an image file to upload.", "error", "")
+            return status_visible("Choose an image file to upload.", "error")
         case "policy":
-            return StatusMessage("Upload rejected by file policy.", "error", "")
+            return status_visible("Upload rejected by file policy.", "error")
         case "blocked":
-            return StatusMessage(
+            return status_visible(
                 "Upload blocked by moderation policy (photorealistic images are not allowed).",
                 "error",
-                "",
             )
         case "login-required":
-            return StatusMessage("Login required before uploading fanart.", "error", "")
+            return status_visible("Login required before uploading fanart.", "error")
         case "terms":
-            return StatusMessage(
+            return status_visible(
                 "You must agree to the Terms and Conditions before uploading.",
                 "error",
-                "",
             )
         case _:
-            return StatusMessage("", "", "hidden")
+            return status_hidden()
 
 
 def render_upload_page(

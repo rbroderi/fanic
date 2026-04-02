@@ -7,6 +7,7 @@ from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import TagPopularityRow
 from fanic.repository import list_top_tag_popularity
 
@@ -88,7 +89,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Not found", 404)
 
     username = current_user(request)
-    if role_for_user(username) not in {"superadmin", "admin"}:
+    if not is_privileged_role(role_for_user(username)):
         return text_error(response, "Forbidden", 403)
 
     tag_type = _normalize_tag_type(request.args.get("type", ""))

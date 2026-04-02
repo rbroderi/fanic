@@ -9,6 +9,7 @@ import time
 import tomllib
 from collections.abc import Callable
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -109,6 +110,7 @@ MAX_URL_FIELD_LENGTH = 2048
 # Per-IP rate limiting for general POST endpoints (dmca, profile, etc.).
 POST_RATE_WINDOW_SECONDS = 60
 POST_RATE_MAX_REQUESTS = 30
+MAX_TRACKED_RATE_LIMIT_KEYS = int(getattr(_SETTINGS, "max_tracked_rate_limit_keys", 10000))
 
 _POST_FORM_OPEN_TAG_RE = re.compile(
     r"<form\b[^>]*\bmethod\s*=\s*(['\"]?)post\1[^>]*>",
@@ -333,6 +335,21 @@ class ResponseLike(Protocol):
     ) -> None: ...
 
     def delete_cookie(self, key: str, path: str = "/") -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class StatusReplacements:
+    text: str
+    css_class: str
+    hidden_attr: str
+
+
+def status_hidden() -> StatusReplacements:
+    return StatusReplacements("", "", "hidden")
+
+
+def status_visible(text: str, css_class: str) -> StatusReplacements:
+    return StatusReplacements(text, css_class, "")
 
 
 def request_id(request: RequestLike, response: ResponseLike | None = None) -> str:
@@ -821,6 +838,58 @@ def _prune_stale_auth_entries(now: float) -> None:
         _AUTH_LOCKED_UNTIL.pop(key, None)
         _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
 
+    if len(_AUTH_LOCKED_UNTIL) <= MAX_TRACKED_RATE_LIMIT_KEYS:
+        return
+
+    overflow = len(_AUTH_LOCKED_UNTIL) - MAX_TRACKED_RATE_LIMIT_KEYS
+    sorted_keys = sorted(_AUTH_LOCKED_UNTIL, key=lambda key: _AUTH_LOCKED_UNTIL.get(key, 0.0))
+    for key in sorted_keys[:overflow]:
+        _AUTH_LOCKED_UNTIL.pop(key, None)
+        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
+
+
+def _prune_stale_post_rate_entries(now: float) -> None:
+    cutoff = now - POST_RATE_WINDOW_SECONDS * 2
+    stale_keys = [key for key, attempts in _POST_RATE_TIMESTAMPS.items() if not attempts or max(attempts) < cutoff]
+    for key in stale_keys:
+        _POST_RATE_TIMESTAMPS.pop(key, None)
+
+    if len(_POST_RATE_TIMESTAMPS) <= MAX_TRACKED_RATE_LIMIT_KEYS:
+        return
+
+    overflow = len(_POST_RATE_TIMESTAMPS) - MAX_TRACKED_RATE_LIMIT_KEYS
+    sorted_keys = sorted(
+        _POST_RATE_TIMESTAMPS,
+        key=lambda key: max(_POST_RATE_TIMESTAMPS.get(key, [0.0])),
+    )
+    for key in sorted_keys[:overflow]:
+        _POST_RATE_TIMESTAMPS.pop(key, None)
+
+
+def _prune_stale_upload_rate_entries(now: float) -> None:
+    cutoff = now - UPLOAD_RATE_WINDOW_SECONDS * 2
+    stale_keys = [
+        key
+        for key, attempts in _UPLOAD_ATTEMPT_TIMESTAMPS.items()
+        if (not attempts or max(attempts) < cutoff) and _UPLOAD_IN_FLIGHT.get(key, 0) <= 0
+    ]
+    for key in stale_keys:
+        _UPLOAD_ATTEMPT_TIMESTAMPS.pop(key, None)
+        _UPLOAD_IN_FLIGHT.pop(key, None)
+
+    if len(_UPLOAD_ATTEMPT_TIMESTAMPS) <= MAX_TRACKED_RATE_LIMIT_KEYS:
+        return
+
+    overflow = len(_UPLOAD_ATTEMPT_TIMESTAMPS) - MAX_TRACKED_RATE_LIMIT_KEYS
+    sorted_keys = sorted(
+        _UPLOAD_ATTEMPT_TIMESTAMPS,
+        key=lambda key: max(_UPLOAD_ATTEMPT_TIMESTAMPS.get(key, [0.0])),
+    )
+    for key in sorted_keys[:overflow]:
+        if _UPLOAD_IN_FLIGHT.get(key, 0) <= 0:
+            _UPLOAD_ATTEMPT_TIMESTAMPS.pop(key, None)
+            _UPLOAD_IN_FLIGHT.pop(key, None)
+
 
 def clear_auth_failures(request: RequestLike, username: str) -> None:
     key = _auth_key(request, username)
@@ -914,6 +983,7 @@ def begin_upload_session(username: str) -> tuple[bool, str, int]:
 
     now = time.time()
     with _UPLOAD_LOCK:
+        _prune_stale_upload_rate_entries(now)
         attempts = _UPLOAD_ATTEMPT_TIMESTAMPS.get(normalized_username, [])
         window_floor = now - UPLOAD_RATE_WINDOW_SECONDS
         attempts = [attempt for attempt in attempts if attempt >= window_floor]
@@ -1011,6 +1081,7 @@ def check_post_rate_limit(request: RequestLike) -> int:
     client_ip = _request_client_ip(request)
     now = time.time()
     with _POST_RATE_LOCK:
+        _prune_stale_post_rate_entries(now)
         attempts = _POST_RATE_TIMESTAMPS.get(client_ip, [])
         window_floor = now - POST_RATE_WINDOW_SECONDS
         attempts = [ts for ts in attempts if ts >= window_floor]

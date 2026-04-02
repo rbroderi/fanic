@@ -40,6 +40,7 @@ from fanic.moderation import get_explicit_threshold
 from fanic.repository import get_work
 from fanic.repository import list_work_chapters
 from fanic.repository import list_work_page_rows
+from fanic.type_coercion import as_float
 
 
 def _csv(value: str) -> list[str]:
@@ -54,19 +55,7 @@ def _has_selected_file(upload: object | None) -> bool:
 
 
 def _as_float(value: object, default: float = 0.0) -> float:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int) or isinstance(value, float):
-        return float(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return default
-        try:
-            return float(stripped)
-        except ValueError:
-            return default
-    return default
+    return as_float(value, default, allow_bool=False)
 
 
 def _collect_metadata_from_form(request: RequestLike) -> dict[str, object]:

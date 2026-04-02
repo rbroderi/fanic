@@ -1,6 +1,5 @@
 from collections.abc import Mapping
 from collections.abc import Sequence
-from dataclasses import dataclass
 from html import escape
 from typing import TYPE_CHECKING
 from typing import Any
@@ -15,6 +14,7 @@ else:
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import StatusReplacements
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import media_url
 from fanic.cylinder_sites.common import rating_badge_html
@@ -41,13 +41,6 @@ from fanic.repository import list_work_page_rows
 from fanic.repository import list_work_versions
 from fanic.repository import load_progress
 from fanic.repository import work_kudos_count
-
-
-@dataclass(frozen=True, slots=True)
-class StatusMessage:
-    text: str
-    css_class: str
-    hidden_attr: str
 
 
 def _can_edit_work(username: str | None, uploader_username: str, *, is_admin: bool) -> bool:
@@ -192,7 +185,7 @@ def _version_metadata_html(version_manifest: dict[str, object]) -> str:
     return "".join(parts)
 
 
-def _status_for_edit_message(save_msg: str) -> StatusMessage:
+def _status_for_edit_message(save_msg: str) -> StatusReplacements:
     text = ""
     css_class = ""
     hidden_attr = "hidden"
@@ -289,10 +282,10 @@ def _status_for_edit_message(save_msg: str) -> StatusMessage:
             text = ""
             css_class = ""
             hidden_attr = "hidden"
-    return StatusMessage(text, css_class, hidden_attr)
+    return StatusReplacements(text, css_class, hidden_attr)
 
 
-def _status_for_work_message(msg: str) -> StatusMessage:
+def _status_for_work_message(msg: str) -> StatusReplacements:
     text = ""
     css_class = ""
     hidden_attr = ""
@@ -325,7 +318,7 @@ def _status_for_work_message(msg: str) -> StatusMessage:
             text = ""
             css_class = ""
             hidden_attr = "hidden"
-    return StatusMessage(text, css_class, hidden_attr)
+    return StatusReplacements(text, css_class, hidden_attr)
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

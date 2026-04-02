@@ -1,14 +1,17 @@
 import logging
 import sys
 import time
-from contextlib import AbstractContextManager
-from typing import Any
-from typing import cast
 
 import pillow_avif  # type: ignore[import-not-found]  # noqa: F401
 
 from fanic.clip_backend import get_backend
 from fanic.settings import get_settings
+from fanic.torch_helpers import call0 as _call0
+from fanic.torch_helpers import call0_context_manager as _call0_context_manager
+from fanic.torch_helpers import call1 as _call1
+from fanic.torch_helpers import call_kw as _call_kw
+from fanic.type_coercion import as_float_or_none
+from fanic.type_coercion import as_int_or_none
 
 _MODEL_NAME = "ViT-L-14"
 _MODEL_PRETRAINED = "openai"
@@ -68,86 +71,12 @@ _last_classify_error = ""
 _LOGGER = logging.getLogger(__name__)
 
 
-def _call0(obj: object | None, name: str) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member()
-    except Exception:
-        return None
-
-
-def _call1(obj: object | None, name: str, arg1: object) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(arg1)
-    except Exception:
-        return None
-
-
-def _call_kw(obj: object | None, name: str, *args: object, **kwargs: object) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(*args, **kwargs)
-    except Exception:
-        return None
-
-
-def _call0_context_manager(
-    obj: object | None,
-    name: str,
-) -> AbstractContextManager[Any] | None:
-    value = _call0(obj, name)
-    if value is None:
-        return None
-    enter = getattr(value, "__enter__", None)
-    exit_ = getattr(value, "__exit__", None)
-    if not callable(enter) or not callable(exit_):
-        return None
-    return cast(AbstractContextManager[Any], value)
-
-
 def _as_float_or_none(value: object | None) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return float(value)
-    if isinstance(value, int | float):
-        return float(value)
-    if not isinstance(value, str):
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
+    return as_float_or_none(value)
 
 
 def _as_int_or_none(value: object | None) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return None
-    return None
+    return as_int_or_none(value)
 
 
 def _ensure_loaded() -> bool:

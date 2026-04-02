@@ -5,9 +5,16 @@ from typing import cast
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 import torch
-from tqdm import tqdm
+
+try:
+    from tqdm import tqdm as tqdm
+except Exception:  # pragma: no cover - optional dependency fallback
+    tqdm = None
 
 from fanic.settings import get_settings
+from fanic.torch_helpers import call0
+from fanic.torch_helpers import call1
+from fanic.torch_helpers import call_kw
 
 _SETTINGS = get_settings()
 _CACHE_DIR = _SETTINGS.openclip_cache_dir
@@ -24,45 +31,40 @@ _device: str = "cpu"
 _last_load_failed_at = 0.0
 
 
-def _call0(obj: object | None, name: str) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
+class _NoopProgress:
+    def update(self, _step: int) -> None:
+        return
+
+    def set_postfix_str(self, _value: str) -> None:
+        return
+
+    def close(self) -> None:
+        return
+
+
+def _build_progress() -> object:
+    if not _VERBOSE_LOAD:
+        return _NoopProgress()
+    if tqdm is not None:
+        return tqdm(
+            total=3,
+            desc="Loading CLIP backend",
+            unit="step",
+            leave=False,
+            disable=False,
+        )
     try:
-        return member()
+        from tqdm import tqdm as resolved_tqdm
+
+        return resolved_tqdm(
+            total=3,
+            desc="Loading CLIP backend",
+            unit="step",
+            leave=False,
+            disable=False,
+        )
     except Exception:
-        return None
-
-
-def _call1(obj: object | None, name: str, arg1: object) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(arg1)
-    except Exception:
-        return None
-
-
-def _call_kw(
-    obj: object | None,
-    name: str,
-    *args: object,
-    **kwargs: object,
-) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(*args, **kwargs)
-    except Exception:
-        return None
+        return _NoopProgress()
 
 
 def ensure_backend_loaded() -> bool:
@@ -84,22 +86,16 @@ def ensure_backend_loaded() -> bool:
     torch_mod = torch
     os.makedirs(_CACHE_DIR, exist_ok=True)
 
-    progress = tqdm(
-        total=3,
-        desc="Loading CLIP backend",
-        unit="step",
-        leave=False,
-        disable=not _VERBOSE_LOAD,
-    )
+    progress = _build_progress()
 
     try:
         cuda_obj = getattr(torch_mod, "cuda", None)
-        is_available = _call0(cuda_obj, "is_available")
+        is_available = call0(cuda_obj, "is_available")
         _device = "cuda" if bool(is_available) else "cpu"
-        _ = progress.update(1)
-        progress.set_postfix_str(f"device={_device}")
+        _ = call1(progress, "update", 1)
+        _ = call1(progress, "set_postfix_str", f"device={_device}")
 
-        created = _call_kw(
+        created = call_kw(
             open_clip_mod,
             "create_model_and_transforms",
             _MODEL_NAME,
@@ -109,38 +105,38 @@ def ensure_backend_loaded() -> bool:
         )
         if not isinstance(created, tuple):
             _last_load_failed_at = time.time()
-            progress.close()
+            _ = call0(progress, "close")
             return False
 
         created_tuple = cast(tuple[object, ...], created)
         if len(created_tuple) < 3:
             _last_load_failed_at = time.time()
-            progress.close()
+            _ = call0(progress, "close")
             return False
 
         model = created_tuple[0]
         preprocess = created_tuple[2]
-        moved_model = _call1(model, "to", _device)
+        moved_model = call1(model, "to", _device)
         if moved_model is None:
             _last_load_failed_at = time.time()
-            progress.close()
+            _ = call0(progress, "close")
             return False
 
-        tokenizer = _call1(open_clip_mod, "get_tokenizer", _MODEL_NAME)
+        tokenizer = call1(open_clip_mod, "get_tokenizer", _MODEL_NAME)
         if tokenizer is None:
             _last_load_failed_at = time.time()
-            progress.close()
+            _ = call0(progress, "close")
             return False
 
         _model = moved_model
-        _ = _call0(_model, "eval")
+        _ = call0(_model, "eval")
         _preprocess = preprocess
         _tokenizer = tokenizer
         _torch_mod = torch_mod
 
-        _ = progress.update(2)
-        progress.set_postfix_str("ready")
-        progress.close()
+        _ = call1(progress, "update", 2)
+        _ = call1(progress, "set_postfix_str", "ready")
+        _ = call0(progress, "close")
         _last_load_failed_at = 0.0
         return True
     except Exception:
@@ -149,7 +145,7 @@ def ensure_backend_loaded() -> bool:
         _tokenizer = None
         _torch_mod = None
         _last_load_failed_at = time.time()
-        progress.close()
+        _ = call0(progress, "close")
         return False
 
 

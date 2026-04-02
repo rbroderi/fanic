@@ -11,6 +11,7 @@ from fanic.cylinder_sites.common import rating_badge_html
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import role_for_user
 from fanic.cylinder_sites.common import text_error
+from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import FanartItemRow
 from fanic.repository import WorkListItem
 from fanic.repository import can_view_work
@@ -183,7 +184,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         "sort": sort,
     }
     username = current_user(request)
-    can_delete = role_for_user(username) in {"superadmin", "admin"}
+    can_delete = is_privileged_role(role_for_user(username))
     query_string = urlencode({"view": view, **filters})
     back_href = f"{request.path}?{query_string}" if query_string else request.path
 

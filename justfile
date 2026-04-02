@@ -44,9 +44,9 @@ autopep695 mode="check":
 ruff-ci:
     uvx ruff check --exclude typings src tests; uvx ruff format --check --exclude typings src tests
 
-# Run Ruff in pre-commit mode (auto-format, then lint check).
+# Run Ruff in pre-commit mode (auto-fix, auto-format, then lint check).
 ruff-precommit:
-    uvx ruff format --exclude typings src tests; uvx ruff check --exclude typings src tests
+    uvx ruff check --fix --exclude typings src tests; uvx ruff format --exclude typings src tests; uvx ruff check --exclude typings src tests
 
 # Run Python type checking with basedpyright.
 [windows]

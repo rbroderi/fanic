@@ -1,13 +1,15 @@
-from dataclasses import dataclass
 from html import escape
 from textwrap import dedent
 from urllib.parse import urlencode
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import StatusReplacements
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import role_for_user
+from fanic.cylinder_sites.common import status_hidden
+from fanic.cylinder_sites.common import status_visible
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.feedback_categories import feedback_category_label
 from fanic.cylinder_sites.feedback_categories import feedback_category_options_html
@@ -15,15 +17,9 @@ from fanic.cylinder_sites.report_issues import report_issue_label
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.cylinder_sites.report_statuses import report_status_label
 from fanic.cylinder_sites.report_statuses import report_status_options_html
+from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import ContentReportRow
 from fanic.repository import list_content_reports
-
-
-@dataclass(frozen=True, slots=True)
-class StatusReplacements:
-    text: str
-    css_class: str
-    hidden_attr: str
 
 
 def _report_tab(tab: str) -> str:
@@ -61,45 +57,41 @@ def _tab_filter_href(
 def _status_replacements(msg: str) -> StatusReplacements:
     match msg:
         case "removed":
-            return StatusReplacements("Report removed.", "success", "")
+            return status_visible("Report removed.", "success")
         case "marked-false":
-            return StatusReplacements("Report marked as false report.", "success", "")
+            return status_visible("Report marked as false report.", "success")
         case "marked-research":
-            return StatusReplacements(
+            return status_visible(
                 "Report marked as more research needed.",
                 "success",
-                "",
             )
         case "marked-resolved":
-            return StatusReplacements("Report marked as resolved.", "success", "")
+            return status_visible("Report marked as resolved.", "success")
         case "marked-reopen":
-            return StatusReplacements("Report marked as re-open.", "success", "")
+            return status_visible("Report marked as re-open.", "success")
         case "promoted-explicit":
-            return StatusReplacements(
+            return status_visible(
                 "Work rating promoted to Explicit and report marked resolved.",
                 "success",
-                "",
             )
         case "promote-missing-work":
-            return StatusReplacements(
+            return status_visible(
                 "Cannot promote rating: report is not linked to a work id.",
                 "error",
-                "",
             )
         case "promote-work-not-found":
-            return StatusReplacements(
+            return status_visible(
                 "Cannot promote rating: linked work was not found.",
                 "error",
-                "",
             )
         case "not-found":
-            return StatusReplacements("Report not found.", "error", "")
+            return status_visible("Report not found.", "error")
         case "invalid-id":
-            return StatusReplacements("Invalid report id.", "error", "")
+            return status_visible("Invalid report id.", "error")
         case "invalid-action":
-            return StatusReplacements("Invalid report action.", "error", "")
+            return status_visible("Invalid report action.", "error")
         case _:
-            return StatusReplacements("", "", "hidden")
+            return status_hidden()
 
 
 def _report_rows_html(
@@ -201,7 +193,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Not found", 404)
 
     username = current_user(request)
-    if role_for_user(username) not in {"superadmin", "admin"}:
+    if not is_privileged_role(role_for_user(username)):
         return text_error(response, "Forbidden", 403)
 
     msg = request.args.get("msg", "").strip()

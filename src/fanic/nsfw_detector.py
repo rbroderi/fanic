@@ -2,6 +2,10 @@ import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: i
 
 from fanic.clip_backend import get_backend
 from fanic.settings import get_settings
+from fanic.torch_helpers import call0 as _call0
+from fanic.torch_helpers import call1 as _call1
+from fanic.torch_helpers import call_kw as _call_kw
+from fanic.type_coercion import as_float_or_none
 
 _NSFW_PROMPTS_BY_CLASS: dict[str, list[str]] = {
     "sfw": [
@@ -51,58 +55,8 @@ _device: str = "cpu"
 _load_attempted = False
 
 
-def _call0(obj: object | None, name: str) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member()
-    except Exception:
-        return None
-
-
-def _call1(obj: object | None, name: str, arg1: object) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(arg1)
-    except Exception:
-        return None
-
-
-def _call_kw(
-    obj: object | None,
-    name: str,
-    *args: object,
-    **kwargs: object,
-) -> object | None:
-    if obj is None:
-        return None
-    member = getattr(obj, name, None)
-    if not callable(member):
-        return None
-    try:
-        return member(*args, **kwargs)
-    except Exception:
-        return None
-
-
 def _as_float(value: object) -> float | None:
-    if isinstance(value, bool):
-        return float(value)
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
+    return as_float_or_none(value)
 
 
 def _as_prob_0_1(value: object) -> float:

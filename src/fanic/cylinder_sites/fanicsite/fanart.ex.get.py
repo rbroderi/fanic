@@ -20,6 +20,7 @@ from fanic.cylinder_sites.common import route_tail
 from fanic.cylinder_sites.common import send_file
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.report_issues import report_issue_options_html
+from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository import FanartCommentRow
 from fanic.repository import FanartGalleryRow
 from fanic.repository import FanartItemRow
@@ -486,7 +487,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         username = current_user(request)
         can_manage_galleries = username == work_owner_username
-        can_delete = role_for_user(username) in {"superadmin", "admin"}
+        can_delete = is_privileged_role(role_for_user(username))
         all_works = list_fanart_items_by_uploader(work_owner_username, limit=500)
         galleries = list_fanart_galleries_by_uploader(work_owner_username)
         active_gallery_slug = request.args.get("gallery", "").strip()

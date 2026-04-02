@@ -1,13 +1,15 @@
 from collections.abc import Sequence
-from dataclasses import dataclass
 from html import escape
 from textwrap import dedent
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import StatusReplacements
 from fanic.cylinder_sites.common import current_user
 from fanic.cylinder_sites.common import render_html_template
 from fanic.cylinder_sites.common import role_for_user
+from fanic.cylinder_sites.common import status_hidden
+from fanic.cylinder_sites.common import status_visible
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.user_roles import ManagedUserRole
 from fanic.cylinder_sites.user_roles import is_privileged_role
@@ -18,41 +20,32 @@ from fanic.repository import list_local_users
 USERS_PER_PAGE = 50
 
 
-@dataclass(frozen=True, slots=True)
-class StatusReplacements:
-    text: str
-    css_class: str
-    hidden_attr: str
-
-
 def _status_replacements(msg: str) -> StatusReplacements:
     match msg:
         case "created":
-            return StatusReplacements("User created.", "success", "")
+            return status_visible("User created.", "success")
         case "updated":
-            return StatusReplacements("User updated.", "success", "")
+            return status_visible("User updated.", "success")
         case "removed":
-            return StatusReplacements("User removed.", "success", "")
+            return status_visible("User removed.", "success")
         case "invalid":
-            return StatusReplacements("Invalid user action.", "error", "")
+            return status_visible("Invalid user action.", "error")
         case "not-found":
-            return StatusReplacements("User not found.", "error", "")
+            return status_visible("User not found.", "error")
         case "exists":
-            return StatusReplacements("Username already exists.", "error", "")
+            return status_visible("Username already exists.", "error")
         case "forbidden-action":
-            return StatusReplacements(
+            return status_visible(
                 "You do not have permission for that action.",
                 "error",
-                "",
             )
         case "self-action-blocked":
-            return StatusReplacements(
+            return status_visible(
                 "You cannot deactivate or remove your own account from this screen.",
                 "error",
-                "",
             )
         case _:
-            return StatusReplacements("", "", "hidden")
+            return status_hidden()
 
 
 def _role_options_html(selected_role: str) -> str:

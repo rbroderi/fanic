@@ -1,39 +1,32 @@
-from dataclasses import dataclass
 from html import escape
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 
 from fanic.cylinder_sites.common import RequestLike
 from fanic.cylinder_sites.common import ResponseLike
+from fanic.cylinder_sites.common import StatusReplacements
 from fanic.cylinder_sites.common import render_html_template
+from fanic.cylinder_sites.common import status_hidden
+from fanic.cylinder_sites.common import status_visible
 from fanic.cylinder_sites.common import text_error
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 
 
-@dataclass(frozen=True, slots=True)
-class StatusReplacements:
-    text: str
-    css_class: str
-    hidden_attr: str
-
-
 def _status_replacements(msg: str, report_id: str) -> StatusReplacements:
     match msg:
         case "submitted":
-            return StatusReplacements(
+            return status_visible(
                 "Report submitted." + (f" Reference #{escape(report_id)}." if report_id else ""),
                 "success",
-                "",
             )
         case "invalid":
-            return StatusReplacements(
+            return status_visible(
                 "Please complete all required fields and certify your claim.",
                 "error",
-                "",
             )
         case _:
-            return StatusReplacements("", "", "hidden")
+            return status_hidden()
 
 
 def _request_base_url(request: RequestLike) -> str:
