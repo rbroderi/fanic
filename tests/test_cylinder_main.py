@@ -598,7 +598,7 @@ def test_create_app_alpha_invite_gate_accepts_code_and_allows_access(
     assert response_chunks == [b"ok"]
 
 
-def test_security_headers_middleware_keeps_style_strict_and_allows_inline_script_elem(
+def test_security_headers_middleware_allows_inline_style_and_script_elem(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured_headers: dict[str, str] = {}
@@ -641,6 +641,5 @@ def test_security_headers_middleware_keeps_style_strict_and_allows_inline_script
     csp_value = captured_headers["Content-Security-Policy"]
     assert "script-src-elem 'self' https://static.cloudflareinsights.com 'unsafe-inline'" in csp_value
     assert "script-src 'self' https://static.cloudflareinsights.com 'unsafe-inline'" in csp_value
-    assert "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com" in csp_value
-    assert "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'" not in csp_value
+    assert "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'" in csp_value
     assert response_chunks == [b"ok"]

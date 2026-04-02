@@ -9,6 +9,14 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: forbid-fanic-db
+        name: forbid-fanic-db
+        entry: bash scripts/forbid-fanic-db.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: sync-static-from-storage
         name: sync-static-from-storage
         entry: bash static/sync-from-storage.sh

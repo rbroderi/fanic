@@ -231,7 +231,7 @@ def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
             "form-action 'self'",
             f"script-src {' '.join(script_sources)} 'unsafe-inline'",
             f"script-src-elem {' '.join(script_sources)} 'unsafe-inline'",
-            "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+            "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
             f"connect-src {' '.join(connect_sources)}",
