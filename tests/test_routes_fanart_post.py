@@ -2,8 +2,15 @@ from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from typing import Protocol
 
-from conftest import DummyResponse as ResponseLike
+
+class ResponseLike(Protocol):
+    status_code: int
+    content_type: str
+    headers: dict[str, str]
+
+    def set_data(self, data: str | bytes) -> None: ...
 
 
 class _UploadStub:

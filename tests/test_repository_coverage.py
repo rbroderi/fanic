@@ -68,7 +68,7 @@ def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
             setattr(repository, symbol, value)
 
     # Keep access to one private helper used in these tests.
-    setattr(repository, "_ensure_tag", repository_works._ensure_tag)
+    setattr(repository, "_ensure_tag", repository_works._ensure_tag)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
     setattr(
         repository,
         "_modules",

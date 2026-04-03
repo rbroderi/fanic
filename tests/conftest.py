@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -8,8 +9,33 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+
+# Force tests onto isolated runtime storage and DB path.
+TEST_RUNTIME_ROOT = (ROOT / ".pytest-runtime").resolve()
+os.environ.setdefault("FANIC_DATA_DIR", str(TEST_RUNTIME_ROOT))
+os.environ.setdefault("FANIC_DB_PATH", str(TEST_RUNTIME_ROOT / "fanic.test.db"))
+
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _guard_test_runtime_paths() -> None:  # pyright: ignore[reportUnusedFunction]
+    test_data_dir_raw = os.environ.get("FANIC_DATA_DIR", "")
+    test_db_path_raw = os.environ.get("FANIC_DB_PATH", "")
+    if not test_data_dir_raw or not test_db_path_raw:
+        pytest.fail("FANIC_DATA_DIR and FANIC_DB_PATH must be set for tests.")
+
+    test_data_dir = Path(test_data_dir_raw).expanduser().resolve()
+    test_db_path = Path(test_db_path_raw).expanduser().resolve()
+    disallowed_roots = (Path("/mnt/storage"), ROOT / "runtime")
+
+    for disallowed_root in disallowed_roots:
+        resolved_root = disallowed_root.resolve()
+        if test_data_dir.is_relative_to(resolved_root):
+            pytest.fail(f"Unsafe FANIC_DATA_DIR for tests: {test_data_dir}")
+        if test_db_path.is_relative_to(resolved_root):
+            pytest.fail(f"Unsafe FANIC_DB_PATH for tests: {test_db_path}")
 
 
 class FileLike(Protocol):

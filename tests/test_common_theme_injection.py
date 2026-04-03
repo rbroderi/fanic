@@ -9,6 +9,7 @@ import pytest
 class ResponseLike(Protocol):
     data: bytes
     status_code: int
+    headers: dict[str, Any]
 
     def set_data(self, data: str | bytes) -> None: ...
 

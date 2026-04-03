@@ -67,11 +67,11 @@ prek-run:
 
 # Run pytest with coverage for the src package.
 [windows]
-test-cov *args:
+test *args:
     $env:FANIC_ENABLE_BEARTYPE = "1"; uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}
 
 [unix]
-test-cov *args:
+test *args:
     if sudo systemctl cat fanic >/dev/null 2>&1 && sudo systemctl is-active --quiet fanic; then sudo systemctl stop fanic; fi; args='{{ args }}'; if [ -n "$args" ]; then FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}; else FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-report= --ignore=tests/test_moderation_media.py && FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-append --cov-report=term-missing tests/test_moderation_media.py; fi
 
 # Install and configure nginx on Windows for FANIC.

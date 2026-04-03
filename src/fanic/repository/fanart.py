@@ -7,6 +7,7 @@ from typing import NotRequired
 from typing import TypedDict
 
 from fanic.db import get_connection
+from fanic.filesystem import delete_file
 from fanic.settings import FANART_DIR
 from fanic.type_coercion import as_int
 from fanic.utils import slugify
@@ -842,13 +843,13 @@ def delete_fanart_item(item_id: str) -> bool:
 
     if image_name and not image_in_use:
         try:
-            fanart_file_for(image_name).unlink(missing_ok=True)
+            delete_file(fanart_file_for(image_name), missing_ok=True)
         except OSError:
             pass
 
     if thumb_name and not thumb_in_use:
         try:
-            fanart_thumb_for(thumb_name).unlink(missing_ok=True)
+            delete_file(fanart_thumb_for(thumb_name), missing_ok=True)
         except OSError:
             pass
 

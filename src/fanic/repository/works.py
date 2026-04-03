@@ -1,7 +1,6 @@
 """works repository domain implementation."""
 
 import json
-import shutil
 import sqlite3
 from collections.abc import Mapping
 from datetime import datetime
@@ -15,6 +14,8 @@ from urllib.parse import quote
 import tomli_w
 
 from fanic.db import get_connection
+from fanic.filesystem import delete_file
+from fanic.filesystem import delete_tree
 from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
 from fanic.type_coercion import as_int
@@ -212,7 +213,7 @@ def sync_work_metadata_toml(work_id: str) -> None:
     # Legacy snapshot files are deprecated in favor of metadata.toml.
     for legacy_name in ("manifest.json", "metadata.json"):
         try:
-            (work_dir / legacy_name).unlink(missing_ok=True)
+            delete_file(work_dir / legacy_name, missing_ok=True)
         except OSError:
             pass
 
@@ -1155,13 +1156,13 @@ def delete_work(work_id: str) -> bool:
         try:
             cbz_resolved = cbz_path.resolve()
             _ = cbz_resolved.relative_to(CBZ_DIR.resolve())
-            cbz_resolved.unlink(missing_ok=True)
+            delete_file(cbz_resolved, missing_ok=True)
         except (OSError, ValueError):
             pass
 
     work_dir = WORKS_DIR / work_id
     try:
-        shutil.rmtree(work_dir, ignore_errors=True)
+        delete_tree(work_dir, ignore_errors=True)
     except OSError:
         pass
 

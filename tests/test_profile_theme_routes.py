@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
+
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType

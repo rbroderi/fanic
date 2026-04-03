@@ -29,6 +29,7 @@ from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common.session import SESSION_COOKIE_NAME
 from fanic.cylinder_sites.common.session import decode_session
 from fanic.db import initialize_database
+from fanic.filesystem import delete_file
 from fanic.moderation import initialize_moderation_models
 from fanic.path_utils import resolve_log_path
 from fanic.repository.users import get_user_role
@@ -474,7 +475,7 @@ def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perm
         socket_path.parent.mkdir(parents=True, exist_ok=True)
         if socket_path.exists():
             if socket_path.is_socket():
-                socket_path.unlink()
+                delete_file(socket_path)
             else:
                 raise ValueError(f"Unix socket path exists and is not a socket: {socket_path}")
         try:

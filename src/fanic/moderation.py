@@ -1,12 +1,13 @@
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from collections.abc import Callable
 from typing import TypedDict
 from typing import cast
 
 from lazi.core import lazi
 
+from fanic.filesystem import delete_file
 from fanic.settings import get_settings
 
 with lazi:
@@ -162,7 +163,7 @@ def moderate_image_bytes(image_bytes: bytes, suffix: str = ".png") -> Moderation
     finally:
         if temp_path:
             try:
-                Path(temp_path).unlink(missing_ok=True)
+                delete_file(Path(temp_path), missing_ok=True)
             except OSError:
                 pass
 

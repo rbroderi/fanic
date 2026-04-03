@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fanic.db import initialize_database
 from fanic.db import run_database_migrations
+from fanic.filesystem import delete_file
 from fanic.settings import get_settings
 
 OK = 0
@@ -311,7 +312,7 @@ def main() -> int:
             )
             resolved_backup_path = backup_path.expanduser().resolve()
             if resolved_backup_path.exists() and bool(args.overwrite):
-                resolved_backup_path.unlink()
+                delete_file(resolved_backup_path)
 
             try:
                 created_path = create_runtime_backup(resolved_backup_path)
@@ -334,7 +335,7 @@ def main() -> int:
                 )
                 resolved_snapshot_path = snapshot_path.expanduser().resolve()
                 if resolved_snapshot_path.exists() and bool(args.snapshot_overwrite):
-                    resolved_snapshot_path.unlink()
+                    delete_file(resolved_snapshot_path)
 
                 try:
                     created_snapshot_path = create_runtime_backup(resolved_snapshot_path)

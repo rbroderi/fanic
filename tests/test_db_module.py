@@ -10,11 +10,11 @@ import fanic.db as db
 
 
 def _table_exists_fn() -> Callable[[sqlite3.Connection, str], bool]:
-    return cast(Callable[[sqlite3.Connection, str], bool], getattr(db, "_table_exists"))
+    return cast(Callable[[sqlite3.Connection, str], bool], db._table_exists)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
 
 def _ensure_runtime_schema_fn() -> Callable[[sqlite3.Connection], None]:
-    return cast(Callable[[sqlite3.Connection], None], getattr(db, "_ensure_runtime_schema"))
+    return cast(Callable[[sqlite3.Connection], None], db._ensure_runtime_schema)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
 
 def test_managed_connection_closes_on_context_exit(
@@ -195,16 +195,19 @@ def test_create_runtime_backup_archives_db_and_storage(
     db_path = data_root / "fanic.db"
     cbz_dir = data_root / "cbz"
     works_dir = data_root / "works"
+    fanart_dir = data_root / "fanart"
 
     monkeypatch.setattr(db, "DATA_ROOT", data_root)
     monkeypatch.setattr(db, "DB_PATH", db_path)
     monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
     monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+    monkeypatch.setattr(db, "FANART_DIR", fanart_dir)
 
     def fake_ensure_storage_dirs() -> None:
         data_root.mkdir(parents=True, exist_ok=True)
         cbz_dir.mkdir(parents=True, exist_ok=True)
         works_dir.mkdir(parents=True, exist_ok=True)
+        fanart_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
 
@@ -234,16 +237,19 @@ def test_restore_runtime_backup_requires_force_when_data_exists(
     db_path = data_root / "fanic.db"
     cbz_dir = data_root / "cbz"
     works_dir = data_root / "works"
+    fanart_dir = data_root / "fanart"
 
     monkeypatch.setattr(db, "DATA_ROOT", data_root)
     monkeypatch.setattr(db, "DB_PATH", db_path)
     monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
     monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+    monkeypatch.setattr(db, "FANART_DIR", fanart_dir)
 
     def fake_ensure_storage_dirs() -> None:
         data_root.mkdir(parents=True, exist_ok=True)
         cbz_dir.mkdir(parents=True, exist_ok=True)
         works_dir.mkdir(parents=True, exist_ok=True)
+        fanart_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
 
@@ -266,16 +272,19 @@ def test_restore_runtime_backup_replaces_runtime_data_when_forced(
     db_path = data_root / "fanic.db"
     cbz_dir = data_root / "cbz"
     works_dir = data_root / "works"
+    fanart_dir = data_root / "fanart"
 
     monkeypatch.setattr(db, "DATA_ROOT", data_root)
     monkeypatch.setattr(db, "DB_PATH", db_path)
     monkeypatch.setattr(db, "CBZ_DIR", cbz_dir)
     monkeypatch.setattr(db, "WORKS_DIR", works_dir)
+    monkeypatch.setattr(db, "FANART_DIR", fanart_dir)
 
     def fake_ensure_storage_dirs() -> None:
         data_root.mkdir(parents=True, exist_ok=True)
         cbz_dir.mkdir(parents=True, exist_ok=True)
         works_dir.mkdir(parents=True, exist_ok=True)
+        fanart_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(db, "ensure_storage_dirs", fake_ensure_storage_dirs)
 

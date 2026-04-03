@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
+
 from collections.abc import Callable
 from json import JSONDecodeError
 from types import ModuleType

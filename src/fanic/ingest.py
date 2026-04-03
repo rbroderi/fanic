@@ -18,6 +18,7 @@ from PIL import UnidentifiedImageError
 from tqdm import tqdm
 
 from fanic.db import get_connection
+from fanic.filesystem import delete_file
 from fanic.image_settings import image_processing_constants
 from fanic.image_settings import resolve_thumbnail_dimensions
 from fanic.ingest_editor_service import editor_delete_page_use_case
@@ -186,7 +187,7 @@ def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str
             handle.write(data)
         target_stat = target.stat()
         if target_stat.st_nlink > 1:
-            target.unlink(missing_ok=True)
+            delete_file(target, missing_ok=True)
             raise ValueError(f"Unsafe linked upload target detected: {target}")
     except FileExistsError:
         # Another request wrote the same hash concurrently.

@@ -1,4 +1,4 @@
-import shutil
+import os
 import sqlite3
 import tempfile
 import zipfile
@@ -8,6 +8,10 @@ from typing import Literal
 from typing import override
 
 from fanic.db_migration import run_runtime_migrations
+from fanic.filesystem import copy_file
+from fanic.filesystem import copy_tree
+from fanic.filesystem import delete_file
+from fanic.filesystem import delete_tree
 from fanic.settings import CBZ_DIR
 from fanic.settings import DATA_ROOT
 from fanic.settings import DB_PATH
@@ -18,6 +22,10 @@ from fanic.settings import get_settings
 
 _SETTINGS = get_settings()
 SCHEMA_PATH = _SETTINGS.package_root / "sql" / "schema.sql"
+_DISALLOWED_TEST_ROOTS = (
+    Path("/mnt/storage"),
+    _SETTINGS.package_root.parent / "runtime",
+)
 
 
 class _ManagedConnection(sqlite3.Connection):
@@ -190,6 +198,17 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
 
 
 def get_connection() -> sqlite3.Connection:
+    if os.environ.get("PYTEST_VERSION"):
+        test_db_path_raw = os.environ.get("FANIC_DB_PATH")
+        if not test_db_path_raw:
+            raise RuntimeError("Tests must set FANIC_DB_PATH to an isolated test database path before loading fanic.db")
+
+        test_db_path = Path(test_db_path_raw).expanduser().resolve()
+        if test_db_path.name != "fanic.test.db" and ".pytest-runtime" not in test_db_path.as_posix():
+            raise RuntimeError(
+                "Unsafe test DB path. Use a dedicated test DB path (recommended: .pytest-runtime/fanic.test.db)."
+            )
+
     ensure_storage_dirs()
     connection = sqlite3.connect(DB_PATH, factory=_ManagedConnection)
     connection.row_factory = sqlite3.Row
@@ -205,16 +224,31 @@ def _reset_runtime_data() -> None:
     if DATA_ROOT.exists():
         for child in DATA_ROOT.iterdir():
             if child.is_dir() and not child.is_symlink():
-                shutil.rmtree(child)
+                delete_tree(child)
             else:
-                child.unlink()
+                delete_file(child)
 
     if DB_PATH.exists() and DB_PATH.parent != DATA_ROOT:
-        DB_PATH.unlink()
+        delete_file(DB_PATH)
+
+
+def _assert_pytest_safe_destructive_target(operation: str) -> None:
+    if not os.environ.get("PYTEST_VERSION"):
+        return
+
+    data_root = DATA_ROOT.resolve()
+    db_path = DB_PATH.resolve()
+    for disallowed_root in _DISALLOWED_TEST_ROOTS:
+        root = disallowed_root.resolve()
+        if data_root.is_relative_to(root) or db_path.is_relative_to(root):
+            raise RuntimeError(
+                f"Refusing {operation} under pytest for production-like paths: DATA_ROOT={data_root}, DB_PATH={db_path}"
+            )
 
 
 def initialize_database(schema_path: Path = SCHEMA_PATH, *, reset: bool = False) -> int:
     if reset:
+        _assert_pytest_safe_destructive_target("initialize_database(reset=True)")
         _reset_runtime_data()
     ensure_storage_dirs()
     sql = schema_path.read_text(encoding="utf-8")
@@ -290,7 +324,8 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
     if DATA_ROOT.exists() and any(DATA_ROOT.iterdir()):
         if not force:
             raise FileExistsError("Data directory is not empty. Re-run with force=True to overwrite it.")
-        shutil.rmtree(DATA_ROOT)
+        _assert_pytest_safe_destructive_target("restore_runtime_backup(force=True)")
+        delete_tree(DATA_ROOT)
 
     with tempfile.TemporaryDirectory(prefix="fanic-restore-") as tmp_dir:
         extract_root = Path(tmp_dir) / "extract"
@@ -307,7 +342,7 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
         ensure_storage_dirs()
         restored_db = extract_root / DB_PATH.name
         if restored_db.exists():
-            shutil.copy2(restored_db, DB_PATH)
+            _ = copy_file(restored_db, DB_PATH)
 
         for source_name, destination_dir in (
             ("cbz", CBZ_DIR),
@@ -316,9 +351,9 @@ def restore_runtime_backup(backup_path: Path, *, force: bool = False) -> int:
         ):
             source_dir = extract_root / source_name
             if destination_dir.exists():
-                shutil.rmtree(destination_dir)
+                delete_tree(destination_dir)
             if source_dir.exists():
-                shutil.copytree(source_dir, destination_dir)
+                _ = copy_tree(source_dir, destination_dir)
             else:
                 destination_dir.mkdir(parents=True, exist_ok=True)
     return 0
