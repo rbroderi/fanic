@@ -1,3 +1,5 @@
+# pyright: reportPrivateLocalImportUsage=false
+
 import sqlite3
 from collections.abc import Mapping
 from pathlib import Path

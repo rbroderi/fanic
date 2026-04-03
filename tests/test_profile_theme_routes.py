@@ -1,5 +1,3 @@
-# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
-
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -26,14 +24,100 @@ class DummyUpload:
         Path(dst).write_text(self._content, encoding="utf-8")
 
 
+def _always_https(_request: Any, _response: ResponseLike) -> bool:
+    return True
+
+
+def _always_csrf_valid(_request: Any) -> bool:
+    return True
+
+
+def _zero_rate_limit(_request: Any) -> int:
+    return 0
+
+
+def _current_user_alice(_request: Any) -> str:
+    return "alice"
+
+
+def _current_user_admin(_request: Any) -> str:
+    return "admin"
+
+
+def _empty_work_list(_username: str) -> list[dict[str, Any]]:
+    return []
+
+
+def _empty_bookmark_list(_username: str) -> list[dict[str, Any]]:
+    return []
+
+
+def _empty_recent_history(_username: str, *, limit: int) -> list[dict[str, Any]]:
+    _ = limit
+    return []
+
+
+def _empty_fanart_list(_username: str, *, limit: int = 30) -> list[dict[str, Any]]:
+    _ = limit
+    return []
+
+
+def _can_view_all(_username: str | None, _work: dict[str, Any]) -> bool:
+    return True
+
+
+def _prefers_false(_username: str) -> bool:
+    return False
+
+
+def _requires_onboarding_true(_username: str) -> bool:
+    return True
+
+
+def _requires_onboarding_false(_username: str) -> bool:
+    return False
+
+
+def _theme_pref_disabled(_username: str) -> dict[str, Any]:
+    return {"enabled": False, "toml_text": ""}
+
+
+def _no_local_user(_username: str) -> None:
+    return None
+
+
+def _settings_with_profile_history_limit_five() -> object:
+    class FakeSettings:
+        profile_history_limit: int = 5
+
+    return FakeSettings()
+
+
+def _settings_with_profile_history_limit_seven() -> object:
+    class FakeSettings:
+        profile_history_limit: int = 7
+
+    return FakeSettings()
+
+
+def _reject_onboarding_update(
+    _username: str,
+    *,
+    display_name: str,
+    is_over_18: bool,
+) -> bool:
+    _ = (display_name, is_over_18)
+    return False
+
+
 def _allow_secure_get(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> None:
-    monkeypatch.setattr(module, "enforce_https_termination", lambda _request, _response: True)
+    monkeypatch.setattr(module, "enforce_https_termination", _always_https)
 
 
 def _allow_secure_post(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> None:
     _allow_secure_get(monkeypatch, module)
-    monkeypatch.setattr(module, "validate_csrf", lambda _request: True)
-    monkeypatch.setattr(module, "check_post_rate_limit", lambda _request: 0)
+    monkeypatch.setattr(module, "validate_csrf", _always_csrf_valid)
+    monkeypatch.setattr(module, "check_post_rate_limit", _zero_rate_limit)
 
 
 def test_profile_post_saves_theme_toml(
@@ -130,9 +214,6 @@ def test_profile_get_marks_custom_theme_checked(
             "created_at": "2026-03-22T00:00:00Z",
         }
 
-    class FakeSettings:
-        profile_history_limit: int = 7
-
     def fake_list_recent_reading_history(
         user_id: str,
         *,
@@ -161,7 +242,7 @@ def test_profile_get_marks_custom_theme_checked(
     monkeypatch.setattr(module, "list_works_by_uploader", fake_list_works_by_uploader)
     monkeypatch.setattr(module, "user_prefers_mature", fake_user_prefers_mature)
     monkeypatch.setattr(module, "user_prefers_explicit", fake_user_prefers_explicit)
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_seven)
     monkeypatch.setattr(
         module,
         "list_recent_reading_history",
@@ -267,10 +348,9 @@ def test_users_public_profile_uses_public_template(
         fake_list_fanart_items_by_uploader,
     )
     monkeypatch.setattr(handler_module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(
-        handler_module,
-        "get_local_user",
-        lambda _username: {
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "admin",
             "display_name": "AdminDisplay",
             "email": "admin@example.com",
@@ -279,7 +359,12 @@ def test_users_public_profile_uses_public_template(
             "role": "admin",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
     captured: dict[str, str] = {}
@@ -329,20 +414,19 @@ def test_users_public_profile_resolves_by_display_name(
     )
     handler_module = route_module.ex_get_handler
 
-    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
-    monkeypatch.setattr(handler_module, "list_works_by_uploader", lambda _username: [])
-    monkeypatch.setattr(handler_module, "list_user_bookmarks", lambda _username: [])
+    monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
+    monkeypatch.setattr(handler_module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(handler_module, "list_user_bookmarks", _empty_bookmark_list)
     monkeypatch.setattr(
         handler_module,
         "list_fanart_items_by_uploader",
-        lambda _username, *, limit=30: [],
+        _empty_fanart_list,
     )
-    monkeypatch.setattr(handler_module, "can_view_work", lambda _username, _work: True)
-    monkeypatch.setattr(handler_module, "get_local_user", lambda _username: None)
-    monkeypatch.setattr(
-        handler_module,
-        "get_local_user_by_display_name",
-        lambda _display_name: {
+    monkeypatch.setattr(handler_module, "can_view_work", _can_view_all)
+    monkeypatch.setattr(handler_module, "get_local_user", _no_local_user)
+
+    def fake_get_local_user_by_display_name(_display_name: str) -> dict[str, Any]:
+        return {
             "username": "admin",
             "display_name": "AdminDisplay",
             "email": "admin@example.com",
@@ -351,7 +435,12 @@ def test_users_public_profile_resolves_by_display_name(
             "role": "admin",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user_by_display_name",
+        fake_get_local_user_by_display_name,
     )
 
     captured: dict[str, str] = {}
@@ -394,35 +483,43 @@ def test_profile_get_fanart_links_use_reader_with_gallery_context(
         "fanicsite_user_profile_ex_get_fanart_reader_links_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
-    monkeypatch.setattr(module, "list_works_by_uploader", lambda _username: [])
-    monkeypatch.setattr(module, "user_prefers_mature", lambda _username: False)
-    monkeypatch.setattr(module, "user_prefers_explicit", lambda _username: False)
-    monkeypatch.setattr(module, "list_recent_reading_history", lambda _username, *, limit: [])
-    monkeypatch.setattr(module, "list_user_bookmarks", lambda _username: [])
-    monkeypatch.setattr(
-        module,
-        "list_fanart_items_by_uploader",
-        lambda _username, *, limit=30: [
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
+    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
+    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
+    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
+
+    def fake_list_fanart_items_by_uploader(
+        _username: str,
+        *,
+        limit: int = 30,
+    ) -> list[dict[str, str]]:
+        _ = limit
+        return [
             {
                 "id": "art-1",
                 "uploader_username": "alice",
                 "title": "Sky",
                 "image_filename": "_objects/aa/image.avif",
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items_by_uploader",
+        fake_list_fanart_items_by_uploader,
     )
-    monkeypatch.setattr(module, "can_view_work", lambda _username, _work: True)
+    monkeypatch.setattr(module, "can_view_work", _can_view_all)
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
-        lambda _username: {"enabled": False, "toml_text": ""},
+        _theme_pref_disabled,
     )
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: False)
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_false)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "alice",
             "display_name": "AliceDisplay",
             "email": "alice@example.com",
@@ -431,29 +528,38 @@ def test_profile_get_fanart_links_use_reader_with_gallery_context(
             "role": "user",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
-    )
+        }
 
     monkeypatch.setattr(
-        profile_shared,
-        "list_fanart_galleries_by_uploader",
-        lambda _username: [
+        module,
+        "get_local_user",
+        fake_get_local_user,
+    )
+
+    def fake_list_fanart_galleries_by_uploader(_username: str) -> list[dict[str, str]]:
+        return [
             {
                 "id": "gallery-1",
                 "slug": "sketches",
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        profile_shared,
+        "list_fanart_galleries_by_uploader",
+        fake_list_fanart_galleries_by_uploader,
     )
+
+    def fake_list_fanart_gallery_item_ids(_gallery_id: str) -> set[str]:
+        return {"art-1"}
+
     monkeypatch.setattr(
         profile_shared,
         "list_fanart_gallery_item_ids",
-        lambda _gallery_id: {"art-1"},
+        fake_list_fanart_gallery_item_ids,
     )
 
-    class FakeSettings:
-        profile_history_limit: int = 5
-
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
 
     captured: dict[str, str] = {}
 
@@ -494,13 +600,17 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
     )
     handler_module = route_module.ex_get_handler
 
-    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
-    monkeypatch.setattr(handler_module, "list_works_by_uploader", lambda _username: [])
-    monkeypatch.setattr(handler_module, "list_user_bookmarks", lambda _username: [])
-    monkeypatch.setattr(
-        handler_module,
-        "list_fanart_items_by_uploader",
-        lambda _username, *, limit=30: [
+    monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
+    monkeypatch.setattr(handler_module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(handler_module, "list_user_bookmarks", _empty_bookmark_list)
+
+    def fake_list_fanart_items_by_uploader(
+        _username: str,
+        *,
+        limit: int = 30,
+    ) -> list[dict[str, str]]:
+        _ = limit
+        return [
             {
                 "id": "art-1",
                 "uploader_username": "admin",
@@ -513,29 +623,41 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
                 "title": "Cloud",
                 "image_filename": "_objects/bb/image.avif",
             },
-        ],
-    )
-    monkeypatch.setattr(handler_module, "can_view_work", lambda _username, _work: True)
+        ]
+
     monkeypatch.setattr(
-        profile_shared,
-        "list_fanart_galleries_by_uploader",
-        lambda _username: [
+        handler_module,
+        "list_fanart_items_by_uploader",
+        fake_list_fanart_items_by_uploader,
+    )
+    monkeypatch.setattr(handler_module, "can_view_work", _can_view_all)
+
+    def fake_list_fanart_galleries_by_uploader(_username: str) -> list[dict[str, str]]:
+        return [
             {
                 "id": "gallery-1",
                 "name": "Sketches",
                 "slug": "sketches",
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        profile_shared,
+        "list_fanart_galleries_by_uploader",
+        fake_list_fanart_galleries_by_uploader,
     )
+
+    def fake_list_fanart_gallery_item_ids(_gallery_id: str) -> set[str]:
+        return {"art-1"}
+
     monkeypatch.setattr(
         profile_shared,
         "list_fanart_gallery_item_ids",
-        lambda _gallery_id: {"art-1"},
+        fake_list_fanart_gallery_item_ids,
     )
-    monkeypatch.setattr(
-        handler_module,
-        "get_local_user",
-        lambda _username: {
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "admin",
             "display_name": "AdminDisplay",
             "email": "admin@example.com",
@@ -544,7 +666,12 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
             "role": "admin",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
     captured: dict[str, str] = {}
@@ -588,11 +715,10 @@ def test_users_gallery_all_redirects_to_fanart_gallery(
     )
     handler_module = route_module.ex_get_handler
 
-    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
-    monkeypatch.setattr(
-        handler_module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "admin",
             "display_name": "AdminDisplay",
             "email": "admin@example.com",
@@ -601,7 +727,12 @@ def test_users_gallery_all_redirects_to_fanart_gallery(
             "role": "admin",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
     request = dummy_request(path="/users/admin/gallery/all", args={})
@@ -624,11 +755,10 @@ def test_users_gallery_slug_redirects_to_filtered_fanart_gallery(
     )
     handler_module = route_module.ex_get_handler
 
-    monkeypatch.setattr(handler_module, "current_user", lambda _request: "admin")
-    monkeypatch.setattr(
-        handler_module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "admin",
             "display_name": "AdminDisplay",
             "email": "admin@example.com",
@@ -637,7 +767,12 @@ def test_users_gallery_slug_redirects_to_filtered_fanart_gallery(
             "role": "admin",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        handler_module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
     request = dummy_request(path="/users/admin/gallery/new_name", args={})
@@ -732,8 +867,8 @@ def test_profile_post_onboarding_saves_display_name_and_age_gate(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
 
     captured: dict[str, object] = {}
 
@@ -777,13 +912,13 @@ def test_profile_post_onboarding_rejects_repeat_submission(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
     monkeypatch.setattr(
         module,
         "update_user_onboarding",
-        lambda _username, *, display_name, is_over_18: False,
+        _reject_onboarding_update,
     )
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
 
     request = dummy_request(
         path="/user/onboarding",
@@ -809,7 +944,7 @@ def test_profile_post_display_name_saves_successfully(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
 
     captured: dict[str, object] = {}
 
@@ -857,7 +992,7 @@ def test_profile_post_display_name_rejects_invalid_name(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
 
     def fake_update_user_profile_details(
         _username: str,
@@ -899,7 +1034,7 @@ def test_profile_post_display_name_rejects_taken_name(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
 
     def fake_update_user_profile_details(
         _username: str,
@@ -941,7 +1076,7 @@ def test_profile_post_display_name_requires_age_selection(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
 
     request = dummy_request(
         path="/user/profile",
@@ -969,24 +1104,23 @@ def test_profile_get_exposes_onboarding_markers_for_logged_in_user(
         "fanicsite_user_profile_ex_get_onboarding_markers_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
-    monkeypatch.setattr(module, "list_works_by_uploader", lambda _username: [])
-    monkeypatch.setattr(module, "user_prefers_mature", lambda _username: False)
-    monkeypatch.setattr(module, "user_prefers_explicit", lambda _username: False)
-    monkeypatch.setattr(module, "list_recent_reading_history", lambda _username, *, limit: [])
-    monkeypatch.setattr(module, "list_user_bookmarks", lambda _username: [])
-    monkeypatch.setattr(module, "list_fanart_items_by_uploader", lambda _username, *, limit=30: [])
-    monkeypatch.setattr(module, "can_view_work", lambda _username, _work: True)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
+    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
+    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
+    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
+    monkeypatch.setattr(module, "list_fanart_items_by_uploader", _empty_fanart_list)
+    monkeypatch.setattr(module, "can_view_work", _can_view_all)
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
-        lambda _username: {"enabled": False, "toml_text": ""},
+        _theme_pref_disabled,
     )
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: False)
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_false)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "alice",
             "display_name": "Alice Artist",
             "email": "alice@example.com",
@@ -995,13 +1129,15 @@ def test_profile_get_exposes_onboarding_markers_for_logged_in_user(
             "role": "user",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
-    class FakeSettings:
-        profile_history_limit: int = 5
-
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
 
     captured: dict[str, str] = {}
 
@@ -1043,24 +1179,23 @@ def test_profile_get_redirects_to_onboarding_when_required(
         "fanicsite_user_profile_ex_get_onboarding_redirect_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
-    monkeypatch.setattr(module, "list_works_by_uploader", lambda _username: [])
-    monkeypatch.setattr(module, "user_prefers_mature", lambda _username: False)
-    monkeypatch.setattr(module, "user_prefers_explicit", lambda _username: False)
-    monkeypatch.setattr(module, "list_recent_reading_history", lambda _username, *, limit: [])
-    monkeypatch.setattr(module, "list_user_bookmarks", lambda _username: [])
-    monkeypatch.setattr(module, "list_fanart_items_by_uploader", lambda _username, *, limit=30: [])
-    monkeypatch.setattr(module, "can_view_work", lambda _username, _work: True)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
+    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
+    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
+    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
+    monkeypatch.setattr(module, "list_fanart_items_by_uploader", _empty_fanart_list)
+    monkeypatch.setattr(module, "can_view_work", _can_view_all)
     monkeypatch.setattr(
         module,
         "get_user_theme_preference",
-        lambda _username: {"enabled": False, "toml_text": ""},
+        _theme_pref_disabled,
     )
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "alice",
             "display_name": "Alice Artist",
             "email": "alice@example.com",
@@ -1069,13 +1204,15 @@ def test_profile_get_redirects_to_onboarding_when_required(
             "role": "user",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
-    class FakeSettings:
-        profile_history_limit: int = 5
-
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
 
     request = dummy_request(path="/user/profile", args={})
     response = dummy_response()
@@ -1097,12 +1234,11 @@ def test_onboarding_get_shows_page_when_required(
     )
     _allow_secure_get(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
-    monkeypatch.setattr(module, "user_requires_onboarding", lambda _username: True)
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda _username: {
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
+
+    def fake_get_local_user(_username: str) -> dict[str, Any]:
+        return {
             "username": "alice",
             "display_name": "AliceArtist",
             "email": "alice@example.com",
@@ -1111,7 +1247,12 @@ def test_onboarding_get_shows_page_when_required(
             "role": "user",
             "active": True,
             "created_at": "2026-03-22T00:00:00Z",
-        },
+        }
+
+    monkeypatch.setattr(
+        module,
+        "get_local_user",
+        fake_get_local_user,
     )
 
     captured: dict[str, str] = {}

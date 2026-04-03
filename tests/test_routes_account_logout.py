@@ -1,9 +1,9 @@
-# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
-
 from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 from typing import Protocol
+
+import pytest
 
 
 class ResponseLike(Protocol):
@@ -14,11 +14,23 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def _clear_cookie(response: ResponseLike) -> None:
+    _ = response
+
+
+def _allow_https(_request: Any, _response: ResponseLike) -> bool:
+    return True
+
+
+def _validate_csrf(_request: Any) -> bool:
+    return True
+
+
 def test_logout_get_redirects_to_auth0_with_logged_out_return_to(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/account/logout.ex.get.py",
@@ -33,10 +45,16 @@ def test_logout_get_redirects_to_auth0_with_logged_out_return_to(
         logout_return_url: str = "https://fanic.media/"
         logout_endpoint: str = "https://auth.fanic.media/v2/logout"
 
-    monkeypatch.setattr(module, "clear_login_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
-    monkeypatch.setattr(module, "auth0_config_from_settings", lambda _s: FakeConfig())
+    def fake_get_settings() -> FakeSettings:
+        return FakeSettings()
+
+    def fake_auth0_config_from_settings(_settings: FakeSettings) -> FakeConfig:
+        return FakeConfig()
+
+    monkeypatch.setattr(module, "clear_login_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "get_settings", fake_get_settings)
+    monkeypatch.setattr(module, "auth0_config_from_settings", fake_auth0_config_from_settings)
 
     request = dummy_request(path="/account/logout", method="GET")
     response = dummy_response()
@@ -52,7 +70,7 @@ def test_logout_get_redirects_to_logged_out_when_auth0_not_configured(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/account/logout.ex.get.py",
@@ -62,9 +80,12 @@ def test_logout_get_redirects_to_logged_out_when_auth0_not_configured(
     class FakeSettings:
         auth0_configured: bool = False
 
-    monkeypatch.setattr(module, "clear_login_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
+    def fake_get_settings() -> FakeSettings:
+        return FakeSettings()
+
+    monkeypatch.setattr(module, "clear_login_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "get_settings", fake_get_settings)
 
     request = dummy_request(path="/account/logout", method="GET")
     response = dummy_response()
@@ -78,7 +99,7 @@ def test_logout_post_redirects_to_auth0_with_logged_out_return_to(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/account/logout.ex.post.py",
@@ -93,12 +114,18 @@ def test_logout_post_redirects_to_auth0_with_logged_out_return_to(
         logout_return_url: str = "https://fanic.media/"
         logout_endpoint: str = "https://auth.fanic.media/v2/logout"
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda _r, _s: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda _r: True)
-    monkeypatch.setattr(module, "clear_login_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
-    monkeypatch.setattr(module, "auth0_config_from_settings", lambda _s: FakeConfig())
+    def fake_get_settings() -> FakeSettings:
+        return FakeSettings()
+
+    def fake_auth0_config_from_settings(_settings: FakeSettings) -> FakeConfig:
+        return FakeConfig()
+
+    monkeypatch.setattr(module, "enforce_https_termination", _allow_https)
+    monkeypatch.setattr(module, "validate_csrf", _validate_csrf)
+    monkeypatch.setattr(module, "clear_login_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "get_settings", fake_get_settings)
+    monkeypatch.setattr(module, "auth0_config_from_settings", fake_auth0_config_from_settings)
 
     request = dummy_request(path="/account/logout", method="POST")
     request.headers = {"Host": "fanic.media", "X-Forwarded-Proto": "https"}
@@ -115,7 +142,7 @@ def test_logout_post_prefers_configured_return_to_over_request_host(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/account/logout.ex.post.py",
@@ -130,12 +157,18 @@ def test_logout_post_prefers_configured_return_to_over_request_host(
         logout_return_url: str = "https://fanic.media/account/logged-out"
         logout_endpoint: str = "https://auth.fanic.media/v2/logout"
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda _r, _s: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda _r: True)
-    monkeypatch.setattr(module, "clear_login_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", lambda _response: None)
-    monkeypatch.setattr(module, "get_settings", lambda: FakeSettings())
-    monkeypatch.setattr(module, "auth0_config_from_settings", lambda _s: FakeConfig())
+    def fake_get_settings() -> FakeSettings:
+        return FakeSettings()
+
+    def fake_auth0_config_from_settings(_settings: FakeSettings) -> FakeConfig:
+        return FakeConfig()
+
+    monkeypatch.setattr(module, "enforce_https_termination", _allow_https)
+    monkeypatch.setattr(module, "validate_csrf", _validate_csrf)
+    monkeypatch.setattr(module, "clear_login_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "clear_auth0_oauth_cookie", _clear_cookie)
+    monkeypatch.setattr(module, "get_settings", fake_get_settings)
+    monkeypatch.setattr(module, "auth0_config_from_settings", fake_auth0_config_from_settings)
 
     request = dummy_request(path="/account/logout", method="POST")
     request.headers = {"Host": "127.0.0.1:8000", "X-Forwarded-Proto": "http"}
@@ -151,7 +184,7 @@ def test_logged_out_page_renders_template(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/account/logged-out.ex.get.py",

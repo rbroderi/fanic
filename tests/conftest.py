@@ -1,6 +1,8 @@
 import importlib.util
 import os
+import shutil
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 from typing import Protocol
@@ -14,6 +16,32 @@ SRC = ROOT / "src"
 TEST_RUNTIME_ROOT = (ROOT / ".pytest-runtime").resolve()
 os.environ.setdefault("FANIC_DATA_DIR", str(TEST_RUNTIME_ROOT))
 os.environ.setdefault("FANIC_DB_PATH", str(TEST_RUNTIME_ROOT / "fanic.test.db"))
+
+
+def _settings_toml_db_path() -> Path:
+    settings_toml_path = ROOT / "settings.toml"
+    if not settings_toml_path.is_file():
+        return ROOT / "runtime" / "fanic.db"
+
+    with settings_toml_path.open("rb") as handle:
+        parsed = tomllib.load(handle)
+    db_path_raw = parsed.get("db_path")
+    if isinstance(db_path_raw, str) and db_path_raw.strip():
+        return Path(db_path_raw).expanduser()
+    return ROOT / "runtime" / "fanic.db"
+
+
+def _test_db_source_path() -> Path:
+    source_from_env = os.environ.get("FANIC_TEST_DB_SOURCE_PATH")
+    if isinstance(source_from_env, str) and source_from_env.strip():
+        return Path(source_from_env).expanduser()
+
+    source_from_legacy_env = os.environ.get("FANIC_PROD_DB_PATH")
+    if isinstance(source_from_legacy_env, str) and source_from_legacy_env.strip():
+        return Path(source_from_legacy_env).expanduser()
+
+    return _settings_toml_db_path()
+
 
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
@@ -36,6 +64,19 @@ def _guard_test_runtime_paths() -> None:  # pyright: ignore[reportUnusedFunction
             pytest.fail(f"Unsafe FANIC_DATA_DIR for tests: {test_data_dir}")
         if test_db_path.is_relative_to(resolved_root):
             pytest.fail(f"Unsafe FANIC_DB_PATH for tests: {test_db_path}")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _seed_test_database_copy() -> None:  # pyright: ignore[reportUnusedFunction]
+    target_db_path = Path(os.environ["FANIC_DB_PATH"]).expanduser().resolve()
+    source_db_path = _test_db_source_path().resolve()
+
+    target_db_path.parent.mkdir(parents=True, exist_ok=True)
+    if target_db_path.exists():
+        target_db_path.unlink()
+
+    if source_db_path.exists():
+        shutil.copy2(source_db_path, target_db_path)
 
 
 class FileLike(Protocol):

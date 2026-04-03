@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false
+
 import importlib.util
 import json
 import sys
@@ -13,6 +15,7 @@ from PIL import Image
 
 from fanic.ingest_editor_service import editor_delete_page_use_case
 from fanic.ingest_editor_service import plan_delete_page
+from fanic.repository.works import WorkPageRow
 from fanic.settings import FanicSettings as RealFanicSettings
 from fanic.settings import get_settings as get_real_settings
 
@@ -400,7 +403,7 @@ def test_ingest_cbz_creates_chapters_from_member_directories(
         zip_file.writestr("page-004.png", _png_bytes((10, 8)))
 
     rendered_counter = {"value": 0}
-    added_chapters: list[dict[str, object]] = []
+    added_chapters: list[dict[str, int | str]] = []
     chapter_members: dict[int, list[str]] = {}
 
     def render_image_bytes_stub(image: object, fmt: str, quality: int) -> bytes:
@@ -1429,7 +1432,7 @@ def test_plan_delete_page_missing_index_raises() -> None:
 
 
 def test_editor_delete_page_use_case_paths() -> None:
-    pages: list[dict[str, object]] = [
+    pages: list[WorkPageRow] = [
         {
             "page_index": 1,
             "image_filename": "a.avif",
@@ -1454,17 +1457,17 @@ def test_editor_delete_page_use_case_paths() -> None:
     ]
 
     reconciled: list[tuple[str, str | None]] = []
-    replaced: list[list[dict[str, object]]] = []
+    replaced: list[list[WorkPageRow]] = []
     snapshots: list[dict[str, object]] = []
 
     def require_owner_stub(work_id: str, uploader: str) -> dict[str, object]:
         _ = (work_id, uploader)
         return {"id": work_id}
 
-    def list_pages_stub(_work_id: str) -> list[dict[str, object]]:
+    def list_pages_stub(_work_id: str) -> list[WorkPageRow]:
         return list(pages)
 
-    def replace_pages_stub(work_id: str, new_pages: list[dict[str, object]]) -> None:
+    def replace_pages_stub(work_id: str, new_pages: list[WorkPageRow]) -> None:
         _ = work_id
         replaced.append(new_pages)
 
@@ -1473,7 +1476,7 @@ def test_editor_delete_page_use_case_paths() -> None:
 
     def upsert_existing_work_stub(
         existing: dict[str, object],
-        new_pages: list[dict[str, object]],
+        new_pages: list[WorkPageRow],
     ) -> None:
         _ = (existing, new_pages)
 

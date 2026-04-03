@@ -3,6 +3,8 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 
+import pytest
+
 
 class ResponseLike(Protocol):
     status_code: int
@@ -20,18 +22,41 @@ def _role_admin(_: str | None) -> str:
     return "admin"
 
 
+def _current_user_alice(_request: object) -> str:
+    return "alice"
+
+
+def _current_user_admin(_request: object) -> str:
+    return "admin"
+
+
+def _tag_popularity_rows(**_kwargs: object) -> list[dict[str, object]]:
+    return [
+        {
+            "tag_id": 1,
+            "slug": "adventure",
+            "name": "Adventure",
+            "type": "freeform",
+            "attached_works": 4,
+            "seed_count": 100,
+            "usage_count": 20,
+            "effective_popularity": 120,
+        }
+    ]
+
+
 def test_tag_popularity_route_forbidden_for_non_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/admin/tag-popularity.ex.get.py",
         "fanicsite_tag_popularity_forbidden_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
     monkeypatch.setattr(module, "role_for_user", _role_user)
 
     request = dummy_request(path="/admin/tag-popularity", args={})
@@ -45,31 +70,16 @@ def test_tag_popularity_route_renders_rows_for_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/admin/tag-popularity.ex.get.py",
         "fanicsite_tag_popularity_admin_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda _request: "admin")
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
     monkeypatch.setattr(module, "role_for_user", _role_admin)
-    monkeypatch.setattr(
-        module,
-        "list_top_tag_popularity",
-        lambda **_kwargs: [
-            {
-                "tag_id": 1,
-                "slug": "adventure",
-                "name": "Adventure",
-                "type": "freeform",
-                "attached_works": 4,
-                "seed_count": 100,
-                "usage_count": 20,
-                "effective_popularity": 120,
-            }
-        ],
-    )
+    monkeypatch.setattr(module, "list_top_tag_popularity", _tag_popularity_rows)
 
     captured: dict[str, str] = {}
 

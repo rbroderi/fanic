@@ -1,13 +1,31 @@
 import sqlite3
 from pathlib import Path
+from types import TracebackType
+from typing import Literal
+from typing import override
 
 import pytest
 
 import fanic.repository.social as social
 
 
+class _ManagedTestConnection(sqlite3.Connection):
+    @override
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
+        try:
+            super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+        return False
+
+
 def _setup_social_db(db_path: Path) -> None:
-    with sqlite3.connect(db_path) as connection:
+    with sqlite3.connect(db_path, factory=_ManagedTestConnection) as connection:
         connection.execute(
             """
             CREATE TABLE dmca_reports (
@@ -38,7 +56,7 @@ def test_add_dmca_report_stores_blank_work_id_as_null(
     _setup_social_db(db_path)
 
     def get_connection() -> sqlite3.Connection:
-        connection = sqlite3.connect(db_path)
+        connection = sqlite3.connect(db_path, factory=_ManagedTestConnection)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -59,7 +77,7 @@ def test_add_dmca_report_stores_blank_work_id_as_null(
     )
 
     assert report_id > 0
-    with sqlite3.connect(db_path) as connection:
+    with sqlite3.connect(db_path, factory=_ManagedTestConnection) as connection:
         row = connection.execute(
             "SELECT work_id FROM dmca_reports WHERE id = ?",
             (report_id,),
@@ -76,7 +94,7 @@ def test_list_content_reports_applies_filters(
     _setup_social_db(db_path)
 
     def get_connection() -> sqlite3.Connection:
-        connection = sqlite3.connect(db_path)
+        connection = sqlite3.connect(db_path, factory=_ManagedTestConnection)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -156,7 +174,7 @@ def test_update_and_delete_content_report_return_status(
     _setup_social_db(db_path)
 
     def get_connection() -> sqlite3.Connection:
-        connection = sqlite3.connect(db_path)
+        connection = sqlite3.connect(db_path, factory=_ManagedTestConnection)
         connection.row_factory = sqlite3.Row
         return connection
 

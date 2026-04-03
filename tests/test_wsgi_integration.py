@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
+
 from collections.abc import Callable
 from types import TracebackType
 from typing import Any

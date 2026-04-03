@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false, reportPrivateUsage=false
+
 import logging
 from collections.abc import Callable
 from io import BytesIO

@@ -1,3 +1,5 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
+
 import json
 from collections.abc import Callable
 from io import BytesIO
@@ -17,6 +19,26 @@ class ResponseLike(Protocol):
     data: bytes
 
     def set_data(self, data: str | bytes) -> None: ...
+
+
+def _always_true(*_args: object, **_kwargs: object) -> bool:
+    return True
+
+
+def _role_admin(*_args: object, **_kwargs: object) -> str:
+    return "admin"
+
+
+def _role_superadmin(*_args: object, **_kwargs: object) -> str:
+    return "superadmin"
+
+
+def _current_user_alice(*_args: object, **_kwargs: object) -> str:
+    return "alice"
+
+
+def _owner_profile_key(username: str) -> str:
+    return username
 
 
 def test_home_route_renders_work_links(
@@ -129,7 +151,7 @@ def test_home_route_renders_fanart_tab(
         ]
 
     monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "superadmin")
+    monkeypatch.setattr(module, "role_for_user", _role_superadmin)
     monkeypatch.setattr(module, "list_fanart_items", fake_list_fanart_items)
 
     def fake_render_html_template(
@@ -185,9 +207,9 @@ def test_home_route_tab_views_render_quickly(
         "fanicsite_ex_get_perf_test",
     )
 
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
-    monkeypatch.setattr(module, "can_view_work", lambda *_: True)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
+    monkeypatch.setattr(module, "can_view_work", _always_true)
     monkeypatch.setattr(
         module,
         "list_works",
@@ -307,7 +329,7 @@ def test_fanart_route_gallery_and_media(
     monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: set())
     monkeypatch.setattr(module, "list_fanart_comments", lambda *_: [])
     monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
 
     rendered: dict[str, str] = {}
 
@@ -327,7 +349,7 @@ def test_fanart_route_gallery_and_media(
         return response
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
-    monkeypatch.setattr(module, "_owner_profile_key", lambda username: username)
+    monkeypatch.setattr(module, "_owner_profile_key", _owner_profile_key)
 
     gallery_request = dummy_request(path="/fanart/alice", args={})
     gallery_response = dummy_response()
@@ -528,7 +550,7 @@ def test_fanart_route_gallery_grouping_filter(
     )
     monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: {"art-2"})
     monkeypatch.setattr(module, "list_fanart_comments", lambda *_: [])
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
     monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
 
     rendered: dict[str, str] = {}
@@ -549,7 +571,7 @@ def test_fanart_route_gallery_grouping_filter(
         return response
 
     monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
-    monkeypatch.setattr(module, "_owner_profile_key", lambda username: username)
+    monkeypatch.setattr(module, "_owner_profile_key", _owner_profile_key)
 
     gallery_request = dummy_request(path="/fanart/alice", args={"gallery": "sketches"})
     gallery_response = dummy_response()

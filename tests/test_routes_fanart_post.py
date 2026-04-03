@@ -1,8 +1,13 @@
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
+
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 from typing import Protocol
+from typing import final
+
+import pytest
 
 
 class ResponseLike(Protocol):
@@ -13,33 +18,78 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+@final
 class _UploadStub:
     def __init__(self, filename: str = "image.png") -> None:
-        self.filename = filename
+        self.filename: str = filename
 
     def save(self, dst: str | Path) -> None:
         Path(dst).write_bytes(b"png")
 
 
-def _patch_owner_profile_as_username(monkeypatch: Any, module: ModuleType) -> None:
-    monkeypatch.setattr(module, "owner_profile_key", lambda username: username)
+def _owner_profile_key(username: str) -> str:
+    return username
+
+
+def _always_true(*_args: object, **_kwargs: object) -> bool:
+    return True
+
+
+def _always_none(*_args: object, **_kwargs: object) -> None:
+    return None
+
+
+def _rate_limit_ok(*_args: object, **_kwargs: object) -> int:
+    return 0
+
+
+def _current_user_alice(*_args: object, **_kwargs: object) -> str:
+    return "alice"
+
+
+def _current_user_bob(*_args: object, **_kwargs: object) -> str:
+    return "bob"
+
+
+def _current_user_admin(*_args: object, **_kwargs: object) -> str:
+    return "admin-user"
+
+
+def _current_user_none(*_args: object, **_kwargs: object) -> None:
+    return None
+
+
+def _role_user(*_args: object, **_kwargs: object) -> str:
+    return "user"
+
+
+def _role_admin(*_args: object, **_kwargs: object) -> str:
+    return "admin"
+
+
+def _role_superadmin(*_args: object, **_kwargs: object) -> str:
+    return "superadmin"
+
+
+def _patch_owner_profile_as_username(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> None:
+    monkeypatch.setattr(module, "owner_profile_key", _owner_profile_key)
 
 
 def test_fanart_delete_requires_admin_role(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_forbidden_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
 
     request = dummy_request(path="/fanart/alice/fanart-1/delete", method="POST")
     response = dummy_response()
@@ -52,17 +102,17 @@ def test_fanart_delete_admin_redirects_to_gallery(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_delete_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(
         module,
         "get_fanart_item",
@@ -83,17 +133,17 @@ def test_fanart_delete_admin_redirects_to_safe_next_target(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_delete_next_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "superadmin")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_superadmin)
     monkeypatch.setattr(
         module,
         "get_fanart_item",
@@ -117,19 +167,19 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart/upload.ex.post.py",
         "fanicsite_fanart_upload_ex_post_upload_moderation_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "check_post_rate_limit", lambda *_: 0)
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "validate_page_upload_policy", lambda *_: None)
-    monkeypatch.setattr(module, "validate_saved_upload_size", lambda *_: None)
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "check_post_rate_limit", _rate_limit_ok)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "validate_page_upload_policy", _always_none)
+    monkeypatch.setattr(module, "validate_saved_upload_size", _always_none)
     monkeypatch.setattr(module, "validate_field_lengths", lambda *_args, **_kwargs: "")
     monkeypatch.setattr(
         module,
@@ -141,7 +191,7 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
             "rating_auto_elevated": True,
         },
     )
-    monkeypatch.setattr(module, "get_local_user", lambda *_: None)
+    monkeypatch.setattr(module, "get_local_user", _always_none)
 
     request = dummy_request(
         path="/fanart/upload",
@@ -166,17 +216,17 @@ def test_fanart_gallery_create_requires_owner(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_gallery_create_forbidden_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_bob)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
 
     request = dummy_request(
         path="/fanart/alice/galleries/create",
@@ -193,17 +243,17 @@ def test_fanart_gallery_create_redirects_to_new_gallery(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_gallery_create_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
     monkeypatch.setattr(
         module,
         "create_fanart_gallery",
@@ -236,7 +286,7 @@ def test_fanart_gallery_update_items_redirects_with_success(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
@@ -298,10 +348,10 @@ def test_fanart_gallery_delete_requires_owner(
         "fanicsite_fanart_ex_post_gallery_delete_forbidden_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_bob)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
 
     request = dummy_request(
         path="/fanart/alice/galleries/delete",
@@ -318,17 +368,17 @@ def test_fanart_gallery_delete_redirects_to_gallery_root(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_gallery_delete_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "role_for_user", _role_user)
     monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
@@ -372,17 +422,17 @@ def test_fanart_gallery_delete_admin_can_delete_for_owner(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_gallery_delete_admin_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
     monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
@@ -426,17 +476,17 @@ def test_fanart_reader_comment_requires_login(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_reader_comment_login_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
     monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
-    monkeypatch.setattr(module, "current_user", lambda *_: None)
+    monkeypatch.setattr(module, "current_user", _current_user_none)
 
     request = dummy_request(
         path="/fanart/alice/reader/comments",
@@ -458,17 +508,17 @@ def test_fanart_reader_comment_rejects_empty_body(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_reader_comment_empty_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
     monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
-    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(module, "current_user", _current_user_bob)
     monkeypatch.setattr(
         module,
         "get_fanart_item",
@@ -498,17 +548,17 @@ def test_fanart_reader_comment_redirects_with_success(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
         "fanicsite_fanart_ex_post_reader_comment_success_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
     monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
-    monkeypatch.setattr(module, "current_user", lambda *_: "bob")
+    monkeypatch.setattr(module, "current_user", _current_user_bob)
     monkeypatch.setattr(
         module,
         "get_fanart_item",
