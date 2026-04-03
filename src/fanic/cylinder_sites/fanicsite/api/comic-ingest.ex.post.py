@@ -3,23 +3,23 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from fanic.cylinder_sites.common.security import MAX_CBZ_UPLOAD_BYTES
-from fanic.cylinder_sites.common.protocols import RequestLike
-from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.responses import admin_aware_detail
-from fanic.cylinder_sites.common.rate_limit import begin_comic_ingest_session
-from fanic.cylinder_sites.common.rate_limit import begin_upload_session
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.rate_limit import end_comic_ingest_session
-from fanic.cylinder_sites.common.rate_limit import end_upload_session
-from fanic.cylinder_sites.common.responses import json_response
 from fanic.cylinder_sites.common.logging_utils import log_exception
 from fanic.cylinder_sites.common.logging_utils import request_id
-from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.rate_limit import begin_comic_ingest_session
+from fanic.cylinder_sites.common.rate_limit import begin_upload_session
+from fanic.cylinder_sites.common.rate_limit import end_comic_ingest_session
+from fanic.cylinder_sites.common.rate_limit import end_upload_session
+from fanic.cylinder_sites.common.responses import admin_aware_detail
+from fanic.cylinder_sites.common.responses import json_response
 from fanic.cylinder_sites.common.responses import stable_api_error
+from fanic.cylinder_sites.common.security import MAX_CBZ_UPLOAD_BYTES
+from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.security import upload_policy_error_info
 from fanic.cylinder_sites.common.security import validate_cbz_upload_policy
 from fanic.cylinder_sites.common.security import validate_saved_upload_size
+from fanic.cylinder_sites.common.session import current_user
 from fanic.ingest import ModerationBlockedError
 from fanic.ingest import extract_comicinfo_metadata_from_cbz
 from fanic.ingest import ingest_cbz
@@ -86,24 +86,24 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
         if cbz_policy_error:
-            error_code, status_code = upload_policy_error_info(cbz_policy_error)
+            policy_error_info = upload_policy_error_info(cbz_policy_error)
             return json_response(
                 response,
-                {"detail": cbz_policy_error, "error": error_code},
-                status_code,
+                {"detail": cbz_policy_error, "error": policy_error_info.error_code},
+                policy_error_info.status_code,
             )
 
         started_comic_ingest_session = False
-        queue_allowed, queue_retry_after, queue_position = begin_comic_ingest_session()
-        if not queue_allowed:
+        queue_session = begin_comic_ingest_session()
+        if not queue_session.allowed:
             return json_response(
                 response,
                 {
                     "ok": False,
                     "error": "comic_ingest_queue_timeout",
                     "detail": "Comic ingest queue is full. Please retry shortly.",
-                    "retry_after": queue_retry_after,
-                    "queue_position": queue_position,
+                    "retry_after": queue_session.retry_after,
+                    "queue_position": queue_session.queue_position,
                     "request_id": request_id(request, response),
                 },
                 429,
@@ -111,16 +111,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         started_comic_ingest_session = True
         started_upload_session = False
-        allowed, limit_code, retry_after = begin_upload_session(username)
-        if not allowed:
-            if limit_code == "upload_rate_limited":
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
+            if upload_session.limit_code == "upload_rate_limited":
                 return json_response(
                     response,
                     {
                         "ok": False,
-                        "error": limit_code,
+                        "error": upload_session.limit_code,
                         "detail": "Too many upload requests. Please retry later.",
-                        "retry_after": retry_after,
+                        "retry_after": upload_session.retry_after,
                         "request_id": request_id(request, response),
                     },
                     429,
@@ -129,7 +129,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 response,
                 {
                     "ok": False,
-                    "error": limit_code,
+                    "error": upload_session.limit_code,
                     "detail": "Too many concurrent uploads. Please wait for active uploads to finish.",
                     "request_id": request_id(request, response),
                 },
@@ -147,11 +147,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     "CBZ upload",
                 )
                 if cbz_size_error:
-                    error_code, status_code = upload_policy_error_info(cbz_size_error)
+                    policy_error_info = upload_policy_error_info(cbz_size_error)
                     return json_response(
                         response,
-                        {"detail": cbz_size_error, "error": error_code},
-                        status_code,
+                        {
+                            "detail": cbz_size_error,
+                            "error": policy_error_info.error_code,
+                        },
+                        policy_error_info.status_code,
                     )
                 metadata = extract_comicinfo_metadata_from_cbz(cbz_path)
 
@@ -195,11 +198,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     cbz_policy_error = validate_cbz_upload_policy(cbz_upload)
     if cbz_policy_error:
-        error_code, status_code = upload_policy_error_info(cbz_policy_error)
+        policy_error_info = upload_policy_error_info(cbz_policy_error)
         return json_response(
             response,
-            {"detail": cbz_policy_error, "error": error_code},
-            status_code,
+            {"detail": cbz_policy_error, "error": policy_error_info.error_code},
+            policy_error_info.status_code,
         )
 
     upload_token = request.form.get("upload_token", "").strip()
@@ -216,17 +219,17 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
 
     started_comic_ingest_session = False
-    queue_allowed, queue_retry_after, queue_position = begin_comic_ingest_session(
+    queue_session = begin_comic_ingest_session(
         on_queued=on_queued,
     )
-    if not queue_allowed:
+    if not queue_session.allowed:
         if upload_token:
             set_progress(
                 upload_token,
                 stage="throttled",
                 message=(
-                    f"Comic ingest queue timeout at position {queue_position}. Please retry."
-                    if queue_position > 0
+                    f"Comic ingest queue timeout at position {queue_session.queue_position}. Please retry."
+                    if queue_session.queue_position > 0
                     else "Comic ingest queue is full"
                 ),
                 done=True,
@@ -238,8 +241,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "ok": False,
                 "error": "comic_ingest_queue_timeout",
                 "detail": "Comic ingest queue is full. Please retry shortly.",
-                "retry_after": queue_retry_after,
-                "queue_position": queue_position,
+                "retry_after": queue_session.retry_after,
+                "queue_position": queue_session.queue_position,
                 "request_id": request_id(request, response),
             },
             429,
@@ -247,8 +250,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     started_comic_ingest_session = True
     started_upload_session = False
-    allowed, limit_code, retry_after = begin_upload_session(username)
-    if not allowed:
+    upload_session = begin_upload_session(username)
+    if not upload_session.allowed:
         if upload_token:
             set_progress(
                 upload_token,
@@ -257,14 +260,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 done=True,
                 ok=False,
             )
-        if limit_code == "upload_rate_limited":
+        if upload_session.limit_code == "upload_rate_limited":
             return json_response(
                 response,
                 {
                     "ok": False,
-                    "error": limit_code,
+                    "error": upload_session.limit_code,
                     "detail": "Too many upload requests. Please retry later.",
-                    "retry_after": retry_after,
+                    "retry_after": upload_session.retry_after,
                     "request_id": request_id(request, response),
                 },
                 429,
@@ -273,7 +276,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             response,
             {
                 "ok": False,
-                "error": limit_code,
+                "error": upload_session.limit_code,
                 "detail": "Too many concurrent uploads. Please wait for active uploads to finish.",
                 "request_id": request_id(request, response),
             },
@@ -295,11 +298,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 "CBZ upload",
             )
             if cbz_size_error:
-                error_code, status_code = upload_policy_error_info(cbz_size_error)
+                policy_error_info = upload_policy_error_info(cbz_size_error)
                 return json_response(
                     response,
-                    {"detail": cbz_size_error, "error": error_code},
-                    status_code,
+                    {"detail": cbz_size_error, "error": policy_error_info.error_code},
+                    policy_error_info.status_code,
                 )
 
             metadata_path: Path | None = None

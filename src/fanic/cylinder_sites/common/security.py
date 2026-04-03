@@ -2,6 +2,7 @@
 
 import hmac
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -26,6 +27,12 @@ ALLOWED_CBZ_CONTENT_TYPES = set(_SETTINGS.allowed_cbz_content_types)
 ALLOWED_PAGE_EXTENSIONS = set(_SETTINGS.allowed_page_extensions)
 ALLOWED_PAGE_CONTENT_TYPES = set(_SETTINGS.allowed_page_content_types)
 LOGGER = structlog.get_logger("fanic.http")
+
+
+@dataclass(frozen=True, slots=True)
+class UploadPolicyErrorInfo:
+    error_code: str
+    status_code: int
 
 
 def path_parts(request: RequestLike) -> list[str]:
@@ -131,16 +138,16 @@ def validate_saved_upload_size(path: Path, max_bytes: int, label: str) -> str | 
     return None
 
 
-def upload_policy_error_info(message: str) -> tuple[str, int]:
+def upload_policy_error_info(message: str) -> UploadPolicyErrorInfo:
     if "exceeds the configured upload size limit" in message:
-        return "upload_too_large", 413
+        return UploadPolicyErrorInfo("upload_too_large", 413)
     if "Unsupported file extension" in message:
-        return "unsupported_extension", 415
+        return UploadPolicyErrorInfo("unsupported_extension", 415)
     if "Unsupported page image extension" in message:
-        return "unsupported_extension", 415
+        return UploadPolicyErrorInfo("unsupported_extension", 415)
     if "Unsupported content type" in message:
-        return "unsupported_content_type", 415
-    return "upload_policy_violation", 400
+        return UploadPolicyErrorInfo("unsupported_content_type", 415)
+    return UploadPolicyErrorInfo("upload_policy_violation", 400)
 
 
 def request_is_secure(request: RequestLike) -> bool:

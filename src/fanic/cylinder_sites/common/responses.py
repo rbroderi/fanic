@@ -29,11 +29,11 @@ from fanic.repository.users import UserRole
 from fanic.repository.users import get_local_user
 from fanic.repository.users import get_user_role
 from fanic.repository.users import get_user_theme_preference
+from fanic.settings import DYNAMIC_TEMPLATE_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-STATIC_ROOT = (PACKAGE_ROOT / "dynamic").resolve()
+STATIC_ROOT = DYNAMIC_TEMPLATE_DIR
 _SETTINGS = get_settings()
 SESSION_COOKIE_NAME = "fanic_session"
 CSRF_COOKIE_NAME = "fanic_csrf"
@@ -85,6 +85,28 @@ SITE_COMMON_SCRIPTS_HTML = dedent(
     <script src="/static/queued-images.js?v=20260401-queue"></script>
     """
 ).strip()
+
+
+def site_logo_html(*, home_href: str = "/", include_title_wrapper: bool = True) -> str:
+    safe_home_href = escape(home_href)
+    logo_anchor = dedent(
+        f"""
+        <a href="{safe_home_href}" aria-label="FANIC home">
+        <img class="site-logo" src="/static/logo.png" alt="FANIC Logo" />
+        </a>
+        """
+    ).strip()
+    if include_title_wrapper:
+        return dedent(
+            f"""
+            <h1 class="site-title">
+            {logo_anchor}
+            </h1>
+            """
+        ).strip()
+    return logo_anchor
+
+
 THEME_VAR_ALLOWLIST = {
     "bg",
     "paper",
@@ -351,15 +373,7 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
         "__USER_MENU_PANEL_CONTENT__": user_menu_panel_content,
         "__USER_MENU_HTML__": user_menu_html,
         "__SITE_TAGLINE__": "Fan Archive Nexus for Illustrated Comics",
-        "__SITE_LOGO_HTML__": dedent(
-            """
-            <h1 class="site-title">
-            <a href="/" aria-label="FANIC home">
-            <img class="site-logo" src="/static/logo.png" alt="FANIC Logo" />
-            </a>
-            </h1>
-            """
-        ).strip(),
+        "__SITE_LOGO_HTML__": site_logo_html(),
         "__USER_MENU_UPLOAD_LINK__": "",
         "__ADMIN_REPORTS_LINK__": admin_reports_link,
     }

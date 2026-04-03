@@ -1,26 +1,86 @@
+from dataclasses import dataclass
 from typing import cast
 from urllib.parse import quote
 
-from fanic.authorization import AuthorizationContext
 from fanic.authorization import FanartPolicy
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
-from fanic.cylinder_sites.common.session import role_for_user
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.fanicsite.fanart_post_service import CreateGalleryOutcome
+from fanic.cylinder_sites.fanicsite.fanart_post_service import DeleteGalleryOutcome
+from fanic.cylinder_sites.fanicsite.fanart_post_service import DeleteItemOutcome
+from fanic.cylinder_sites.fanicsite.fanart_post_service import ReaderCommentOutcome
+from fanic.cylinder_sites.fanicsite.fanart_post_service import UpdateGalleryOutcome
+from fanic.cylinder_sites.fanicsite.fanart_post_service import (
+    authorization_context_for_owner,
+)
+from fanic.cylinder_sites.fanicsite.fanart_post_service import owner_profile_key
+from fanic.cylinder_sites.fanicsite.fanart_post_service import resolve_owner_username
+from fanic.cylinder_sites.fanicsite.fanart_post_service import (
+    run_create_gallery_use_case,
+)
+from fanic.cylinder_sites.fanicsite.fanart_post_service import (
+    run_delete_gallery_use_case,
+)
+from fanic.cylinder_sites.fanicsite.fanart_post_service import run_delete_item_use_case
+from fanic.cylinder_sites.fanicsite.fanart_post_service import (
+    run_reader_comment_use_case,
+)
+from fanic.cylinder_sites.fanicsite.fanart_post_service import (
+    run_update_gallery_items_use_case,
+)
 from fanic.repository.fanart import add_fanart_comment
 from fanic.repository.fanart import create_fanart_gallery
 from fanic.repository.fanart import delete_fanart_gallery
 from fanic.repository.fanart import delete_fanart_item
 from fanic.repository.fanart import get_fanart_gallery_by_slug
 from fanic.repository.fanart import get_fanart_item
-from fanic.repository.users import get_local_user
-from fanic.repository.users import get_local_user_by_display_name
 from fanic.repository.fanart import replace_fanart_gallery_items
+from fanic.repository.users import UserRole
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentIdentity:
+    username: str | None
+    user_role: UserRole
+    current_username: str
+
+
+def _get_fanart_item_as_dict(item_id: str) -> dict[str, object] | None:
+    item = get_fanart_item(item_id)
+    if item is None:
+        return None
+    return cast(dict[str, object], cast(object, item))
+
+
+def _get_fanart_gallery_by_slug_as_dict(
+    uploader_username: str,
+    gallery_slug: str,
+) -> dict[str, object] | None:
+    gallery = get_fanart_gallery_by_slug(uploader_username, gallery_slug)
+    if gallery is None:
+        return None
+    return cast(dict[str, object], cast(object, gallery))
+
+
+def _create_fanart_gallery_as_dict(
+    *,
+    uploader_username: str,
+    name: str,
+    description: str = "",
+) -> dict[str, object]:
+    gallery = create_fanart_gallery(
+        uploader_username=uploader_username,
+        name=name,
+        description=description,
+    )
+    return cast(dict[str, object], cast(object, gallery))
 
 
 def _form_values(request: RequestLike, key: str) -> list[str]:
@@ -52,35 +112,225 @@ def _safe_redirect_target(raw_target: str) -> str | None:
     return target
 
 
-def _resolve_owner_username(owner_key: str) -> str | None:
-    normalized_owner_key = owner_key.strip()
-    if not normalized_owner_key:
-        return None
-
-    local_user = get_local_user(normalized_owner_key)
-    if local_user is not None:
-        username = str(local_user.get("username", "")).strip()
-        if username:
-            return username
-
-    local_user = get_local_user_by_display_name(normalized_owner_key)
-    if local_user is not None:
-        username = str(local_user.get("username", "")).strip()
-        if username:
-            return username
-
-    return normalized_owner_key
+def _current_identity(request: RequestLike) -> CurrentIdentity:
+    username = current_user(request)
+    user_role = role_for_user(username)
+    current_username = username if username else ""
+    return CurrentIdentity(
+        username=username,
+        user_role=user_role,
+        current_username=current_username,
+    )
 
 
-def _owner_profile_key(work_owner_username: str) -> str:
-    local_user = get_local_user(work_owner_username)
-    if local_user is None:
-        return work_owner_username
+def _handle_reader_comments(
+    request: RequestLike,
+    response: ResponseLike,
+    work_owner_key: str,
+) -> ResponseLike:
+    work_owner_username = resolve_owner_username(work_owner_key)
+    if not work_owner_username:
+        return text_error(response, "Not found", 404)
 
-    display_name = str(local_user.get("display_name", "")).strip()
-    if display_name:
-        return display_name
-    return work_owner_username
+    identity = _current_identity(request)
+    username = identity.username
+    fanart_item_id = request.form.get("fanart_item_id", "").strip()
+    comment_body = request.form.get("comment_body", "").strip()
+
+    result = run_reader_comment_use_case(
+        owner_username=work_owner_username,
+        actor_username=username,
+        fanart_item_id=fanart_item_id,
+        comment_body=comment_body,
+        get_fanart_item=_get_fanart_item_as_dict,
+        add_fanart_comment=add_fanart_comment,
+    )
+
+    next_target = _safe_redirect_target(request.form.get("next", ""))
+    if result.outcome == ReaderCommentOutcome.NOT_FOUND:
+        return text_error(response, "Not found", 404)
+    if result.outcome == ReaderCommentOutcome.LOGIN_REQUIRED:
+        if next_target:
+            separator = "&" if "?" in next_target else "?"
+            return _redirect(response, f"{next_target}{separator}msg=login-required")
+        profile_key = owner_profile_key(work_owner_username)
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}/reader?msg=login-required",
+        )
+    if result.outcome == ReaderCommentOutcome.COMMENT_EMPTY:
+        if next_target:
+            separator = "&" if "?" in next_target else "?"
+            return _redirect(response, f"{next_target}{separator}msg=comment-empty")
+        profile_key = owner_profile_key(work_owner_username)
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-empty",
+        )
+
+    if next_target:
+        separator = "&" if "?" in next_target else "?"
+        return _redirect(response, f"{next_target}{separator}msg=comment-saved")
+    profile_key = owner_profile_key(work_owner_username)
+    return _redirect(
+        response,
+        f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-saved",
+    )
+
+
+def _handle_item_delete(
+    request: RequestLike,
+    response: ResponseLike,
+    work_owner_key: str,
+    work_id: str,
+) -> ResponseLike:
+    identity = _current_identity(request)
+    work_owner_username = resolve_owner_username(work_owner_key)
+    if not work_owner_username:
+        return text_error(response, "Not found", 404)
+
+    result = run_delete_item_use_case(
+        owner_username=work_owner_username,
+        current_username=identity.current_username,
+        current_role=identity.user_role,
+        item_id=work_id,
+        authorization_context_for_owner=authorization_context_for_owner,
+        can_delete_item=FanartPolicy.can_delete_item,
+        get_fanart_item=_get_fanart_item_as_dict,
+        delete_fanart_item=delete_fanart_item,
+    )
+
+    if result.outcome == DeleteItemOutcome.FORBIDDEN:
+        return text_error(response, "Forbidden", 403)
+    if result.outcome == DeleteItemOutcome.NOT_FOUND:
+        return text_error(response, "Not found", 404)
+
+    next_target = _safe_redirect_target(request.args.get("next", ""))
+    if next_target:
+        return _redirect(response, next_target)
+    profile_key = owner_profile_key(work_owner_username)
+    return _redirect(
+        response,
+        f"/fanart/{quote(profile_key, safe='')}?msg=deleted",
+    )
+
+
+def _handle_gallery_create(
+    request: RequestLike,
+    response: ResponseLike,
+    work_owner_key: str,
+) -> ResponseLike:
+    work_owner_username = resolve_owner_username(work_owner_key)
+    if not work_owner_username:
+        return text_error(response, "Not found", 404)
+
+    identity = _current_identity(request)
+    gallery_name = request.form.get("gallery_name", "").strip()
+    gallery_description = request.form.get("gallery_description", "").strip()
+
+    result = run_create_gallery_use_case(
+        owner_username=work_owner_username,
+        current_username=identity.current_username,
+        current_role=identity.user_role,
+        gallery_name=gallery_name,
+        gallery_description=gallery_description,
+        authorization_context_for_owner=authorization_context_for_owner,
+        can_create_gallery=FanartPolicy.can_create_gallery,
+        create_fanart_gallery=_create_fanart_gallery_as_dict,
+    )
+
+    if result.outcome == CreateGalleryOutcome.FORBIDDEN:
+        return text_error(response, "Forbidden", 403)
+
+    profile_key = owner_profile_key(work_owner_username)
+    if result.outcome == CreateGalleryOutcome.NAME_REQUIRED:
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}?msg=gallery-name-required",
+        )
+    if result.outcome == CreateGalleryOutcome.INVALID:
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}?msg=gallery-invalid",
+        )
+
+    gallery_slug = result.gallery_slug
+    return _redirect(
+        response,
+        (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-created"),
+    )
+
+
+def _handle_gallery_update_items(
+    request: RequestLike,
+    response: ResponseLike,
+    work_owner_key: str,
+) -> ResponseLike:
+    work_owner_username = resolve_owner_username(work_owner_key)
+    if not work_owner_username:
+        return text_error(response, "Not found", 404)
+
+    identity = _current_identity(request)
+    gallery_slug = request.form.get("gallery_slug", "").strip()
+    selected_item_ids = _form_values(request, "gallery_item_id")
+
+    result = run_update_gallery_items_use_case(
+        owner_username=work_owner_username,
+        current_username=identity.current_username,
+        current_role=identity.user_role,
+        gallery_slug=gallery_slug,
+        selected_item_ids=selected_item_ids,
+        authorization_context_for_owner=authorization_context_for_owner,
+        can_update_gallery_items=FanartPolicy.can_update_gallery_items,
+        get_fanart_gallery_by_slug=_get_fanart_gallery_by_slug_as_dict,
+        replace_fanart_gallery_items=replace_fanart_gallery_items,
+    )
+
+    if result.outcome == UpdateGalleryOutcome.FORBIDDEN:
+        return text_error(response, "Forbidden", 403)
+    if result.outcome == UpdateGalleryOutcome.NOT_FOUND:
+        return text_error(response, "Not found", 404)
+
+    profile_key = owner_profile_key(work_owner_username)
+    return _redirect(
+        response,
+        (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"),
+    )
+
+
+def _handle_gallery_delete(
+    request: RequestLike,
+    response: ResponseLike,
+    work_owner_key: str,
+) -> ResponseLike:
+    work_owner_username = resolve_owner_username(work_owner_key)
+    if not work_owner_username:
+        return text_error(response, "Not found", 404)
+
+    identity = _current_identity(request)
+    gallery_slug = request.form.get("gallery_slug", "").strip()
+
+    result = run_delete_gallery_use_case(
+        owner_username=work_owner_username,
+        current_username=identity.current_username,
+        current_role=identity.user_role,
+        gallery_slug=gallery_slug,
+        authorization_context_for_owner=authorization_context_for_owner,
+        can_delete_gallery=FanartPolicy.can_delete_gallery,
+        get_fanart_gallery_by_slug=_get_fanart_gallery_by_slug_as_dict,
+        delete_fanart_gallery=delete_fanart_gallery,
+    )
+
+    if result.outcome == DeleteGalleryOutcome.FORBIDDEN:
+        return text_error(response, "Forbidden", 403)
+    if result.outcome == DeleteGalleryOutcome.NOT_FOUND:
+        return text_error(response, "Not found", 404)
+
+    profile_key = owner_profile_key(work_owner_username)
+    return _redirect(
+        response,
+        f"/fanart/{quote(profile_key, safe='')}?msg=gallery-deleted",
+    )
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -94,206 +344,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
 
-    if len(tail) == 3 and tail[1] == "reader" and tail[2] == "comments":
-        work_owner_key = tail[0].strip()
-        work_owner_username = _resolve_owner_username(work_owner_key)
-        if not work_owner_username:
+    path_key = tail[1] if len(tail) > 1 else ""
+    action = tail[2] if len(tail) > 2 else ""
+    owner_key = tail[0].strip() if tail else ""
+
+    match (len(tail), path_key, action):
+        case (3, "reader", "comments"):
+            return _handle_reader_comments(request, response, owner_key)
+        case (3, _, "delete") if path_key != "galleries":
+            work_id = path_key.strip()
+            return _handle_item_delete(request, response, owner_key, work_id)
+        case (3, "galleries", "create"):
+            return _handle_gallery_create(request, response, owner_key)
+        case (3, "galleries", "update-items"):
+            return _handle_gallery_update_items(request, response, owner_key)
+        case (3, "galleries", "delete"):
+            return _handle_gallery_delete(request, response, owner_key)
+        case _:
             return text_error(response, "Not found", 404)
-
-        username = current_user(request)
-        if username is None:
-            next_target = _safe_redirect_target(request.form.get("next", ""))
-            if next_target:
-                separator = "&" if "?" in next_target else "?"
-                return _redirect(response, f"{next_target}{separator}msg=login-required")
-            profile_key = _owner_profile_key(work_owner_username)
-            return _redirect(
-                response,
-                f"/fanart/{quote(profile_key, safe='')}/reader?msg=login-required",
-            )
-
-        fanart_item_id = request.form.get("fanart_item_id", "").strip()
-        if not fanart_item_id:
-            return text_error(response, "Not found", 404)
-
-        fanart_item = get_fanart_item(fanart_item_id)
-        if fanart_item is None:
-            return text_error(response, "Not found", 404)
-        uploader_username = str(fanart_item.get("uploader_username", "")).strip()
-        if uploader_username != work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        comment_body = request.form.get("comment_body", "").strip()
-        next_target = _safe_redirect_target(request.form.get("next", ""))
-        if not comment_body:
-            if next_target:
-                separator = "&" if "?" in next_target else "?"
-                return _redirect(response, f"{next_target}{separator}msg=comment-empty")
-            profile_key = _owner_profile_key(work_owner_username)
-            return _redirect(
-                response,
-                f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-empty",
-            )
-
-        add_fanart_comment(fanart_item_id, username, comment_body)
-
-        if next_target:
-            separator = "&" if "?" in next_target else "?"
-            return _redirect(response, f"{next_target}{separator}msg=comment-saved")
-        profile_key = _owner_profile_key(work_owner_username)
-        return _redirect(
-            response,
-            f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-saved",
-        )
-
-    if len(tail) == 3 and tail[1] != "galleries" and tail[2] == "delete":
-        username = current_user(request)
-        user_role = role_for_user(username)
-        current_username = username if username else ""
-        work_owner_key = tail[0].strip()
-        work_owner_username = _resolve_owner_username(work_owner_key)
-        if not work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        delete_ctx = AuthorizationContext.from_inputs(
-            current_username=current_username,
-            current_role=user_role,
-            owner_username=work_owner_username,
-        )
-        if not FanartPolicy.can_delete_item(delete_ctx):
-            return text_error(response, "Forbidden", 403)
-        work_id = tail[1].strip()
-        if not work_owner_username or not work_id:
-            return text_error(response, "Not found", 404)
-
-        work = get_fanart_item(work_id)
-        if work is None:
-            return text_error(response, "Not found", 404)
-        work_owner = str(work.get("uploader_username", "")).strip()
-        if work_owner != work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        _ = delete_fanart_item(work_id)
-        next_target = _safe_redirect_target(request.args.get("next", ""))
-        if next_target:
-            return _redirect(response, next_target)
-        profile_key = _owner_profile_key(work_owner_username)
-        return _redirect(
-            response,
-            f"/fanart/{quote(profile_key, safe='')}?msg=deleted",
-        )
-
-    if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "create":
-        work_owner_key = tail[0].strip()
-        work_owner_username = _resolve_owner_username(work_owner_key)
-        if not work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        username = current_user(request)
-        user_role = role_for_user(username)
-        current_username = username if username else ""
-        create_ctx = AuthorizationContext.from_inputs(
-            current_username=current_username,
-            current_role=user_role,
-            owner_username=work_owner_username,
-        )
-        if not FanartPolicy.can_create_gallery(create_ctx):
-            return text_error(response, "Forbidden", 403)
-
-        gallery_name = request.form.get("gallery_name", "").strip()
-        gallery_description = request.form.get("gallery_description", "").strip()
-        profile_key = _owner_profile_key(work_owner_username)
-        if not gallery_name:
-            return _redirect(
-                response,
-                f"/fanart/{quote(profile_key, safe='')}?msg=gallery-name-required",
-            )
-
-        try:
-            gallery = create_fanart_gallery(
-                uploader_username=work_owner_username,
-                name=gallery_name,
-                description=gallery_description,
-            )
-        except ValueError:
-            return _redirect(
-                response,
-                f"/fanart/{quote(profile_key, safe='')}?msg=gallery-invalid",
-            )
-
-        gallery_slug = str(gallery.get("slug", "")).strip()
-        return _redirect(
-            response,
-            (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-created"),
-        )
-
-    if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "update-items":
-        work_owner_key = tail[0].strip()
-        work_owner_username = _resolve_owner_username(work_owner_key)
-        if not work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        username = current_user(request)
-        user_role = role_for_user(username)
-        current_username = username if username else ""
-        update_ctx = AuthorizationContext.from_inputs(
-            current_username=current_username,
-            current_role=user_role,
-            owner_username=work_owner_username,
-        )
-        if not FanartPolicy.can_update_gallery_items(update_ctx):
-            return text_error(response, "Forbidden", 403)
-
-        gallery_slug = request.form.get("gallery_slug", "").strip()
-        gallery = get_fanart_gallery_by_slug(work_owner_username, gallery_slug)
-        if gallery is None:
-            return text_error(response, "Not found", 404)
-
-        selected_item_ids = _form_values(request, "gallery_item_id")
-        _ = replace_fanart_gallery_items(
-            uploader_username=work_owner_username,
-            gallery_id=str(gallery.get("id", "")),
-            fanart_item_ids=selected_item_ids,
-        )
-        profile_key = _owner_profile_key(work_owner_username)
-        return _redirect(
-            response,
-            (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"),
-        )
-
-    if len(tail) == 3 and tail[1] == "galleries" and tail[2] == "delete":
-        work_owner_key = tail[0].strip()
-        work_owner_username = _resolve_owner_username(work_owner_key)
-        if not work_owner_username:
-            return text_error(response, "Not found", 404)
-
-        username = current_user(request)
-        user_role = role_for_user(username)
-        current_username = username if username else ""
-        delete_gallery_ctx = AuthorizationContext.from_inputs(
-            current_username=current_username,
-            current_role=user_role,
-            owner_username=work_owner_username,
-        )
-        if not FanartPolicy.can_delete_gallery(delete_gallery_ctx):
-            return text_error(response, "Forbidden", 403)
-
-        gallery_slug = request.form.get("gallery_slug", "").strip()
-        gallery = get_fanart_gallery_by_slug(work_owner_username, gallery_slug)
-        if gallery is None:
-            return text_error(response, "Not found", 404)
-
-        deleted = delete_fanart_gallery(
-            uploader_username=work_owner_username,
-            gallery_id=str(gallery.get("id", "")),
-        )
-        if not deleted:
-            return text_error(response, "Not found", 404)
-
-        profile_key = _owner_profile_key(work_owner_username)
-        return _redirect(
-            response,
-            f"/fanart/{quote(profile_key, safe='')}?msg=gallery-deleted",
-        )
-
-    return text_error(response, "Not found", 404)

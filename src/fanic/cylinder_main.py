@@ -210,8 +210,7 @@ def _underage_restriction_middleware(app: WSGIApplication) -> WSGIApplication:
 def _security_headers_middleware(app: WSGIApplication) -> WSGIApplication:
     settings = get_settings()
     add_hsts = settings.require_https_effective
-    media_base_url_obj = getattr(settings, "media_base_url", "")
-    media_base_url = str(media_base_url_obj).strip()
+    media_base_url = settings.media_base_url.strip()
 
     script_sources: list[str] = ["'self'", "https://static.cloudflareinsights.com"]
     connect_sources: list[str] = [

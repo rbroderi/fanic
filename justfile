@@ -101,6 +101,15 @@ relocate-storage target:
 relocate-storage target:
     bash scripts/relocate-storage-ubuntu.sh --target-storage-root "{{ target }}"
 
+# Summarize storage deletion/rename audit events with actor/process metadata.
+[windows]
+audit-deletions since="recent" path="/mnt/storage/fanart":
+    echo "audit-deletions is only supported on Linux"; exit 1
+
+[unix]
+audit-deletions since="recent" path="/mnt/storage/fanart":
+    bash scripts/query-auditd-deletions-summary.sh --since "{{ since }}" --path "{{ path }}"
+
 # Start nginx (or reload if already running) and then run the WSGI server.
 [windows]
 start:
@@ -180,66 +189,80 @@ rebuild-thumbnails *args:
 
 # Build frontend TypeScript into static JavaScript assets.
 [windows]
-frontend-build:
+_frontend-build:
     npm run frontend:build
 
 [unix]
-frontend-build:
+_frontend-build:
     npm run frontend:build
 
 # Build frontend TypeScript with source maps for local debugging.
 [windows]
-frontend-build-dev:
+_frontend-build-dev:
     npm run frontend:build:dev
 
 [unix]
-frontend-build-dev:
+_frontend-build-dev:
     npm run frontend:build:dev
 
 # Type-check frontend TypeScript without emitting files.
 [windows]
-frontend-typecheck:
+_frontend-typecheck:
     npm run frontend:typecheck
 
 [unix]
-frontend-typecheck:
+_frontend-typecheck:
     npm run frontend:typecheck
 
 # Lint frontend TypeScript.
 [windows]
-frontend-lint:
+_frontend-lint:
     npm run frontend:lint
 
 [unix]
-frontend-lint:
+_frontend-lint:
     npm run frontend:lint
 
 # Check frontend TypeScript formatting.
 [windows]
-frontend-format-check:
+_frontend-format-check:
     npm run frontend:format:check
 
 [unix]
-frontend-format-check:
+_frontend-format-check:
     npm run frontend:format:check
 
 # Format frontend TypeScript files in place.
 [windows]
-frontend-format:
+_frontend-format:
     npm run frontend:format
 
 [unix]
-frontend-format:
+_frontend-format:
     npm run frontend:format
 
 # Watch and recompile frontend TypeScript on file changes.
 [windows]
-frontend-watch:
+_frontend-watch:
     npm run frontend:watch
 
 [unix]
-frontend-watch:
+_frontend-watch:
     npm run frontend:watch
+
+# Frontend command router.
+# Usage examples:
+#   just frontend build
+#   just frontend lint
+
+# just frontend format-check
+[windows]
+frontend action="build":
+    $action = "{{ action }}"; switch ($action) { "build" { just _frontend-build; break } "build-dev" { just _frontend-build-dev; break } "typecheck" { just _frontend-typecheck; break } "lint" { just _frontend-lint; break } "format-check" { just _frontend-format-check; break } "format" { just _frontend-format; break } "watch" { just _frontend-watch; break } default { Write-Host "Unknown frontend action: $action"; Write-Host "Allowed: build, build-dev, typecheck, lint, format-check, format, watch"; exit 1 } }
+
+[unix]
+frontend action="build":
+    action="{{ action }}"; if [ "$action" = "build" ]; then just _frontend-build; elif [ "$action" = "build-dev" ]; then just _frontend-build-dev; elif [ "$action" = "typecheck" ]; then just _frontend-typecheck; elif [ "$action" = "lint" ]; then just _frontend-lint; elif [ "$action" = "format-check" ]; then just _frontend-format-check; elif [ "$action" = "format" ]; then just _frontend-format; elif [ "$action" = "watch" ]; then just _frontend-watch; else echo "Unknown frontend action: $action"; echo "Allowed: build, build-dev, typecheck, lint, format-check, format, watch"; exit 1; fi
 
 # Apply generated AO3 SQL into the Fanic SQLite database.
 # Usage examples:

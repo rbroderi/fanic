@@ -150,6 +150,7 @@ def test_create_app_blocks_non_admin_under_admin_paths(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = False
+        media_base_url: str = ""
         log_path_template: str = "logs/test.log"
 
     monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
@@ -222,6 +223,7 @@ def test_create_app_allows_admin_under_admin_paths(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = False
+        media_base_url: str = ""
         log_path_template: str = "logs/test.log"
 
     monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
@@ -310,6 +312,7 @@ def test_create_app_alpha_invite_gate_blocks_without_cookie(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = True
+        media_base_url: str = ""
         alpha_invite_codes: set[str] = {"alpha-code"}
         alpha_invite_cookie_max_age: int = 3600
         session_secret: str = "test-secret"
@@ -399,6 +402,7 @@ def test_create_app_redirects_underage_user_to_profile(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = False
+        media_base_url: str = ""
         log_path_template: str = "logs/test.log"
 
     monkeypatch.setattr(cylinder_main, "startup", fake_startup)
@@ -468,6 +472,7 @@ def test_create_app_allows_underage_user_profile_page(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = False
+        media_base_url: str = ""
         log_path_template: str = "logs/test.log"
 
     monkeypatch.setattr(cylinder_main, "startup", fake_startup)
@@ -521,6 +526,7 @@ def test_create_app_alpha_invite_gate_accepts_code_and_allows_access(
     class _Settings:
         require_https_effective: bool = False
         alpha_invite_gate_enabled: bool = True
+        media_base_url: str = ""
         alpha_invite_codes: set[str] = {"alpha-code"}
         alpha_invite_cookie_max_age: int = 3600
         session_secret: str = "test-secret"
@@ -613,6 +619,7 @@ def test_security_headers_middleware_allows_inline_style_and_script_elem(
 
     class _Settings:
         require_https_effective: bool = False
+        media_base_url: str = ""
 
     monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
 

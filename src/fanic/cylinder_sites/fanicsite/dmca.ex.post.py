@@ -1,21 +1,18 @@
 from urllib.parse import quote
 
+from fanic.cylinder_sites.common.field_validation import is_non_empty_text
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.rate_limit import check_post_rate_limit
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
-from fanic.cylinder_sites.common.responses import text_error
-from fanic.cylinder_sites.common.security import validate_csrf
 from fanic.cylinder_sites.common.rate_limit import validate_field_lengths
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
+from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.report_issues import normalize_report_issue_type
 from fanic.cylinder_sites.report_issues import report_issue_label
 from fanic.repository.social import add_dmca_report
-
-
-def _is_non_empty(value: str) -> bool:
-    return bool(value.strip())
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -55,11 +52,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(response, "/dmca?msg=invalid")
 
     if (
-        not _is_non_empty(reporter_name)
-        or not _is_non_empty(reporter_email)
-        or not _is_non_empty(issue_type)
-        or not _is_non_empty(claimed_url)
-        or not _is_non_empty(details)
+        not is_non_empty_text(reporter_name)
+        or not is_non_empty_text(reporter_email)
+        or not is_non_empty_text(issue_type)
+        or not is_non_empty_text(claimed_url)
+        or not is_non_empty_text(details)
         or attest not in {"on", "true", "1", "yes"}
     ):
         return _redirect(response, "/dmca?msg=invalid")

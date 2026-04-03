@@ -9,6 +9,7 @@ from typing import TypedDict
 
 from fanic.db import get_connection
 from fanic.settings import get_settings
+from fanic.type_coercion import as_int
 
 UserRole = Literal["superadmin", "admin", "user", "guest"]
 
@@ -793,26 +794,6 @@ def delete_user(username: str) -> bool:
     return cursor.rowcount > 0
 
 
-def _to_int(value: object, default: int = 0) -> int:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        stripped_value = value.strip()
-        if not stripped_value:
-            return default
-        try:
-            return int(stripped_value)
-        except ValueError:
-            return default
-    return default
-
-
 def user_prefers_mature(username: str | None) -> bool:
     if not username:
         return False
@@ -1108,7 +1089,7 @@ def list_recent_reading_history(
             {
                 "work_id": str(row["work_id"]),
                 "work_title": str(row["title"]),
-                "page_index": _to_int(row["page_index"], 1),
+                "page_index": as_int(row["page_index"], 1),
                 "updated_at": str(row["updated_at"]),
             }
         )
@@ -1203,7 +1184,7 @@ def list_user_bookmarks(
                 "work_title": str(row["title"]),
                 "author_username": str(row["author_username"]),
                 "author_display_name": str(row["author_display_name"]),
-                "page_index": _to_int(row["page_index"], 1),
+                "page_index": as_int(row["page_index"], 1),
                 "message": str(row["message"]),
                 "updated_at": str(row["updated_at"]),
                 "rating": str(row["rating"]),

@@ -17,6 +17,7 @@ import tomli_w
 from fanic.db import get_connection
 from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
+from fanic.type_coercion import as_int
 from fanic.utils import slugify
 
 TAG_FIELD_TO_TYPE = {
@@ -88,26 +89,6 @@ def _utc_now_iso() -> str:
 def _new_version_id() -> str:
     now = datetime.now(timezone.utc)
     return now.strftime("%Y%m%dT%H%M%S_%fZ")
-
-
-def _to_int(value: object, default: int = 0) -> int:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        stripped_value = value.strip()
-        if not stripped_value:
-            return default
-        try:
-            return int(stripped_value)
-        except ValueError:
-            return default
-    return default
 
 
 def _list_of_strings(value: object) -> list[str]:
@@ -200,15 +181,15 @@ def sync_work_metadata_toml(work_id: str) -> None:
             "series_name": work.get("series_name"),
             "series_index": work.get("series_index"),
             "published_at": work.get("published_at"),
-            "cover_page_index": _to_int(work.get("cover_page_index", 1), 1),
-            "page_count": _to_int(work.get("page_count", 0), 0),
+            "cover_page_index": as_int(work.get("cover_page_index", 1), 1),
+            "page_count": as_int(work.get("page_count", 0), 0),
             "cbz_path": str(work.get("cbz_path", "")),
             "uploader_username": work.get("uploader_username"),
             "created_at": work.get("created_at"),
             "updated_at": work.get("updated_at"),
             "last_metadata_editor": work.get("last_metadata_editor"),
             "last_metadata_edited_at": work.get("last_metadata_edited_at"),
-            "last_metadata_edited_by_admin": bool(_to_int(work.get("last_metadata_edited_by_admin", 0), 0)),
+            "last_metadata_edited_by_admin": bool(as_int(work.get("last_metadata_edited_by_admin", 0), 0)),
         },
         "tags": tags,
         "chapters": chapters,
@@ -435,8 +416,8 @@ def upsert_work(work: dict[str, object]) -> None:
                 work.get("series"),
                 work.get("series_index"),
                 work.get("published_at"),
-                _to_int(work.get("cover_page_index", 1), 1),
-                _to_int(work.get("page_count", 0), 0),
+                as_int(work.get("cover_page_index", 1), 1),
+                as_int(work.get("page_count", 0), 0),
                 work["cbz_path"],
                 work.get("uploader_username"),
             ),
@@ -548,7 +529,7 @@ def replace_work_pages(work_id: str, pages: list[WorkPageRow]) -> None:
                 """,
                 (
                     work_id,
-                    _to_int(page.get("page_index", 0), 0),
+                    as_int(page.get("page_index", 0), 0),
                     str(page.get("image_filename", "")),
                     page.get("thumb_filename"),
                     page.get("width"),
@@ -880,8 +861,8 @@ def create_work_version_snapshot(
             "title": str(work.get("title", "Untitled")),
             "rating": str(work.get("rating", "Not Rated")),
             "status": str(work.get("status", "in_progress")),
-            "cover_page_index": _to_int(work.get("cover_page_index", 1), 1),
-            "page_count": _to_int(work.get("page_count", 0), 0),
+            "cover_page_index": as_int(work.get("cover_page_index", 1), 1),
+            "page_count": as_int(work.get("page_count", 0), 0),
             "updated_at": str(work.get("updated_at", "")),
         },
         "pages": [dict(page) for page in pages],
@@ -940,7 +921,7 @@ def list_work_versions(work_id: str, limit: int = 50) -> list[WorkVersionSummary
         page_count = 0
         work_block_map = _as_string_object_dict(work_block)
         if work_block_map is not None:
-            page_count = _to_int(work_block_map.get("page_count", 0), 0)
+            page_count = as_int(work_block_map.get("page_count", 0), 0)
 
         versions.append(
             {
@@ -983,11 +964,11 @@ def list_work_page_rows(work_id: str) -> list[WorkPageRow]:
     for row in rows:
         page_rows.append(
             {
-                "page_index": _to_int(row["page_index"], 0),
+                "page_index": as_int(row["page_index"], 0),
                 "image_filename": str(row["image_filename"]),
                 "thumb_filename": (str(row["thumb_filename"]) if row["thumb_filename"] is not None else None),
-                "width": (_to_int(row["width"], 0) if row["width"] is not None else None),
-                "height": (_to_int(row["height"], 0) if row["height"] is not None else None),
+                "width": (as_int(row["width"], 0) if row["width"] is not None else None),
+                "height": (as_int(row["height"], 0) if row["height"] is not None else None),
             }
         )
     return page_rows
@@ -1012,11 +993,11 @@ def list_work_chapters(work_id: str) -> list[WorkChapterRow]:
     for row in rows:
         chapter_rows.append(
             {
-                "id": _to_int(row["id"], 0),
-                "chapter_index": _to_int(row["chapter_index"], 0),
+                "id": as_int(row["id"], 0),
+                "chapter_index": as_int(row["chapter_index"], 0),
                 "title": str(row["title"]),
-                "start_page": _to_int(row["start_page"], 1),
-                "end_page": _to_int(row["end_page"], 1),
+                "start_page": as_int(row["start_page"], 1),
+                "end_page": as_int(row["end_page"], 1),
                 "created_at": str(row["created_at"]),
             }
         )

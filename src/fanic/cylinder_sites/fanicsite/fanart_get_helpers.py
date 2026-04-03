@@ -1,5 +1,6 @@
 from base64 import b64encode
 from collections.abc import Sequence
+from dataclasses import dataclass
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -18,6 +19,13 @@ from fanic.repository.fanart import fanart_file_for
 from fanic.repository.users import get_local_user
 from fanic.repository.users import get_local_user_by_display_name
 from fanic.utils import slugify
+
+
+@dataclass(frozen=True, slots=True)
+class FanartCommentStatus:
+    text: str
+    css_class: str
+    hidden_attr: str
 
 
 def redirect_found(response: ResponseLike, location: str) -> ResponseLike:
@@ -337,17 +345,17 @@ def owner_profile_key(work_owner_username: str) -> str:
     return work_owner_username
 
 
-def fanart_comment_status(msg: str) -> tuple[str, str, str]:
+def fanart_comment_status(msg: str) -> FanartCommentStatus:
     normalized_msg = msg.strip()
     match normalized_msg:
         case "comment-saved":
-            return ("Comment posted.", "success", "")
+            return FanartCommentStatus("Comment posted.", "success", "")
         case "comment-empty":
-            return ("Comment cannot be empty.", "error", "")
+            return FanartCommentStatus("Comment cannot be empty.", "error", "")
         case "login-required":
-            return ("Login required before commenting.", "error", "")
+            return FanartCommentStatus("Login required before commenting.", "error", "")
         case _:
-            return ("", "", "hidden")
+            return FanartCommentStatus("", "", "hidden")
 
 
 def fanart_comments_html(comments: list[FanartCommentRow]) -> str:

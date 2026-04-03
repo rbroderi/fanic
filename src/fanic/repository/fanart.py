@@ -8,6 +8,7 @@ from typing import TypedDict
 
 from fanic.db import get_connection
 from fanic.settings import FANART_DIR
+from fanic.type_coercion import as_int
 from fanic.utils import slugify
 
 
@@ -55,24 +56,62 @@ class FanartCommentRow(TypedDict):
     created_at: str
 
 
-def _to_int(value: object, default: int = 0) -> int:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        stripped_value = value.strip()
-        if not stripped_value:
-            return default
-        try:
-            return int(stripped_value)
-        except ValueError:
-            return default
-    return default
+def _fanart_item_from_row(
+    row: sqlite3.Row,
+    *,
+    include_display_name: bool,
+) -> FanartItemRow:
+    thumb_obj = row["thumb_filename"]
+    width_obj = row["width"]
+    height_obj = row["height"]
+
+    item: FanartItemRow = {
+        "id": str(row["id"]),
+        "uploader_username": str(row["uploader_username"]),
+        "title": str(row["title"]),
+        "summary": str(row["summary"]),
+        "fandom": str(row["fandom"]),
+        "rating": str(row["rating"]),
+        "image_filename": str(row["image_filename"]),
+        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
+        "width": as_int(width_obj, 0) if width_obj is not None else None,
+        "height": as_int(height_obj, 0) if height_obj is not None else None,
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
+    }
+    if include_display_name:
+        item["uploader_display_name"] = str(row["uploader_display_name"])
+    return item
+
+
+def _select_fanart_item_by_filter(
+    *,
+    where_sql: str,
+    params: tuple[object, ...],
+    include_display_name: bool,
+) -> FanartItemRow | None:
+    select_display_name = (
+        ", COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name"
+        if include_display_name
+        else ""
+    )
+    join_display_name = (
+        " LEFT JOIN users u ON lower(u.username) = lower(fi.uploader_username)" if include_display_name else ""
+    )
+    sql = (
+        "SELECT fi.id, fi.uploader_username"
+        f"{select_display_name}, fi.title, fi.summary, fi.fandom, fi.rating, "
+        "fi.image_filename, fi.thumb_filename, fi.width, fi.height, fi.created_at, fi.updated_at "
+        "FROM fanart_items fi"
+        f"{join_display_name} "
+        f"WHERE {where_sql}"
+    )
+
+    with get_connection() as connection:
+        row = connection.execute(sql, params).fetchone()
+    if row is None:
+        return None
+    return _fanart_item_from_row(row, include_display_name=include_display_name)
 
 
 def add_fanart_comment(
@@ -250,7 +289,7 @@ def list_fanart_galleries_by_uploader(
                 "name": str(row["name"]),
                 "slug": str(row["slug"]),
                 "description": str(row["description"]),
-                "item_count": _to_int(row["item_count"], 0),
+                "item_count": as_int(row["item_count"], 0),
                 "created_at": str(row["created_at"]),
                 "updated_at": str(row["updated_at"]),
             }
@@ -297,7 +336,7 @@ def get_fanart_gallery_by_slug(
         "name": str(row["name"]),
         "slug": str(row["slug"]),
         "description": str(row["description"]),
-        "item_count": _to_int(row["item_count"], 0),
+        "item_count": as_int(row["item_count"], 0),
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }
@@ -580,7 +619,7 @@ def list_fanart_users(
         users.append(
             {
                 "uploader_username": str(row["uploader_username"]),
-                "item_count": _to_int(row["item_count"], 0),
+                "item_count": as_int(row["item_count"], 0),
                 "latest_created_at": str(row["latest_created_at"]),
                 "latest_item_id": (str(latest_item_id_obj) if latest_item_id_obj is not None else None),
                 "latest_thumb_filename": (str(thumb_obj) if thumb_obj is not None else None),
@@ -656,29 +695,7 @@ def list_fanart_items(
     with get_connection() as connection:
         rows = connection.execute(sql, params).fetchall()
 
-    items: list[FanartItemRow] = []
-    for row in rows:
-        thumb_obj = row["thumb_filename"]
-        width_obj = row["width"]
-        height_obj = row["height"]
-        items.append(
-            {
-                "id": str(row["id"]),
-                "uploader_username": str(row["uploader_username"]),
-                "uploader_display_name": str(row["uploader_display_name"]),
-                "title": str(row["title"]),
-                "summary": str(row["summary"]),
-                "fandom": str(row["fandom"]),
-                "rating": str(row["rating"]),
-                "image_filename": str(row["image_filename"]),
-                "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-                "width": _to_int(width_obj, 0) if width_obj is not None else None,
-                "height": _to_int(height_obj, 0) if height_obj is not None else None,
-                "created_at": str(row["created_at"]),
-                "updated_at": str(row["updated_at"]),
-            }
-        )
-    return items
+    return [_fanart_item_from_row(row, include_display_name=True) for row in rows]
 
 
 def list_fanart_items_by_uploader(
@@ -706,66 +723,18 @@ def list_fanart_items_by_uploader(
             (normalized_uploader, int(limit)),
         ).fetchall()
 
-    items: list[FanartItemRow] = []
-    for row in rows:
-        thumb_obj = row["thumb_filename"]
-        width_obj = row["width"]
-        height_obj = row["height"]
-        items.append(
-            {
-                "id": str(row["id"]),
-                "uploader_username": str(row["uploader_username"]),
-                "uploader_display_name": str(row["uploader_display_name"]),
-                "title": str(row["title"]),
-                "summary": str(row["summary"]),
-                "fandom": str(row["fandom"]),
-                "rating": str(row["rating"]),
-                "image_filename": str(row["image_filename"]),
-                "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-                "width": _to_int(width_obj, 0) if width_obj is not None else None,
-                "height": _to_int(height_obj, 0) if height_obj is not None else None,
-                "created_at": str(row["created_at"]),
-                "updated_at": str(row["updated_at"]),
-            }
-        )
-    return items
+    return [_fanart_item_from_row(row, include_display_name=True) for row in rows]
 
 
 def get_fanart_item(item_id: str) -> FanartItemRow | None:
     normalized_item_id = item_id.strip()
     if not normalized_item_id:
         return None
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-            WHERE id = ?
-            """,
-            (normalized_item_id,),
-        ).fetchone()
-    if not row:
-        return None
-
-    thumb_obj = row["thumb_filename"]
-    width_obj = row["width"]
-    height_obj = row["height"]
-    return {
-        "id": str(row["id"]),
-        "uploader_username": str(row["uploader_username"]),
-        "title": str(row["title"]),
-        "summary": str(row["summary"]),
-        "fandom": str(row["fandom"]),
-        "rating": str(row["rating"]),
-        "image_filename": str(row["image_filename"]),
-        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-        "width": _to_int(width_obj, 0) if width_obj is not None else None,
-        "height": _to_int(height_obj, 0) if height_obj is not None else None,
-        "created_at": str(row["created_at"]),
-        "updated_at": str(row["updated_at"]),
-    }
+    return _select_fanart_item_by_filter(
+        where_sql="fi.id = ?",
+        params=(normalized_item_id,),
+        include_display_name=False,
+    )
 
 
 def get_fanart_item_by_image(
@@ -776,38 +745,11 @@ def get_fanart_item_by_image(
     normalized_image = image_filename.strip().lstrip("/")
     if not normalized_uploader or not normalized_image:
         return None
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-                                                SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-            WHERE uploader_username = ?
-                                                    AND ltrim(image_filename, '/') = ?
-            """,
-            (normalized_uploader, normalized_image),
-        ).fetchone()
-    if not row:
-        return None
-
-    thumb_obj = row["thumb_filename"]
-    width_obj = row["width"]
-    height_obj = row["height"]
-    return {
-        "id": str(row["id"]),
-        "uploader_username": str(row["uploader_username"]),
-        "title": str(row["title"]),
-        "summary": str(row["summary"]),
-        "fandom": str(row["fandom"]),
-        "rating": str(row["rating"]),
-        "image_filename": str(row["image_filename"]),
-        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-        "width": _to_int(width_obj, 0) if width_obj is not None else None,
-        "height": _to_int(height_obj, 0) if height_obj is not None else None,
-        "created_at": str(row["created_at"]),
-        "updated_at": str(row["updated_at"]),
-    }
+    return _select_fanart_item_by_filter(
+        where_sql="fi.uploader_username = ? AND ltrim(fi.image_filename, '/') = ?",
+        params=(normalized_uploader, normalized_image),
+        include_display_name=False,
+    )
 
 
 def get_fanart_item_by_thumb(
@@ -818,126 +760,33 @@ def get_fanart_item_by_thumb(
     normalized_thumb = thumb_filename.strip().lstrip("/")
     if not normalized_uploader or not normalized_thumb:
         return None
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-                                                SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-            WHERE uploader_username = ?
-                                                    AND ltrim(thumb_filename, '/') = ?
-            """,
-            (normalized_uploader, normalized_thumb),
-        ).fetchone()
-    if not row:
-        return None
-
-    thumb_obj = row["thumb_filename"]
-    width_obj = row["width"]
-    height_obj = row["height"]
-    return {
-        "id": str(row["id"]),
-        "uploader_username": str(row["uploader_username"]),
-        "title": str(row["title"]),
-        "summary": str(row["summary"]),
-        "fandom": str(row["fandom"]),
-        "rating": str(row["rating"]),
-        "image_filename": str(row["image_filename"]),
-        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-        "width": _to_int(width_obj, 0) if width_obj is not None else None,
-        "height": _to_int(height_obj, 0) if height_obj is not None else None,
-        "created_at": str(row["created_at"]),
-        "updated_at": str(row["updated_at"]),
-    }
+    return _select_fanart_item_by_filter(
+        where_sql="fi.uploader_username = ? AND ltrim(fi.thumb_filename, '/') = ?",
+        params=(normalized_uploader, normalized_thumb),
+        include_display_name=False,
+    )
 
 
 def get_fanart_item_by_image_filename(image_filename: str) -> FanartItemRow | None:
     normalized_image = image_filename.strip().lstrip("/")
     if not normalized_image:
         return None
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT
-                fi.id,
-                fi.uploader_username,
-                COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name,
-                fi.title,
-                fi.summary,
-                fi.fandom,
-                fi.rating,
-                fi.image_filename,
-                fi.thumb_filename,
-                fi.width,
-                fi.height,
-                fi.created_at,
-                fi.updated_at
-            FROM fanart_items fi
-            LEFT JOIN users u ON lower(u.username) = lower(fi.uploader_username)
-            WHERE ltrim(fi.image_filename, '/') = ?
-            """,
-            (normalized_image,),
-        ).fetchone()
-    if not row:
-        return None
-
-    thumb_obj = row["thumb_filename"]
-    width_obj = row["width"]
-    height_obj = row["height"]
-    return {
-        "id": str(row["id"]),
-        "uploader_username": str(row["uploader_username"]),
-        "uploader_display_name": str(row["uploader_display_name"]),
-        "title": str(row["title"]),
-        "summary": str(row["summary"]),
-        "fandom": str(row["fandom"]),
-        "rating": str(row["rating"]),
-        "image_filename": str(row["image_filename"]),
-        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-        "width": _to_int(width_obj, 0) if width_obj is not None else None,
-        "height": _to_int(height_obj, 0) if height_obj is not None else None,
-        "created_at": str(row["created_at"]),
-        "updated_at": str(row["updated_at"]),
-    }
+    return _select_fanart_item_by_filter(
+        where_sql="ltrim(fi.image_filename, '/') = ?",
+        params=(normalized_image,),
+        include_display_name=True,
+    )
 
 
 def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | None:
     normalized_thumb = thumb_filename.strip().lstrip("/")
     if not normalized_thumb:
         return None
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT id, uploader_username, title, summary, fandom, rating, image_filename, thumb_filename,
-                   width, height, created_at, updated_at
-            FROM fanart_items
-                 WHERE ltrim(thumb_filename, '/') = ?
-            """,
-            (normalized_thumb,),
-        ).fetchone()
-    if not row:
-        return None
-
-    thumb_obj = row["thumb_filename"]
-    width_obj = row["width"]
-    height_obj = row["height"]
-    return {
-        "id": str(row["id"]),
-        "uploader_username": str(row["uploader_username"]),
-        "title": str(row["title"]),
-        "summary": str(row["summary"]),
-        "fandom": str(row["fandom"]),
-        "rating": str(row["rating"]),
-        "image_filename": str(row["image_filename"]),
-        "thumb_filename": str(thumb_obj) if thumb_obj is not None else None,
-        "width": _to_int(width_obj, 0) if width_obj is not None else None,
-        "height": _to_int(height_obj, 0) if height_obj is not None else None,
-        "created_at": str(row["created_at"]),
-        "updated_at": str(row["updated_at"]),
-    }
+    return _select_fanart_item_by_filter(
+        where_sql="ltrim(fi.thumb_filename, '/') = ?",
+        params=(normalized_thumb,),
+        include_display_name=False,
+    )
 
 
 def fanart_file_for(image_name: str) -> Path:

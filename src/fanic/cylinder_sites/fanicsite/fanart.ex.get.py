@@ -6,13 +6,14 @@ from urllib.parse import quote
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import send_file
+from fanic.cylinder_sites.common.responses import site_logo_html
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.fanicsite.fanart_get_helpers import (
     build_gallery_cbz_bytes as _build_gallery_cbz_bytes,
 )
@@ -326,7 +327,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 fanart_comments = list_fanart_comments(fanart_item_id)
                 fanart_comments_markup = _fanart_comments_html(fanart_comments)
 
-        comment_text, comment_class, comment_hidden_attr = _fanart_comment_status(request.args.get("msg", ""))
+        comment_status = _fanart_comment_status(request.args.get("msg", ""))
+        comment_text = comment_status.text
+        comment_class = comment_status.css_class
+        comment_hidden_attr = comment_status.hidden_attr
         query_parts: list[str] = []
         if requested_item_id:
             query_parts.append(f"item_id={quote(requested_item_id, safe='')}")
@@ -355,6 +359,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             response,
             "reader.html",
             {
+                "__SITE_LOGO_HTML__": site_logo_html(
+                    home_href="/?view=fanart",
+                    include_title_wrapper=False,
+                ),
                 "__READER_TITLE__": escape(str(bootstrap.get("title", "Fanart Reader"))),
                 "__READER_BACK_HREF__": escape(back_href),
                 "__READER_BACK_LABEL__": "Back to search",

@@ -6,24 +6,24 @@ from tempfile import TemporaryDirectory
 from tempfile import mkdtemp
 from typing import cast
 
-from fanic.cylinder_sites.common.security import MAX_CBZ_UPLOAD_BYTES
-from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
-from fanic.cylinder_sites.common.protocols import RequestLike
-from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.responses import admin_aware_detail
-from fanic.cylinder_sites.common.rate_limit import begin_comic_ingest_session
-from fanic.cylinder_sites.common.rate_limit import begin_upload_session
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.rate_limit import end_comic_ingest_session
-from fanic.cylinder_sites.common.rate_limit import end_upload_session
-from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.logging_utils import log_exception
 from fanic.cylinder_sites.common.logging_utils import request_id
+from fanic.cylinder_sites.common.protocols import RequestLike
+from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.rate_limit import begin_comic_ingest_session
+from fanic.cylinder_sites.common.rate_limit import begin_upload_session
+from fanic.cylinder_sites.common.rate_limit import end_comic_ingest_session
+from fanic.cylinder_sites.common.rate_limit import end_upload_session
+from fanic.cylinder_sites.common.responses import admin_aware_detail
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import MAX_CBZ_UPLOAD_BYTES
+from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.security import validate_cbz_upload_policy
 from fanic.cylinder_sites.common.security import validate_csrf
 from fanic.cylinder_sites.common.security import validate_page_upload_policy
 from fanic.cylinder_sites.common.security import validate_saved_upload_size
+from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.fanicsite.comic.upload_page import render_upload_page
 from fanic.ingest import ModerationBlockedError
 from fanic.ingest import editor_add_chapter
@@ -197,13 +197,13 @@ def _run_async_cbz_ingest(
         )
 
     try:
-        queue_allowed, _, queue_position = begin_comic_ingest_session(
+        queue_session = begin_comic_ingest_session(
             on_queued=on_queued,
         )
-        if not queue_allowed:
+        if not queue_session.allowed:
             timeout_message = (
-                f"Comic ingest queue timeout at position {queue_position}. Please retry."
-                if queue_position > 0
+                f"Comic ingest queue timeout at position {queue_session.queue_position}. Please retry."
+                if queue_session.queue_position > 0
                 else "Comic ingest queue is full"
             )
             _set_progress(
@@ -335,8 +335,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
 
         started_upload_session = False
-        allowed, limit_code, retry_after = begin_upload_session(username)
-        if not allowed:
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
             if upload_token:
                 set_progress(
                     upload_token,
@@ -346,8 +346,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     ok=False,
                 )
             message = (
-                f"Too many upload requests. Please retry later (retry in {retry_after}s)."
-                if limit_code == "upload_rate_limited"
+                f"Too many upload requests. Please retry later (retry in {upload_session.retry_after}s)."
+                if upload_session.limit_code == "upload_rate_limited"
                 else "Too many concurrent uploads. Please wait for active uploads to finish."
             )
             return render_upload_page(
@@ -484,11 +484,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
 
         started_upload_session = False
-        allowed, limit_code, retry_after = begin_upload_session(username)
-        if not allowed:
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
             message = (
-                f"Too many upload requests. Please retry later (retry in {retry_after}s)."
-                if limit_code == "upload_rate_limited"
+                f"Too many upload requests. Please retry later (retry in {upload_session.retry_after}s)."
+                if upload_session.limit_code == "upload_rate_limited"
                 else "Too many concurrent uploads. Please wait for active uploads to finish."
             )
             return _render_editor_result(
@@ -633,11 +633,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
 
         started_upload_session = False
-        allowed, limit_code, retry_after = begin_upload_session(username)
-        if not allowed:
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
             message = (
-                f"Too many upload requests. Please retry later (retry in {retry_after}s)."
-                if limit_code == "upload_rate_limited"
+                f"Too many upload requests. Please retry later (retry in {upload_session.retry_after}s)."
+                if upload_session.limit_code == "upload_rate_limited"
                 else "Too many concurrent uploads. Please wait for active uploads to finish."
             )
             return _render_editor_result(

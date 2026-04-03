@@ -5,21 +5,25 @@ from typing import cast
 
 from fanic.authorization import AuthorizationContext
 from fanic.authorization import ComicPolicy
-from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.rate_limit import begin_upload_session
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.rate_limit import end_upload_session
-from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
-from fanic.cylinder_sites.common.session import role_for_user
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import MAX_PAGE_UPLOAD_BYTES
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.security import upload_policy_error_info
 from fanic.cylinder_sites.common.security import validate_csrf
 from fanic.cylinder_sites.common.security import validate_page_upload_policy
 from fanic.cylinder_sites.common.security import validate_saved_upload_size
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.fanicsite.comic_post_service import build_metadata_from_form
+from fanic.cylinder_sites.fanicsite.comic_post_service import (
+    should_lock_explicit_demotion,
+)
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.ingest import editor_add_chapter
 from fanic.ingest import editor_delete_chapter
@@ -29,18 +33,14 @@ from fanic.ingest import editor_reorder_gallery
 from fanic.ingest import editor_replace_page_image
 from fanic.ingest import editor_update_chapter
 from fanic.ingest import ingest_editor_page
+from fanic.repository.users import create_notification
 from fanic.repository.works import add_work_comment
 from fanic.repository.works import add_work_kudo
 from fanic.repository.works import can_view_work
-from fanic.repository.users import create_notification
 from fanic.repository.works import create_work_version_snapshot
 from fanic.repository.works import delete_work
 from fanic.repository.works import get_work
 from fanic.repository.works import update_work_metadata
-
-
-def _csv(value: str) -> list[str]:
-    return [part.strip() for part in value.split(",") if part.strip()]
 
 
 def _has_selected_file(upload: object | None) -> bool:
@@ -48,10 +48,6 @@ def _has_selected_file(upload: object | None) -> bool:
         return False
     filename = getattr(upload, "filename", None)
     return isinstance(filename, str) and bool(filename.strip())
-
-
-def _is_explicit_rating(value: object) -> bool:
-    return str(value).strip().casefold() == "explicit"
 
 
 def _coerce_int(value: object, default: int = 0) -> int:
@@ -198,7 +194,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         page_policy_error = validate_page_upload_policy(page_upload)
         if page_policy_error:
-            error_code, _ = upload_policy_error_info(page_policy_error)
+            policy_error_info = upload_policy_error_info(page_policy_error)
+            error_code = policy_error_info.error_code
             msg = (
                 "page-add-unsupported-extension"
                 if error_code == "unsupported_extension"
@@ -211,9 +208,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         started_upload_session = False
-        allowed, limit_code, _ = begin_upload_session(username)
-        if not allowed:
-            msg = "page-add-rate-limited" if limit_code == "upload_rate_limited" else "page-add-busy"
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
+            msg = "page-add-rate-limited" if upload_session.limit_code == "upload_rate_limited" else "page-add-busy"
             return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         editor_metadata: dict[str, object] = {
@@ -270,7 +267,8 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
         page_policy_error = validate_page_upload_policy(page_upload)
         if page_policy_error:
-            error_code, _ = upload_policy_error_info(page_policy_error)
+            policy_error_info = upload_policy_error_info(page_policy_error)
+            error_code = policy_error_info.error_code
             msg = (
                 "page-replace-unsupported-extension"
                 if error_code == "unsupported_extension"
@@ -282,9 +280,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             )
             return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
         started_upload_session = False
-        allowed, limit_code, _ = begin_upload_session(username)
-        if not allowed:
-            msg = "page-replace-rate-limited" if limit_code == "upload_rate_limited" else "page-replace-busy"
+        upload_session = begin_upload_session(username)
+        if not upload_session.allowed:
+            msg = (
+                "page-replace-rate-limited"
+                if upload_session.limit_code == "upload_rate_limited"
+                else "page-replace-busy"
+            )
             return _redirect(response, f"/comic/{work_id}/edit?msg={msg}")
 
         try:
@@ -428,37 +430,30 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         except Exception:
             return _redirect(response, f"/comic/{work_id}/edit?msg=chapter-delete-failed")
 
-    series_index_raw = request.form.get("series_index", "").strip()
-    try:
-        series_index = int(series_index_raw) if series_index_raw else None
-    except ValueError:
-        series_index = None
-
-    status = request.form.get("status", "").strip()
-    if status not in {"in_progress", "complete"}:
-        status = "in_progress"
-
-    metadata: dict[str, object] = {
-        "title": request.form.get("title", "").strip()
-        if request.form.get("title", "").strip()
-        else str(work.get("title", "Untitled")),
-        "summary": request.form.get("summary", "").strip(),
-        "rating": (request.form.get("rating", "").strip() if request.form.get("rating", "").strip() else "Not Rated"),
-        "warnings": _csv(request.form.get("warnings", "")),
-        "status": status,
-        "language": (request.form.get("language", "").strip() if request.form.get("language", "").strip() else "en"),
-        "series": request.form.get("series", "").strip(),
-        "series_index": series_index,
-        "published_at": request.form.get("published_at", "").strip(),
-        "fandoms": _csv(request.form.get("fandoms", "")),
-        "relationships": _csv(request.form.get("relationships", "")),
-        "characters": _csv(request.form.get("characters", "")),
-        "freeform_tags": _csv(request.form.get("freeform_tags", "")),
-    }
+    metadata = build_metadata_from_form(
+        existing_title=work.get("title", "Untitled"),
+        title_raw=request.form.get("title", ""),
+        summary_raw=request.form.get("summary", ""),
+        rating_raw=request.form.get("rating", ""),
+        warnings_raw=request.form.get("warnings", ""),
+        status_raw=request.form.get("status", ""),
+        language_raw=request.form.get("language", ""),
+        series_raw=request.form.get("series", ""),
+        series_index_raw=request.form.get("series_index", ""),
+        published_at_raw=request.form.get("published_at", ""),
+        fandoms_raw=request.form.get("fandoms", ""),
+        relationships_raw=request.form.get("relationships", ""),
+        characters_raw=request.form.get("characters", ""),
+        freeform_tags_raw=request.form.get("freeform_tags", ""),
+    )
 
     current_rating = work.get("rating", "Not Rated")
     requested_rating = metadata.get("rating", "Not Rated")
-    if not is_admin and _is_explicit_rating(current_rating) and not _is_explicit_rating(requested_rating):
+    if should_lock_explicit_demotion(
+        is_admin=is_admin,
+        current_rating=current_rating,
+        requested_rating=requested_rating,
+    ):
         return _redirect(response, f"/comic/{work_id}/edit?msg=explicit-rating-locked")
 
     update_work_metadata(

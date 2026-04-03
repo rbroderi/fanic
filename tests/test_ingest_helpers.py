@@ -5,12 +5,16 @@ from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from types import ModuleType
-from types import SimpleNamespace
 from typing import Any
 from typing import cast
 
 import pytest
 from PIL import Image
+
+from fanic.ingest_editor_service import editor_delete_page_use_case
+from fanic.ingest_editor_service import plan_delete_page
+from fanic.settings import FanicSettings as RealFanicSettings
+from fanic.settings import get_settings as get_real_settings
 
 ROOT = Path(__file__).resolve().parents[1]
 INGEST_PATH = ROOT / "src" / "fanic" / "ingest.py"
@@ -21,10 +25,15 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         _ = (args, kwargs)
         return None
 
-    def get_settings_obj() -> SimpleNamespace:
-        return SimpleNamespace(
-            image_avif_quality=75,
-            thumbnail_avif_quality=60,
+    def get_settings_obj() -> RealFanicSettings:
+        base_settings = get_real_settings()
+        return base_settings.model_copy(
+            update={
+                "image_avif_quality": 75,
+                "thumbnail_avif_quality": 60,
+                "max_upload_image_pixels": 40000000,
+                "thumbnail_max_size": "720x720",
+            }
         )
 
     def get_explicit_threshold() -> float:
@@ -80,6 +89,7 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         return None
 
     settings_stub = ModuleType("fanic.settings")
+    setattr(settings_stub, "FanicSettings", RealFanicSettings)
     setattr(settings_stub, "CBZ_DIR", tmp_path / "cbz")
     setattr(settings_stub, "WORKS_DIR", tmp_path / "works")
     setattr(settings_stub, "ensure_storage_dirs", noop)
@@ -1368,12 +1378,57 @@ def test_editor_replace_page_image_paths(
     assert snapshots[0]["action"] == "editor-replace-page"
 
 
-def test_editor_delete_page_paths(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
+def test_plan_delete_page_renumbers_pages() -> None:
+    pages: list[dict[str, object]] = [
+        {
+            "page_index": 1,
+            "image_filename": "a.avif",
+            "thumb_filename": "ta.avif",
+            "width": 10,
+            "height": 10,
+        },
+        {
+            "page_index": 2,
+            "image_filename": "b.avif",
+            "thumb_filename": "tb.avif",
+            "width": 10,
+            "height": 10,
+        },
+        {
+            "page_index": 3,
+            "image_filename": "c.avif",
+            "thumb_filename": "tc.avif",
+            "width": 10,
+            "height": 10,
+        },
+    ]
 
+    delete_plan = plan_delete_page(cast(list[Any], pages), 2)
+
+    assert [page["page_index"] for page in delete_plan.renumbered_pages] == [1, 2]
+    assert [page["image_filename"] for page in delete_plan.renumbered_pages] == [
+        "a.avif",
+        "c.avif",
+    ]
+    assert delete_plan.removed_image_name == "b.avif"
+
+
+def test_plan_delete_page_missing_index_raises() -> None:
+    pages: list[dict[str, object]] = [
+        {
+            "page_index": 1,
+            "image_filename": "a.avif",
+            "thumb_filename": "ta.avif",
+            "width": 10,
+            "height": 10,
+        }
+    ]
+
+    with pytest.raises(FileNotFoundError, match="Page index not found"):
+        _ = plan_delete_page(cast(list[Any], pages), 99)
+
+
+def test_editor_delete_page_use_case_paths() -> None:
     pages: list[dict[str, object]] = [
         {
             "page_index": 1,
@@ -1437,21 +1492,31 @@ def test_editor_delete_page_paths(
         snapshots.append(payload)
         return {"version_id": "v1"}
 
-    monkeypatch.setattr(ingest, "_require_editor_owner", require_owner_stub)
-    monkeypatch.setattr(ingest, "list_work_page_rows", list_pages_stub)
-    monkeypatch.setattr(ingest, "replace_work_pages", replace_pages_stub)
-    monkeypatch.setattr(
-        ingest,
-        "_reconcile_chapters_after_page_changes",
-        reconcile_stub,
-    )
-    monkeypatch.setattr(ingest, "_upsert_existing_work", upsert_existing_work_stub)
-    monkeypatch.setattr(ingest, "create_work_version_snapshot", snapshot_stub)
-
     with pytest.raises(FileNotFoundError, match="Page index not found"):
-        ingest.editor_delete_page("w1", 99, "alice")
+        _ = editor_delete_page_use_case(
+            work_id="w1",
+            page_index=99,
+            uploader_username="alice",
+            require_editor_owner=require_owner_stub,
+            list_work_page_rows=list_pages_stub,
+            replace_work_pages=replace_pages_stub,
+            reconcile_chapters_after_page_changes=reconcile_stub,
+            upsert_existing_work=upsert_existing_work_stub,
+            create_work_version_snapshot=snapshot_stub,
+        )
 
-    result = ingest.editor_delete_page("w1", 2, "alice")
+    result = editor_delete_page_use_case(
+        work_id="w1",
+        page_index=2,
+        uploader_username="alice",
+        require_editor_owner=require_owner_stub,
+        list_work_page_rows=list_pages_stub,
+        replace_work_pages=replace_pages_stub,
+        reconcile_chapters_after_page_changes=reconcile_stub,
+        upsert_existing_work=upsert_existing_work_stub,
+        create_work_version_snapshot=snapshot_stub,
+    )
+
     assert result == {"work_id": "w1", "page_count": 2, "deleted_page_index": 2}
     assert [page["page_index"] for page in replaced[0]] == [1, 2]
     assert [page["image_filename"] for page in replaced[0]] == ["a.avif", "c.avif"]

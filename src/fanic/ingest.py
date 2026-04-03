@@ -18,6 +18,9 @@ from PIL import UnidentifiedImageError
 from tqdm import tqdm
 
 from fanic.db import get_connection
+from fanic.image_settings import image_processing_constants
+from fanic.image_settings import resolve_thumbnail_dimensions
+from fanic.ingest_editor_service import editor_delete_page_use_case
 from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
@@ -44,39 +47,6 @@ from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 from fanic.utils import slugify
 
-try:
-    from fanic import image_settings as _image_settings
-except Exception:
-    _image_settings = None
-
-
-def resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
-    if _image_settings is not None:
-        return _image_settings.resolve_thumbnail_dimensions(settings_obj)
-
-    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
-    if isinstance(dims_obj, tuple):
-        dims_tuple = cast(tuple[object, ...], dims_obj)
-        if len(dims_tuple) == 2:
-            width_obj, height_obj = dims_tuple
-            if isinstance(width_obj, int) and isinstance(height_obj, int):
-                return (width_obj, height_obj)
-    return (720, 720)
-
-
-def image_processing_constants(settings_obj: object) -> tuple[int, int, int]:
-    if _image_settings is not None:
-        return _image_settings.image_processing_constants(settings_obj)
-
-    image_quality_obj: object = getattr(settings_obj, "image_avif_quality", 75)
-    thumb_quality_obj: object = getattr(settings_obj, "thumbnail_avif_quality", 60)
-    max_pixels_obj: object = getattr(settings_obj, "max_upload_image_pixels", 40000000)
-    image_quality = image_quality_obj if isinstance(image_quality_obj, int) else 75
-    thumb_quality = thumb_quality_obj if isinstance(thumb_quality_obj, int) else 60
-    max_pixels = max_pixels_obj if isinstance(max_pixels_obj, int) else 40000000
-    return (image_quality, thumb_quality, max_pixels)
-
-
 Image.init()
 SUPPORTED_IMAGE_EXTENSIONS = {
     extension.lower() for extension, format_name in Image.registered_extensions().items() if format_name in Image.OPEN
@@ -84,23 +54,11 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 _SETTINGS = get_settings()
 THUMBNAIL_MAX_DIMENSIONS = resolve_thumbnail_dimensions(_SETTINGS)
 IMAGE_AVIF_QUALITY, THUMBNAIL_AVIF_QUALITY, MAX_UPLOAD_IMAGE_PIXELS = image_processing_constants(_SETTINGS)
-MAX_INGEST_PAGES = int(_SETTINGS.max_ingest_pages) if hasattr(_SETTINGS, "max_ingest_pages") else 2000
-MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = (
-    int(_SETTINGS.max_cbz_member_uncompressed_bytes)
-    if hasattr(_SETTINGS, "max_cbz_member_uncompressed_bytes")
-    else 134217728
-)
-MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = (
-    int(_SETTINGS.max_cbz_total_uncompressed_bytes)
-    if hasattr(_SETTINGS, "max_cbz_total_uncompressed_bytes")
-    else 2147483648
-)
-USER_PAGE_SOFT_CAP = int(_SETTINGS.user_page_soft_cap) if hasattr(_SETTINGS, "user_page_soft_cap") else 2000
-USER_PAGE_QUALITY_RAMP_MULTIPLIER = (
-    float(_SETTINGS.user_page_quality_ramp_multiplier)
-    if hasattr(_SETTINGS, "user_page_quality_ramp_multiplier")
-    else 1.5
-)
+MAX_INGEST_PAGES = _SETTINGS.max_ingest_pages
+MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_member_uncompressed_bytes
+MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_total_uncompressed_bytes
+USER_PAGE_SOFT_CAP = _SETTINGS.user_page_soft_cap
+USER_PAGE_QUALITY_RAMP_MULTIPLIER = _SETTINGS.user_page_quality_ramp_multiplier
 
 type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
@@ -1478,44 +1436,31 @@ def editor_replace_page_image(
 
 
 def editor_delete_page(work_id: str, page_index: int, uploader_username: str) -> dict[str, object]:
-    existing_work = _require_editor_owner(work_id, uploader_username)
-    pages = list_work_page_rows(work_id)
-    current_page = next(
-        (p for p in pages if p["page_index"] == page_index),
-        None,
-    )
-    if not current_page:
-        raise FileNotFoundError(f"Page index not found: {page_index}")
-
-    image_name = _as_str(current_page["image_filename"], "")
-
-    remaining = [p for p in pages if p["page_index"] != page_index]
-    renumbered: list[WorkPageRow] = []
-    for idx, page in enumerate(remaining, start=1):
-        renumbered.append(
-            {
-                "page_index": idx,
-                "image_filename": page["image_filename"],
-                "thumb_filename": page["thumb_filename"],
-                "width": page["width"],
-                "height": page["height"],
-            }
+    def create_work_version_snapshot_adapter(
+        work_id_value: str,
+        action_value: str,
+        actor_value: str | None,
+        details_value: dict[str, object],
+    ) -> Mapping[str, object]:
+        snapshot = create_work_version_snapshot(
+            work_id_value,
+            action=action_value,
+            actor=actor_value,
+            details=details_value,
         )
+        return snapshot if snapshot is not None else {}
 
-    replace_work_pages(work_id, renumbered)
-    _reconcile_chapters_after_page_changes(work_id, removed_image_filename=image_name)
-    _upsert_existing_work(existing_work, renumbered)
-    _ = create_work_version_snapshot(
-        work_id,
-        action="editor-delete-page",
-        actor=uploader_username,
-        details={"deleted_page_index": page_index},
+    return editor_delete_page_use_case(
+        work_id=work_id,
+        page_index=page_index,
+        uploader_username=uploader_username,
+        require_editor_owner=_require_editor_owner,
+        list_work_page_rows=list_work_page_rows,
+        replace_work_pages=replace_work_pages,
+        reconcile_chapters_after_page_changes=_reconcile_chapters_after_page_changes,
+        upsert_existing_work=_upsert_existing_work,
+        create_work_version_snapshot=create_work_version_snapshot_adapter,
     )
-    return {
-        "work_id": work_id,
-        "page_count": len(renumbered),
-        "deleted_page_index": page_index,
-    }
 
 
 def editor_move_page(

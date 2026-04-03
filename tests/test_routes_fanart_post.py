@@ -15,12 +15,7 @@ class _UploadStub:
 
 
 def _patch_owner_profile_as_username(monkeypatch: Any, module: ModuleType) -> None:
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        lambda username: {"username": username, "display_name": ""},
-    )
-    monkeypatch.setattr(module, "get_local_user_by_display_name", lambda *_: None)
+    monkeypatch.setattr(module, "owner_profile_key", lambda username: username)
 
 
 def test_fanart_delete_requires_admin_role(
@@ -245,7 +240,7 @@ def test_fanart_gallery_update_items_redirects_with_success(
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "alice")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
         "get_fanart_gallery_by_slug",
@@ -327,7 +322,7 @@ def test_fanart_gallery_delete_redirects_to_gallery_root(
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "alice")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
         "get_fanart_gallery_by_slug",
@@ -381,7 +376,7 @@ def test_fanart_gallery_delete_admin_can_delete_for_owner(
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
     monkeypatch.setattr(module, "current_user", lambda *_: "admin-user")
     monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(
         module,
         "get_fanart_gallery_by_slug",
@@ -433,7 +428,7 @@ def test_fanart_reader_comment_requires_login(
 
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(module, "current_user", lambda *_: None)
 
     request = dummy_request(
@@ -465,7 +460,7 @@ def test_fanart_reader_comment_rejects_empty_body(
 
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(module, "current_user", lambda *_: "bob")
     monkeypatch.setattr(
         module,
@@ -505,7 +500,7 @@ def test_fanart_reader_comment_redirects_with_success(
 
     monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
     monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(module, "_resolve_owner_username", lambda *_: "alice")
+    monkeypatch.setattr(module, "resolve_owner_username", lambda *_: "alice")
     monkeypatch.setattr(module, "current_user", lambda *_: "bob")
     monkeypatch.setattr(
         module,

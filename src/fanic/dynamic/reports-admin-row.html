@@ -1,0 +1,26 @@
+<article class="card comment-card">
+  <p class="comment-meta"><strong>Report #__REPORT_ROW_ID__</strong> | __REPORT_ROW_CREATED_AT__</p>
+  <p><strong>Type:</strong> __REPORT_ROW_ISSUE_LABEL__ <span class="profile-meta">(__REPORT_ROW_ISSUE_TYPE__)</span></p>
+  <p><strong>Status:</strong> __REPORT_ROW_STATUS_LABEL__ <span class="profile-meta">(__REPORT_ROW_STATUS_RAW__)</span></p>
+  <p><strong>Work:</strong> __REPORT_ROW_WORK_DISPLAY__</p>
+  <p><strong>Reporter:</strong> __REPORT_ROW_REPORTER_DISPLAY__ | __REPORT_ROW_REPORTER_EMAIL__</p>
+  <p><strong>Claimed URL:</strong> <a href="__REPORT_ROW_CLAIMED_URL__" target="_blank" rel="noopener noreferrer">__REPORT_ROW_CLAIMED_URL__</a></p>
+  <p><strong>Evidence:</strong> __REPORT_ROW_EVIDENCE_HTML__</p>
+  <p><strong>Details:</strong><br />__REPORT_ROW_DETAILS_HTML__</p>
+  <form class="upload-form with-top-gap" method="post" action="/admin/reports">
+    <input type="hidden" name="report_id" value="__REPORT_ROW_ID__" />
+    <input type="hidden" name="report_work_id" value="__REPORT_ROW_WORK_ID__" />
+    <input type="hidden" name="work_id" value="__REPORT_FILTER_WORK_ID__" />
+    <input type="hidden" name="issue_type" value="__REPORT_FILTER_ISSUE_TYPE__" />
+    <input type="hidden" name="status" value="__REPORT_FILTER_STATUS__" />
+    <input type="hidden" name="start_date" value="__REPORT_FILTER_START_DATE__" />
+    <input type="hidden" name="end_date" value="__REPORT_FILTER_END_DATE__" />
+    <input type="hidden" name="tab" value="__REPORT_FILTER_TAB__" />
+    <button type="submit" name="report_action" value="mark-resolved" class="button-muted">Mark resolved</button>
+    <button type="submit" name="report_action" value="mark-reopen" class="button-muted">Mark re-open</button>
+    <button type="submit" name="report_action" value="mark-false" class="button-muted">Mark false</button>
+    <button type="submit" name="report_action" value="mark-research" class="button-muted">Mark more research needed</button>
+    __REPORT_PROMOTE_BUTTON_HTML__
+    <button type="submit" name="report_action" value="remove" class="button-danger" data-confirm-message="Remove this report item?">Remove item</button>
+  </form>
+</article>

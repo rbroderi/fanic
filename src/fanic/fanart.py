@@ -2,12 +2,13 @@ import hashlib
 import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import cast
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 from PIL import Image
 from PIL import UnidentifiedImageError
 
+from fanic.image_settings import image_processing_constants
+from fanic.image_settings import resolve_thumbnail_dimensions
 from fanic.ingest import ModerationBlockedError
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
@@ -15,39 +16,6 @@ from fanic.repository.fanart import create_fanart_item
 from fanic.settings import FANART_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
-
-try:
-    from fanic import image_settings as _image_settings
-except Exception:
-    _image_settings = None
-
-
-def resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
-    if _image_settings is not None:
-        return _image_settings.resolve_thumbnail_dimensions(settings_obj)
-
-    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
-    if isinstance(dims_obj, tuple):
-        dims_tuple = cast(tuple[object, ...], dims_obj)
-        if len(dims_tuple) == 2:
-            width_obj, height_obj = dims_tuple
-            if isinstance(width_obj, int) and isinstance(height_obj, int):
-                return (width_obj, height_obj)
-    return (720, 720)
-
-
-def image_processing_constants(settings_obj: object) -> tuple[int, int, int]:
-    if _image_settings is not None:
-        return _image_settings.image_processing_constants(settings_obj)
-
-    image_quality_obj: object = getattr(settings_obj, "image_avif_quality", 75)
-    thumb_quality_obj: object = getattr(settings_obj, "thumbnail_avif_quality", 60)
-    max_pixels_obj: object = getattr(settings_obj, "max_upload_image_pixels", 40000000)
-    image_quality = image_quality_obj if isinstance(image_quality_obj, int) else 75
-    thumb_quality = thumb_quality_obj if isinstance(thumb_quality_obj, int) else 60
-    max_pixels = max_pixels_obj if isinstance(max_pixels_obj, int) else 40000000
-    return (image_quality, thumb_quality, max_pixels)
-
 
 _SETTINGS = get_settings()
 THUMBNAIL_MAX_DIMENSIONS = resolve_thumbnail_dimensions(_SETTINGS)

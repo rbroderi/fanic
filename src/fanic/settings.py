@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 from typing import ClassVar
 from typing import Self
-from typing import cast
 from typing import override
 
 from pydantic import field_validator
@@ -460,34 +459,15 @@ def get_settings() -> FanicSettings:
     return FanicSettings()  # pyright: ignore[reportCallIssue]
 
 
-def resolve_thumbnail_dimensions(settings_obj: object) -> tuple[int, int]:
-    dims_obj: object = getattr(settings_obj, "thumbnail_max_dimensions", (720, 720))
-    if isinstance(dims_obj, tuple):
-        dims_tuple = cast(tuple[object, ...], dims_obj)
-        if len(dims_tuple) == 2:
-            width_obj, height_obj = dims_tuple
-            if isinstance(width_obj, int) and isinstance(height_obj, int):
-                return (width_obj, height_obj)
-    return (720, 720)
-
-
-def image_processing_constants(settings_obj: object) -> tuple[int, int, int]:
-    image_quality_obj: object = getattr(settings_obj, "image_avif_quality", 75)
-    thumb_quality_obj: object = getattr(settings_obj, "thumbnail_avif_quality", 60)
-    max_pixels_obj: object = getattr(settings_obj, "max_upload_image_pixels", 40000000)
-    image_quality = image_quality_obj if isinstance(image_quality_obj, int) else 75
-    thumb_quality = thumb_quality_obj if isinstance(thumb_quality_obj, int) else 60
-    max_pixels = max_pixels_obj if isinstance(max_pixels_obj, int) else 40000000
-    return (image_quality, thumb_quality, max_pixels)
-
-
 _SETTINGS = get_settings()
 DATA_ROOT = _SETTINGS.data_root
 DB_PATH = _SETTINGS.database_path
+PACKAGE_ROOT = _SETTINGS.package_root
 CBZ_DIR = DATA_ROOT / "cbz"
 WORKS_DIR = DATA_ROOT / "works"
 STATIC_ASSETS_DIR = DATA_ROOT / "static"
 FANART_DIR = DATA_ROOT / "fanart"
+DYNAMIC_TEMPLATE_DIR = (PACKAGE_ROOT / "dynamic").resolve()
 
 
 def ensure_storage_dirs() -> None:

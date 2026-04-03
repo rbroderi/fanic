@@ -5,15 +5,17 @@ from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
-from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.security import validate_csrf
-from fanic.cylinder_sites.report_statuses import ReportStatusType
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.fanicsite.admin.reports_post_service import (
+    run_reports_action_use_case,
+)
 from fanic.repository.social import delete_content_report
-from fanic.repository.works import set_work_rating
 from fanic.repository.social import update_content_report_status
+from fanic.repository.works import set_work_rating
 
 
 def _reports_redirect_with_filters(
@@ -89,132 +91,27 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     report_id = int(report_id_raw)
 
-    if report_action == "remove":
-        deleted = delete_content_report(report_id)
-        return _reports_redirect_with_filters(
-            response,
-            msg="removed" if deleted else "not-found",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    if report_action == "mark-false":
-        updated = update_content_report_status(
-            report_id,
-            ReportStatusType.FALSE_REPORT.name_to_dash(),
-        )
-        return _reports_redirect_with_filters(
-            response,
-            msg="marked-false" if updated else "not-found",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    if report_action == "mark-research":
-        updated = update_content_report_status(
-            report_id,
-            ReportStatusType.NEEDS_RESEARCH.name_to_dash(),
-        )
-        return _reports_redirect_with_filters(
-            response,
-            msg="marked-research" if updated else "not-found",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    if report_action == "mark-resolved":
-        updated = update_content_report_status(
-            report_id,
-            ReportStatusType.RESOLVED.name_to_dash(),
-        )
-        return _reports_redirect_with_filters(
-            response,
-            msg="marked-resolved" if updated else "not-found",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    if report_action == "mark-reopen":
-        updated = update_content_report_status(
-            report_id,
-            ReportStatusType.RE_OPEN.name_to_dash(),
-        )
-        return _reports_redirect_with_filters(
-            response,
-            msg="marked-reopen" if updated else "not-found",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    if report_action == "promote-explicit":
-        if not report_work_id:
-            return _reports_redirect_with_filters(
-                response,
-                msg="promote-missing-work",
-                tab=tab,
-                work_id=work_id,
-                issue_type=issue_type,
-                status=status,
-                start_date=start_date,
-                end_date=end_date,
-            )
-
-        promoted = set_work_rating(
-            report_work_id,
+    def set_work_rating_for_promote(work_id: str, editor_username: str) -> bool:
+        return set_work_rating(
+            work_id,
             "Explicit",
-            editor_username=admin_username,
+            editor_username=editor_username,
             edited_by_admin=True,
         )
-        if not promoted:
-            return _reports_redirect_with_filters(
-                response,
-                msg="promote-work-not-found",
-                tab=tab,
-                work_id=work_id,
-                issue_type=issue_type,
-                status=status,
-                start_date=start_date,
-                end_date=end_date,
-            )
 
-        _ = update_content_report_status(
-            report_id,
-            ReportStatusType.RESOLVED.name_to_dash(),
-        )
-        return _reports_redirect_with_filters(
-            response,
-            msg="promoted-explicit",
-            tab=tab,
-            work_id=work_id,
-            issue_type=issue_type,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
+    action_msg = run_reports_action_use_case(
+        report_id=report_id,
+        report_action=report_action,
+        report_work_id=report_work_id,
+        admin_username=admin_username,
+        delete_content_report=delete_content_report,
+        update_content_report_status=update_content_report_status,
+        set_work_rating=set_work_rating_for_promote,
+    )
 
     return _reports_redirect_with_filters(
         response,
-        msg="invalid-action",
+        msg=str(action_msg),
         tab=tab,
         work_id=work_id,
         issue_type=issue_type,

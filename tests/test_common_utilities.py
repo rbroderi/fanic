@@ -358,17 +358,17 @@ def test_log_path_resolution_uses_log_suffix(
     load_route_module: Callable[[str, str], ModuleType],
 ) -> None:
     module = load_route_module(
-        "src/fanic/cylinder_sites/common/logging_utils.py",
-        "common_log_path_suffix_test",
+        "src/fanic/path_utils.py",
+        "path_utils_log_path_suffix_test",
     )
 
-    with_default_template = module._resolve_log_path("logs/%TIMESTAMP%")
+    with_default_template = module.resolve_log_path("logs/%TIMESTAMP%")
     assert with_default_template.suffix == ".log"
 
-    with_blank_template = module._resolve_log_path("   ")
+    with_blank_template = module.resolve_log_path("   ")
     assert with_blank_template.suffix == ".log"
 
-    with_explicit_suffix = module._resolve_log_path("logs/custom.txt")
+    with_explicit_suffix = module.resolve_log_path("logs/custom.txt")
     assert with_explicit_suffix.suffix == ".txt"
 
 
@@ -391,29 +391,29 @@ def test_comic_ingest_queue_helpers(
     def capture_queue_position(position: int) -> None:
         seen_positions.append(position)
 
-    allowed_first, retry_after_first, queue_position_first = module.begin_comic_ingest_session(
+    first_session = module.begin_comic_ingest_session(
         wait_timeout_seconds=0,
     )
-    assert allowed_first is True
-    assert retry_after_first == 0
-    assert queue_position_first == 0
+    assert first_session.allowed is True
+    assert first_session.retry_after == 0
+    assert first_session.queue_position == 0
 
-    allowed_second, retry_after_second, queue_position_second = module.begin_comic_ingest_session(
+    second_session = module.begin_comic_ingest_session(
         wait_timeout_seconds=0,
         on_queued=capture_queue_position,
     )
-    assert allowed_second is False
-    assert retry_after_second == 1
-    assert queue_position_second == 1
+    assert second_session.allowed is False
+    assert second_session.retry_after == 1
+    assert second_session.queue_position == 1
     assert seen_positions == [1]
 
     module.end_comic_ingest_session()
 
-    allowed_third, retry_after_third, queue_position_third = module.begin_comic_ingest_session(
+    third_session = module.begin_comic_ingest_session(
         wait_timeout_seconds=0,
     )
-    assert allowed_third is True
-    assert retry_after_third == 0
-    assert queue_position_third == 0
+    assert third_session.allowed is True
+    assert third_session.retry_after == 0
+    assert third_session.queue_position == 0
 
     module.end_comic_ingest_session()

@@ -1,23 +1,30 @@
 from collections.abc import Sequence
 from html import escape
-from textwrap import dedent
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.protocols import StatusReplacements
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.common.protocols import status_for_message
 from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.user_roles import ManagedUserRole
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository.users import LocalUserRow
 from fanic.repository.users import count_local_users
 from fanic.repository.users import list_local_users
+from fanic.settings import DYNAMIC_TEMPLATE_DIR
 
 USERS_PER_PAGE = 50
+
+
+def _render_fragment_template(template_name: str, replacements: dict[str, str]) -> str:
+    html = (DYNAMIC_TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
+    for marker, value in replacements.items():
+        html = html.replace(marker, value)
+    return html
 
 
 def _status_replacements(msg: str) -> StatusReplacements:
@@ -85,35 +92,24 @@ def _users_rows_html(users: Sequence[LocalUserRow], *, actor_username: str, acto
         role_select_id = f"role-{safe_username}"
 
         rows.append(
-            dedent(
-                f"""\
-                <article class="card comment-card">
-                <p><strong>{safe_display_name}</strong> <span class="profile-meta">({safe_username})</span></p>
-                <p class="profile-meta">Email: {safe_email}</p>
-                <p class="profile-meta">Created: {safe_created_at} | Status: {escape(state_text)} | Role: {escape(role)}</p>
-                <form class="upload-form" method="post" action="/admin/users">
-                <input type="hidden" name="target_username" value="{safe_username}" />
-                <input type="hidden" name="user_action" value="set-role" />
-                <label for="{role_select_id}">Role</label>
-                <select id="{role_select_id}" name="role"{role_select_disabled}>
-                {_role_options_html(role)}
-                </select>
-                <button type="submit">Save role</button>
-                </form>
-                <form class="upload-form" method="post" action="/admin/users">
-                <input type="hidden" name="target_username" value="{safe_username}" />
-                <input type="hidden" name="user_action" value="set-active" />
-                <input type="hidden" name="active" value="{escape(target_active)}" />
-                <button type="submit" class="button-muted"{deactivate_disabled}>{escape(toggle_label)}</button>
-                </form>
-                <form class="upload-form" method="post" action="/admin/users">
-                <input type="hidden" name="target_username" value="{safe_username}" />
-                <input type="hidden" name="user_action" value="remove" />
-                <button type="submit" class="button-danger" data-confirm-message="Remove this user account?"{remove_disabled}>Remove user</button>
-                </form>
-                </article>
-                """
-            ).strip()
+            _render_fragment_template(
+                "users-admin-row.html",
+                {
+                    "__USER_DISPLAY_NAME__": safe_display_name,
+                    "__USER_USERNAME__": safe_username,
+                    "__USER_EMAIL__": safe_email,
+                    "__USER_CREATED_AT__": safe_created_at,
+                    "__USER_STATE_TEXT__": escape(state_text),
+                    "__USER_ROLE_TEXT__": escape(role),
+                    "__USER_ROLE_SELECT_ID__": role_select_id,
+                    "__USER_ROLE_SELECT_DISABLED__": role_select_disabled,
+                    "__USER_ROLE_OPTIONS__": _role_options_html(role),
+                    "__USER_TARGET_ACTIVE__": escape(target_active),
+                    "__USER_TOGGLE_LABEL__": escape(toggle_label),
+                    "__USER_DEACTIVATE_DISABLED__": deactivate_disabled,
+                    "__USER_REMOVE_DISABLED__": remove_disabled,
+                },
+            )
         )
 
     return "".join(rows)

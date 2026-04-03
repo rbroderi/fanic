@@ -16,8 +16,11 @@ def as_int_or_none(value: object | None, *, allow_bool: bool = True) -> int | No
     if isinstance(value, float):
         return int(value)
     if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
         try:
-            return int(value)
+            return int(stripped)
         except ValueError:
             return None
     return None

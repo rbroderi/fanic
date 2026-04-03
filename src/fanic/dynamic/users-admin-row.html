@@ -1,0 +1,25 @@
+<article class="card comment-card">
+  <p><strong>__USER_DISPLAY_NAME__</strong> <span class="profile-meta">(__USER_USERNAME__)</span></p>
+  <p class="profile-meta">Email: __USER_EMAIL__</p>
+  <p class="profile-meta">Created: __USER_CREATED_AT__ | Status: __USER_STATE_TEXT__ | Role: __USER_ROLE_TEXT__</p>
+  <form class="upload-form" method="post" action="/admin/users">
+    <input type="hidden" name="target_username" value="__USER_USERNAME__" />
+    <input type="hidden" name="user_action" value="set-role" />
+    <label for="__USER_ROLE_SELECT_ID__">Role</label>
+    <select id="__USER_ROLE_SELECT_ID__" name="role"__USER_ROLE_SELECT_DISABLED__>
+      __USER_ROLE_OPTIONS__
+    </select>
+    <button type="submit">Save role</button>
+  </form>
+  <form class="upload-form" method="post" action="/admin/users">
+    <input type="hidden" name="target_username" value="__USER_USERNAME__" />
+    <input type="hidden" name="user_action" value="set-active" />
+    <input type="hidden" name="active" value="__USER_TARGET_ACTIVE__" />
+    <button type="submit" class="button-muted"__USER_DEACTIVATE_DISABLED__>__USER_TOGGLE_LABEL__</button>
+  </form>
+  <form class="upload-form" method="post" action="/admin/users">
+    <input type="hidden" name="target_username" value="__USER_USERNAME__" />
+    <input type="hidden" name="user_action" value="remove" />
+    <button type="submit" class="button-danger" data-confirm-message="Remove this user account?"__USER_REMOVE_DISABLED__>Remove user</button>
+  </form>
+</article>

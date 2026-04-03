@@ -1,16 +1,15 @@
 from html import escape
-from textwrap import dedent
 from urllib.parse import urlencode
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.protocols import StatusReplacements
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.common.protocols import status_for_message
 from fanic.cylinder_sites.common.protocols import status_visible
+from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.feedback_categories import feedback_category_label
 from fanic.cylinder_sites.feedback_categories import feedback_category_options_html
 from fanic.cylinder_sites.report_issues import report_issue_label
@@ -20,6 +19,14 @@ from fanic.cylinder_sites.report_statuses import report_status_options_html
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository.social import ContentReportRow
 from fanic.repository.social import list_content_reports
+from fanic.settings import DYNAMIC_TEMPLATE_DIR
+
+
+def _render_fragment_template(template_name: str, replacements: dict[str, str]) -> str:
+    html = (DYNAMIC_TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
+    for marker, value in replacements.items():
+        html = html.replace(marker, value)
+    return html
 
 
 def _report_tab(tab: str) -> str:
@@ -142,36 +149,31 @@ def _report_rows_html(
         )
 
         rows.append(
-            dedent(
-                f"""\
-                <article class="card comment-card">
-                <p class="comment-meta"><strong>Report #{report_id}</strong> | {created_at}</p>
-                <p><strong>Type:</strong> {issue_label} <span class="profile-meta">({issue_type})</span></p>
-                <p><strong>Status:</strong> {report_status_label_text} <span class="profile-meta">({report_status})</span></p>
-                <p><strong>Work:</strong> {work_display}</p>
-                <p><strong>Reporter:</strong> {reporter_display} | {reporter_email}</p>
-                <p><strong>Claimed URL:</strong> <a href="{claimed_url}" target="_blank" rel="noopener noreferrer">{claimed_url}</a></p>
-                <p><strong>Evidence:</strong> {evidence_html}</p>
-                <p><strong>Details:</strong><br />{details}</p>
-                <form class="upload-form with-top-gap" method="post" action="/admin/reports">
-                <input type="hidden" name="report_id" value="{report_id}" />
-                <input type="hidden" name="report_work_id" value="{report_work_id}" />
-                <input type="hidden" name="work_id" value="{escape(filter_work_id)}" />
-                <input type="hidden" name="issue_type" value="{escape(filter_issue_type)}" />
-                <input type="hidden" name="status" value="{escape(filter_status)}" />
-                <input type="hidden" name="start_date" value="{escape(filter_start_date)}" />
-                <input type="hidden" name="end_date" value="{escape(filter_end_date)}" />
-                <input type="hidden" name="tab" value="{escape(tab)}" />
-                <button type="submit" name="report_action" value="mark-resolved" class="button-muted">Mark resolved</button>
-                <button type="submit" name="report_action" value="mark-reopen" class="button-muted">Mark re-open</button>
-                <button type="submit" name="report_action" value="mark-false" class="button-muted">Mark false</button>
-                <button type="submit" name="report_action" value="mark-research" class="button-muted">Mark more research needed</button>
-                {promote_button_html}
-                <button type="submit" name="report_action" value="remove" class="button-danger" data-confirm-message="Remove this report item?">Remove item</button>
-                </form>
-                </article>
-                """
-            ).strip()
+            _render_fragment_template(
+                "reports-admin-row.html",
+                {
+                    "__REPORT_ROW_ID__": report_id,
+                    "__REPORT_ROW_CREATED_AT__": created_at,
+                    "__REPORT_ROW_ISSUE_LABEL__": issue_label,
+                    "__REPORT_ROW_ISSUE_TYPE__": issue_type,
+                    "__REPORT_ROW_STATUS_LABEL__": report_status_label_text,
+                    "__REPORT_ROW_STATUS_RAW__": report_status,
+                    "__REPORT_ROW_WORK_DISPLAY__": work_display,
+                    "__REPORT_ROW_REPORTER_DISPLAY__": reporter_display,
+                    "__REPORT_ROW_REPORTER_EMAIL__": reporter_email,
+                    "__REPORT_ROW_CLAIMED_URL__": claimed_url,
+                    "__REPORT_ROW_EVIDENCE_HTML__": evidence_html,
+                    "__REPORT_ROW_DETAILS_HTML__": details,
+                    "__REPORT_ROW_WORK_ID__": report_work_id,
+                    "__REPORT_FILTER_WORK_ID__": escape(filter_work_id),
+                    "__REPORT_FILTER_ISSUE_TYPE__": escape(filter_issue_type),
+                    "__REPORT_FILTER_STATUS__": escape(filter_status),
+                    "__REPORT_FILTER_START_DATE__": escape(filter_start_date),
+                    "__REPORT_FILTER_END_DATE__": escape(filter_end_date),
+                    "__REPORT_FILTER_TAB__": escape(tab),
+                    "__REPORT_PROMOTE_BUTTON_HTML__": promote_button_html,
+                },
+            )
         )
     return "".join(rows)
 

@@ -3,6 +3,7 @@
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import cast
 
 import structlog
@@ -51,6 +52,20 @@ class _ComicIngestQueueState:
 _comic_ingest_state = _ComicIngestQueueState()
 
 LOGGER = structlog.get_logger("fanic.http")
+
+
+@dataclass(frozen=True, slots=True)
+class UploadSessionStart:
+    allowed: bool
+    limit_code: str
+    retry_after: int
+
+
+@dataclass(frozen=True, slots=True)
+class ComicIngestSessionStart:
+    allowed: bool
+    retry_after: int
+    queue_position: int
 
 
 def _header_value(request: RequestLike, header_name: str) -> str:
@@ -202,10 +217,10 @@ def clear_auth_failures(request: RequestLike, username: str) -> None:
             _AUTH_LOCKED_UNTIL.pop(key)
 
 
-def begin_upload_session(username: str) -> tuple[bool, str, int]:
+def begin_upload_session(username: str) -> UploadSessionStart:
     normalized_username = username.strip().lower()
     if not normalized_username:
-        return True, "", 0
+        return UploadSessionStart(True, "", 0)
 
     now = time.time()
     with _UPLOAD_LOCK:
@@ -217,18 +232,18 @@ def begin_upload_session(username: str) -> tuple[bool, str, int]:
         current_in_flight = _UPLOAD_IN_FLIGHT.get(normalized_username, 0)
         if current_in_flight >= UPLOAD_MAX_CONCURRENT_PER_USER:
             _UPLOAD_ATTEMPT_TIMESTAMPS[normalized_username] = attempts
-            return False, "upload_concurrency_limited", 0
+            return UploadSessionStart(False, "upload_concurrency_limited", 0)
 
         if len(attempts) >= UPLOAD_RATE_MAX_REQUESTS:
             oldest_attempt = attempts[0]
             retry_after = int(max(1, oldest_attempt + UPLOAD_RATE_WINDOW_SECONDS - now))
             _UPLOAD_ATTEMPT_TIMESTAMPS[normalized_username] = attempts
-            return False, "upload_rate_limited", retry_after
+            return UploadSessionStart(False, "upload_rate_limited", retry_after)
 
         attempts.append(now)
         _UPLOAD_ATTEMPT_TIMESTAMPS[normalized_username] = attempts
         _UPLOAD_IN_FLIGHT[normalized_username] = current_in_flight + 1
-    return True, "", 0
+    return UploadSessionStart(True, "", 0)
 
 
 def end_upload_session(username: str) -> None:
@@ -249,9 +264,9 @@ def begin_comic_ingest_session(
     *,
     wait_timeout_seconds: int | None = None,
     on_queued: Callable[[int], None] | None = None,
-) -> tuple[bool, int, int]:
+) -> ComicIngestSessionStart:
     if COMIC_INGEST_MAX_CONCURRENT <= 0:
-        return True, 0, 0
+        return ComicIngestSessionStart(True, 0, 0)
 
     timeout_seconds = wait_timeout_seconds if wait_timeout_seconds is not None else COMIC_INGEST_QUEUE_WAIT_SECONDS
     timeout_seconds = max(timeout_seconds, 0)
@@ -280,7 +295,7 @@ def begin_comic_ingest_session(
                 if queued:
                     queue_state.waiting -= 1
                 timeout_retry_after = 1
-                return (
+                return ComicIngestSessionStart(
                     False,
                     timeout_retry_after,
                     queue_position if queue_position else 1,
@@ -291,7 +306,7 @@ def begin_comic_ingest_session(
         if queued:
             queue_state.waiting -= 1
         queue_state.active += 1
-    return True, 0, queue_position
+    return ComicIngestSessionStart(True, 0, queue_position)
 
 
 def end_comic_ingest_session() -> None:

@@ -89,7 +89,7 @@ repos:
 
       - id: frontend-prettier
         name: frontend-prettier-write
-        entry: just frontend-format
+        entry: just frontend format
         language: system
         pass_filenames: false
         always_run: true
@@ -97,7 +97,7 @@ repos:
 
       - id: frontend-eslint
         name: frontend-eslint
-        entry: just frontend-lint
+        entry: just frontend lint
         language: system
         pass_filenames: false
         always_run: true

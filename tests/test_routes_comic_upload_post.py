@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -38,6 +39,20 @@ class ImmediateThread:
         self._target(**self._kwargs)
 
 
+@dataclass(frozen=True, slots=True)
+class UploadSessionStartStub:
+    allowed: bool
+    limit_code: str
+    retry_after: int
+
+
+@dataclass(frozen=True, slots=True)
+class ComicIngestSessionStartStub:
+    allowed: bool
+    retry_after: int
+    queue_position: int
+
+
 def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -69,12 +84,12 @@ def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     def validate_saved_upload_size_stub(_path: Any, _max_bytes: Any, _label: Any) -> str:
         return ""
 
-    def begin_upload_session_stub(_username: str) -> tuple[bool, str, int]:
-        return (True, "", 0)
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
 
-    def begin_comic_ingest_session_stub(on_queued: Any) -> tuple[bool, int, int]:
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
         _ = on_queued
-        return (True, 0, 0)
+        return ComicIngestSessionStartStub(True, 0, 0)
 
     def end_upload_session_stub(username: str) -> None:
         ended_upload_users.append(username)
@@ -179,12 +194,12 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     def validate_saved_upload_size_stub(_path: Any, _max_bytes: Any, _label: Any) -> str:
         return ""
 
-    def begin_upload_session_stub(_username: str) -> tuple[bool, str, int]:
-        return (True, "", 0)
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
 
-    def begin_comic_ingest_session_stub(on_queued: Any) -> tuple[bool, int, int]:
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
         _ = on_queued
-        return (False, 0, 2)
+        return ComicIngestSessionStartStub(False, 0, 2)
 
     def end_upload_session_stub(username: str) -> None:
         ended_upload_users.append(username)
