@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 from urllib.parse import quote
@@ -50,6 +51,29 @@ class CurrentIdentity:
     username: str | None
     user_role: UserRole
     current_username: str
+
+
+@dataclass(frozen=True, slots=True)
+class FanartPostDependencies:
+    route_tail: Callable[[RequestLike, list[str]], list[str] | None]
+    enforce_https_termination: Callable[[RequestLike, ResponseLike], bool]
+    validate_csrf: Callable[[RequestLike], bool]
+    current_user: Callable[[RequestLike], str | None]
+    role_for_user: Callable[[str | None], UserRole]
+    resolve_owner_username: Callable[[str], str | None]
+    owner_profile_key: Callable[[str], str]
+
+
+def _runtime_deps() -> FanartPostDependencies:
+    return FanartPostDependencies(
+        route_tail=route_tail,
+        enforce_https_termination=enforce_https_termination,
+        validate_csrf=validate_csrf,
+        current_user=current_user,
+        role_for_user=role_for_user,
+        resolve_owner_username=resolve_owner_username,
+        owner_profile_key=owner_profile_key,
+    )
 
 
 def _get_fanart_item_as_dict(item_id: str) -> dict[str, object] | None:
@@ -112,9 +136,12 @@ def _safe_redirect_target(raw_target: str) -> str | None:
     return target
 
 
-def _current_identity(request: RequestLike) -> CurrentIdentity:
-    username = current_user(request)
-    user_role = role_for_user(username)
+def _current_identity(
+    request: RequestLike,
+    deps: FanartPostDependencies,
+) -> CurrentIdentity:
+    username = deps.current_user(request)
+    user_role = deps.role_for_user(username)
     current_username = username if username else ""
     return CurrentIdentity(
         username=username,
@@ -127,12 +154,13 @@ def _handle_reader_comments(
     request: RequestLike,
     response: ResponseLike,
     work_owner_key: str,
+    deps: FanartPostDependencies,
 ) -> ResponseLike:
-    work_owner_username = resolve_owner_username(work_owner_key)
+    work_owner_username = deps.resolve_owner_username(work_owner_key)
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
-    identity = _current_identity(request)
+    identity = _current_identity(request, deps)
     username = identity.username
     fanart_item_id = request.form.get("fanart_item_id", "").strip()
     comment_body = request.form.get("comment_body", "").strip()
@@ -153,7 +181,7 @@ def _handle_reader_comments(
         if next_target:
             separator = "&" if "?" in next_target else "?"
             return _redirect(response, f"{next_target}{separator}msg=login-required")
-        profile_key = owner_profile_key(work_owner_username)
+        profile_key = deps.owner_profile_key(work_owner_username)
         return _redirect(
             response,
             f"/fanart/{quote(profile_key, safe='')}/reader?msg=login-required",
@@ -162,7 +190,7 @@ def _handle_reader_comments(
         if next_target:
             separator = "&" if "?" in next_target else "?"
             return _redirect(response, f"{next_target}{separator}msg=comment-empty")
-        profile_key = owner_profile_key(work_owner_username)
+        profile_key = deps.owner_profile_key(work_owner_username)
         return _redirect(
             response,
             f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-empty",
@@ -171,7 +199,7 @@ def _handle_reader_comments(
     if next_target:
         separator = "&" if "?" in next_target else "?"
         return _redirect(response, f"{next_target}{separator}msg=comment-saved")
-    profile_key = owner_profile_key(work_owner_username)
+    profile_key = deps.owner_profile_key(work_owner_username)
     return _redirect(
         response,
         f"/fanart/{quote(profile_key, safe='')}/reader?item_id={quote(fanart_item_id, safe='')}&msg=comment-saved",
@@ -183,9 +211,10 @@ def _handle_item_delete(
     response: ResponseLike,
     work_owner_key: str,
     work_id: str,
+    deps: FanartPostDependencies,
 ) -> ResponseLike:
-    identity = _current_identity(request)
-    work_owner_username = resolve_owner_username(work_owner_key)
+    identity = _current_identity(request, deps)
+    work_owner_username = deps.resolve_owner_username(work_owner_key)
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
@@ -208,7 +237,7 @@ def _handle_item_delete(
     next_target = _safe_redirect_target(request.args.get("next", ""))
     if next_target:
         return _redirect(response, next_target)
-    profile_key = owner_profile_key(work_owner_username)
+    profile_key = deps.owner_profile_key(work_owner_username)
     return _redirect(
         response,
         f"/fanart/{quote(profile_key, safe='')}?msg=deleted",
@@ -219,12 +248,13 @@ def _handle_gallery_create(
     request: RequestLike,
     response: ResponseLike,
     work_owner_key: str,
+    deps: FanartPostDependencies,
 ) -> ResponseLike:
-    work_owner_username = resolve_owner_username(work_owner_key)
+    work_owner_username = deps.resolve_owner_username(work_owner_key)
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
-    identity = _current_identity(request)
+    identity = _current_identity(request, deps)
     gallery_name = request.form.get("gallery_name", "").strip()
     gallery_description = request.form.get("gallery_description", "").strip()
 
@@ -242,7 +272,7 @@ def _handle_gallery_create(
     if result.outcome == CreateGalleryOutcome.FORBIDDEN:
         return text_error(response, "Forbidden", 403)
 
-    profile_key = owner_profile_key(work_owner_username)
+    profile_key = deps.owner_profile_key(work_owner_username)
     if result.outcome == CreateGalleryOutcome.NAME_REQUIRED:
         return _redirect(
             response,
@@ -265,12 +295,13 @@ def _handle_gallery_update_items(
     request: RequestLike,
     response: ResponseLike,
     work_owner_key: str,
+    deps: FanartPostDependencies,
 ) -> ResponseLike:
-    work_owner_username = resolve_owner_username(work_owner_key)
+    work_owner_username = deps.resolve_owner_username(work_owner_key)
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
-    identity = _current_identity(request)
+    identity = _current_identity(request, deps)
     gallery_slug = request.form.get("gallery_slug", "").strip()
     selected_item_ids = _form_values(request, "gallery_item_id")
 
@@ -291,7 +322,7 @@ def _handle_gallery_update_items(
     if result.outcome == UpdateGalleryOutcome.NOT_FOUND:
         return text_error(response, "Not found", 404)
 
-    profile_key = owner_profile_key(work_owner_username)
+    profile_key = deps.owner_profile_key(work_owner_username)
     return _redirect(
         response,
         (f"/fanart/{quote(profile_key, safe='')}?gallery={quote(gallery_slug, safe='')}&msg=gallery-updated"),
@@ -302,12 +333,13 @@ def _handle_gallery_delete(
     request: RequestLike,
     response: ResponseLike,
     work_owner_key: str,
+    deps: FanartPostDependencies,
 ) -> ResponseLike:
-    work_owner_username = resolve_owner_username(work_owner_key)
+    work_owner_username = deps.resolve_owner_username(work_owner_key)
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
-    identity = _current_identity(request)
+    identity = _current_identity(request, deps)
     gallery_slug = request.form.get("gallery_slug", "").strip()
 
     result = run_delete_gallery_use_case(
@@ -326,22 +358,27 @@ def _handle_gallery_delete(
     if result.outcome == DeleteGalleryOutcome.NOT_FOUND:
         return text_error(response, "Not found", 404)
 
-    profile_key = owner_profile_key(work_owner_username)
+    profile_key = deps.owner_profile_key(work_owner_username)
     return _redirect(
         response,
         f"/fanart/{quote(profile_key, safe='')}?msg=gallery-deleted",
     )
 
 
-def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["fanart"])
+def main(
+    request: RequestLike,
+    response: ResponseLike,
+    deps: FanartPostDependencies | None = None,
+) -> ResponseLike:
+    deps = deps if deps is not None else _runtime_deps()
+    tail = deps.route_tail(request, ["fanart"])
     if tail is None:
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request, response):
+    if not deps.enforce_https_termination(request, response):
         return response
 
-    if not validate_csrf(request):
+    if not deps.validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
 
     path_key = tail[1] if len(tail) > 1 else ""
@@ -350,15 +387,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     match (len(tail), path_key, action):
         case (3, "reader", "comments"):
-            return _handle_reader_comments(request, response, owner_key)
+            return _handle_reader_comments(request, response, owner_key, deps)
         case (3, _, "delete") if path_key != "galleries":
             work_id = path_key.strip()
-            return _handle_item_delete(request, response, owner_key, work_id)
+            return _handle_item_delete(request, response, owner_key, work_id, deps)
         case (3, "galleries", "create"):
-            return _handle_gallery_create(request, response, owner_key)
+            return _handle_gallery_create(request, response, owner_key, deps)
         case (3, "galleries", "update-items"):
-            return _handle_gallery_update_items(request, response, owner_key)
+            return _handle_gallery_update_items(request, response, owner_key, deps)
         case (3, "galleries", "delete"):
-            return _handle_gallery_delete(request, response, owner_key)
+            return _handle_gallery_delete(request, response, owner_key, deps)
         case _:
             return text_error(response, "Not found", 404)

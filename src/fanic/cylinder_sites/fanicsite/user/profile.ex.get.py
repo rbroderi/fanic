@@ -2,27 +2,42 @@ from html import escape
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    display_name_status as _display_name_status,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    onboarding_status as _onboarding_status,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    preference_status as _preference_status,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    profile_visibility as _profile_visibility,
+)
 from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
     recent_history_html as _recent_history_html,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import (
+    theme_status as _theme_status,
 )
 from fanic.cylinder_sites.profile_shared import render_bookmarks_html
 from fanic.cylinder_sites.profile_shared import render_fanart_html
 from fanic.cylinder_sites.profile_shared import render_profile_shared_sections
 from fanic.cylinder_sites.profile_shared import render_uploaded_works_html
-from fanic.repository.works import can_view_work
+from fanic.repository.fanart import list_fanart_items_by_uploader
 from fanic.repository.users import get_local_user
 from fanic.repository.users import get_user_theme_preference
-from fanic.repository.fanart import list_fanart_items_by_uploader
 from fanic.repository.users import list_recent_reading_history
 from fanic.repository.users import list_user_bookmarks
-from fanic.repository.works import list_work_comments
-from fanic.repository.works import list_works_by_uploader
 from fanic.repository.users import user_prefers_explicit
 from fanic.repository.users import user_prefers_mature
 from fanic.repository.users import user_requires_onboarding
+from fanic.repository.works import can_view_work
+from fanic.repository.works import list_work_comments
+from fanic.repository.works import list_works_by_uploader
 from fanic.repository.works import work_kudos_count
 from fanic.settings import get_settings
 
@@ -33,69 +48,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     username = current_user(request)
     save_msg = request.args.get("msg", "").strip()
-    pref_status_text = "Preference saved." if save_msg == "saved" else ""
-    pref_status_class = "success" if save_msg == "saved" else ""
-    pref_status_hidden = "" if save_msg == "saved" else "hidden"
-
-    display_name_status_text = ""
-    display_name_status_class = ""
-    display_name_status_hidden = "hidden"
-    if save_msg == "display-name-saved":
-        display_name_status_text = "Profile details updated."
-        display_name_status_class = "success"
-        display_name_status_hidden = ""
-    elif save_msg == "display-name-invalid":
-        display_name_status_text = "Display name must use only letters and numbers, and age selection is required."
-        display_name_status_class = "error"
-        display_name_status_hidden = ""
-    elif save_msg == "display-name-taken":
-        display_name_status_text = "That display name is already in use."
-        display_name_status_class = "error"
-        display_name_status_hidden = ""
-
-    theme_status_text = ""
-    theme_status_class = ""
-    theme_status_hidden = "hidden"
-    if save_msg == "theme_saved":
-        theme_status_text = "Theme preferences saved."
-        theme_status_class = "success"
-        theme_status_hidden = ""
-    elif save_msg == "theme_parse_error":
-        theme_status_text = "Invalid theme.toml format."
-        theme_status_class = "error"
-        theme_status_hidden = ""
-    elif save_msg == "theme_upload_error":
-        theme_status_text = "Failed to read uploaded theme.toml file."
-        theme_status_class = "error"
-        theme_status_hidden = ""
-
-    onboarding_status_text = ""
-    onboarding_status_class = ""
-    onboarding_status_hidden = "hidden"
-    if save_msg == "onboarding-required":
-        onboarding_status_text = "Please finish onboarding before using the rest of the site."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-saved":
-        onboarding_status_text = "Profile details saved."
-        onboarding_status_class = "success"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-invalid":
-        onboarding_status_text = "Display name must use only letters and numbers, and age selection is required."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-name-taken":
-        onboarding_status_text = "That display name is already in use."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-already-complete":
-        onboarding_status_text = "Onboarding has already been completed for this account."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "underage-restricted":
-        onboarding_status_text = "Your account is currently limited to this page."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
+    pref_status = _preference_status(save_msg)
+    display_name_status = _display_name_status(save_msg)
+    theme_status = _theme_status(save_msg)
+    onboarding_status = _onboarding_status(save_msg, requires_onboarding=False)
 
     if username is None:
         shared_sections_html = render_profile_shared_sections(
@@ -128,23 +84,23 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_DISPLAY_NAME_VALUE__": "",
             "__PROFILE_IS_OVER_18_YES_SELECTED_ATTR__": "",
             "__PROFILE_IS_OVER_18_NO_SELECTED_ATTR__": "",
-            "__PROFILE_ONBOARDING_STATUS__": onboarding_status_text,
-            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
-            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
+            "__PROFILE_ONBOARDING_STATUS__": onboarding_status.text,
+            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status.css_class,
+            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status.hidden_attr,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "hidden",
-            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status_text,
-            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status_class,
-            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status_hidden,
+            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status.text,
+            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status.css_class,
+            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status.hidden_attr,
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": "",
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": "",
-            "__PROFILE_PREF_STATUS__": pref_status_text,
-            "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,
-            "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status_hidden,
+            "__PROFILE_PREF_STATUS__": pref_status.text,
+            "__PROFILE_PREF_STATUS_CLASS__": pref_status.css_class,
+            "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status.hidden_attr,
             "__PROFILE_THEME_FORM_HIDDEN_ATTR__": "",
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__": "",
-            "__PROFILE_THEME_STATUS__": theme_status_text,
-            "__PROFILE_THEME_STATUS_CLASS__": theme_status_class,
-            "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status_hidden,
+            "__PROFILE_THEME_STATUS__": theme_status.text,
+            "__PROFILE_THEME_STATUS_CLASS__": theme_status.css_class,
+            "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status.hidden_attr,
             "__PROFILE_HISTORY_HIDDEN_ATTR__": "hidden",
             "__PROFILE_HISTORY_LIMIT__": "0",
             "__PROFILE_HISTORY_HTML__": "",
@@ -206,16 +162,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         view_explicit_checked = "checked" if user_prefers_explicit(username) else ""
         theme_preference = get_user_theme_preference(username)
         custom_theme_checked = "checked" if theme_preference["enabled"] else ""
+        visibility = _profile_visibility(requires_onboarding)
+        onboarding_status = _onboarding_status(save_msg, requires_onboarding=requires_onboarding)
 
         over_18_yes_selected = "selected" if is_over_18 is True else ""
         over_18_no_selected = "selected" if is_over_18 is False else ""
-        if save_msg == "onboarding-already-complete" and not requires_onboarding:
-            onboarding_status_text = ""
-            onboarding_status_class = ""
-            onboarding_status_hidden = "hidden"
-        onboarding_hidden_attr = "" if requires_onboarding else "hidden"
-        account_summary_hidden_attr = "hidden" if requires_onboarding else ""
-        appearance_hidden_attr = "hidden" if requires_onboarding else ""
         replacements = {
             "__PROFILE_PAGE_TITLE__": "FANIC Profile",
             "__PROFILE_CARD_TITLE__": "Your Profile",
@@ -224,36 +175,36 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__PROFILE_STATUS__": "Logged in.",
             "__PROFILE_STATUS_CLASS__": "",
             "__PROFILE_STATUS_HIDDEN_ATTR__": "",
-            "__PROFILE_ACCOUNT_SUMMARY_HIDDEN_ATTR__": account_summary_hidden_attr,
-            "__PROFILE_APPEARANCE_HIDDEN_ATTR__": appearance_hidden_attr,
+            "__PROFILE_ACCOUNT_SUMMARY_HIDDEN_ATTR__": visibility.account_summary_hidden_attr,
+            "__PROFILE_APPEARANCE_HIDDEN_ATTR__": visibility.appearance_hidden_attr,
             "__PROFILE_DETAILS__": f"Display name: {escape(display_name)}",
-            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
+            "__PROFILE_PUBLIC_LINK_HIDDEN_ATTR__": visibility.public_link_hidden_attr,
             "__PROFILE_PUBLIC_HREF__": f"/users/{escape(display_name)}",
-            "__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
+            "__PROFILE_IMMUTABLE_PUBLIC_LINK_HIDDEN_ATTR__": visibility.immutable_public_link_hidden_attr,
             "__PROFILE_IMMUTABLE_PUBLIC_HREF__": f"/users/{escape(display_name)}",
             "__PROFILE_SETTINGS_HIDDEN_ATTR__": "",
-            "__PROFILE_ONBOARDING_HIDDEN_ATTR__": onboarding_hidden_attr,
+            "__PROFILE_ONBOARDING_HIDDEN_ATTR__": visibility.onboarding_hidden_attr,
             "__PROFILE_DISPLAY_NAME_VALUE__": escape(display_name),
             "__PROFILE_IS_OVER_18_YES_SELECTED_ATTR__": over_18_yes_selected,
             "__PROFILE_IS_OVER_18_NO_SELECTED_ATTR__": over_18_no_selected,
-            "__PROFILE_ONBOARDING_STATUS__": onboarding_status_text,
-            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status_class,
-            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
+            "__PROFILE_ONBOARDING_STATUS__": onboarding_status.text,
+            "__PROFILE_ONBOARDING_STATUS_CLASS__": onboarding_status.css_class,
+            "__PROFILE_ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status.hidden_attr,
             "__PROFILE_PREFS_HIDDEN_ATTR__": "",
-            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status_text,
-            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status_class,
-            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status_hidden,
+            "__PROFILE_DISPLAY_NAME_STATUS__": display_name_status.text,
+            "__PROFILE_DISPLAY_NAME_STATUS_CLASS__": display_name_status.css_class,
+            "__PROFILE_DISPLAY_NAME_STATUS_HIDDEN_ATTR__": display_name_status.hidden_attr,
             "__PROFILE_VIEW_MATURE_CHECKED_ATTR__": view_mature_checked,
             "__PROFILE_VIEW_EXPLICIT_CHECKED_ATTR__": view_explicit_checked,
-            "__PROFILE_PREF_STATUS__": pref_status_text,
-            "__PROFILE_PREF_STATUS_CLASS__": pref_status_class,
-            "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status_hidden,
-            "__PROFILE_THEME_FORM_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
+            "__PROFILE_PREF_STATUS__": pref_status.text,
+            "__PROFILE_PREF_STATUS_CLASS__": pref_status.css_class,
+            "__PROFILE_PREF_STATUS_HIDDEN_ATTR__": pref_status.hidden_attr,
+            "__PROFILE_THEME_FORM_HIDDEN_ATTR__": visibility.theme_form_hidden_attr,
             "__PROFILE_CUSTOM_THEME_ENABLED_CHECKED_ATTR__": custom_theme_checked,
-            "__PROFILE_THEME_STATUS__": theme_status_text,
-            "__PROFILE_THEME_STATUS_CLASS__": theme_status_class,
-            "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status_hidden,
-            "__PROFILE_HISTORY_HIDDEN_ATTR__": "hidden" if requires_onboarding else "",
+            "__PROFILE_THEME_STATUS__": theme_status.text,
+            "__PROFILE_THEME_STATUS_CLASS__": theme_status.css_class,
+            "__PROFILE_THEME_STATUS_HIDDEN_ATTR__": theme_status.hidden_attr,
+            "__PROFILE_HISTORY_HIDDEN_ATTR__": visibility.history_hidden_attr,
             "__PROFILE_HISTORY_LIMIT__": escape(str(history_limit)),
             "__PROFILE_HISTORY_HTML__": _recent_history_html(recent_history),
             "__PROFILE_SHARED_SECTIONS__": shared_sections_html,

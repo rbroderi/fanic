@@ -3,10 +3,14 @@ from html import escape
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.fanicsite.user.onboarding_helpers import (
+    onboarding_display_state,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_get_helpers import onboarding_status
 from fanic.repository.users import get_local_user
 from fanic.repository.users import user_requires_onboarding
 
@@ -26,31 +30,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(response, "/user/profile")
 
     save_msg = request.args.get("msg", "").strip()
-    onboarding_status_text = ""
-    onboarding_status_class = ""
-    onboarding_status_hidden = "hidden"
-    if save_msg == "onboarding-required":
-        onboarding_status_text = "Please finish onboarding before using the rest of the site."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-invalid":
-        onboarding_status_text = "Display name must use only letters and numbers, and age selection is required."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
-    elif save_msg == "onboarding-name-taken":
-        onboarding_status_text = "That display name is already in use."
-        onboarding_status_class = "error"
-        onboarding_status_hidden = ""
+    status = onboarding_status(save_msg, requires_onboarding=True)
 
     local_user = get_local_user(username)
-    display_name = username
-    is_over_18: bool | None = None
-    if local_user is not None:
-        display_name = local_user["display_name"]
-        is_over_18 = local_user["is_over_18"]
-
-    over_18_yes_selected = "selected" if is_over_18 is True else ""
-    over_18_no_selected = "selected" if is_over_18 is False else ""
+    display = onboarding_display_state(username, local_user)
 
     return render_html_template(
         request,
@@ -58,11 +41,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         "onboarding.html",
         {
             "__ONBOARDING_PAGE_TITLE__": "FANIC Onboarding",
-            "__ONBOARDING_DISPLAY_NAME_VALUE__": escape(display_name),
-            "__ONBOARDING_IS_OVER_18_YES_SELECTED_ATTR__": over_18_yes_selected,
-            "__ONBOARDING_IS_OVER_18_NO_SELECTED_ATTR__": over_18_no_selected,
-            "__ONBOARDING_STATUS__": onboarding_status_text,
-            "__ONBOARDING_STATUS_CLASS__": onboarding_status_class,
-            "__ONBOARDING_STATUS_HIDDEN_ATTR__": onboarding_status_hidden,
+            "__ONBOARDING_DISPLAY_NAME_VALUE__": escape(display.display_name),
+            "__ONBOARDING_IS_OVER_18_YES_SELECTED_ATTR__": display.over_18_yes_selected,
+            "__ONBOARDING_IS_OVER_18_NO_SELECTED_ATTR__": display.over_18_no_selected,
+            "__ONBOARDING_STATUS__": status.text,
+            "__ONBOARDING_STATUS_CLASS__": status.css_class,
+            "__ONBOARDING_STATUS_HIDDEN_ATTR__": status.hidden_attr,
         },
     )

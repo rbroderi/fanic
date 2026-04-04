@@ -2,12 +2,13 @@ import sqlite3
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.rate_limit import check_post_rate_limit
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.fanicsite.user.onboarding_helpers import parse_onboarding_form
 from fanic.repository.users import update_user_onboarding
 from fanic.repository.users import user_requires_onboarding
 
@@ -34,16 +35,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not user_requires_onboarding(username):
         return _redirect(response, "/user/profile")
 
-    display_name = request.form.get("display_name", "").strip()
-    is_over_18_raw = request.form.get("is_over_18", "").strip().lower()
-    if is_over_18_raw not in {"yes", "no"}:
+    form_data = parse_onboarding_form(request.form)
+    if form_data is None:
         return _redirect(response, "/user/onboarding?msg=onboarding-invalid")
 
     try:
         saved = update_user_onboarding(
             username,
-            display_name=display_name,
-            is_over_18=is_over_18_raw == "yes",
+            display_name=form_data.display_name,
+            is_over_18=form_data.is_over_18,
         )
     except sqlite3.IntegrityError:
         return _redirect(response, "/user/onboarding?msg=onboarding-name-taken")

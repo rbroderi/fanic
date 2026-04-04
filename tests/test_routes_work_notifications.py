@@ -3,8 +3,6 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 
-import pytest
-
 
 class ResponseLike(Protocol):
     status_code: int
@@ -59,24 +57,39 @@ def _add_comment(
     _ = chapter_number
 
 
+def _comic_post_deps(
+    module: ModuleType,
+    *,
+    create_notification_func: Callable[..., int],
+    add_work_kudo_func: Callable[[str, str], bool] = _kudo_inserted,
+    add_work_comment_func: Callable[..., object] = _add_comment,
+) -> object:
+    return module.ComicPostDependencies(
+        route_tail=module.route_tail,
+        enforce_https_termination=_always_https,
+        validate_csrf=_always_valid_csrf,
+        get_work=_work_sample,
+        current_user=_bob_user,
+        role_for_user=_role_user,
+        can_view_work=_can_view,
+        delete_work=module.delete_work,
+        add_work_kudo=add_work_kudo_func,
+        add_work_comment=add_work_comment_func,
+        create_notification=create_notification_func,
+        update_work_metadata=module.update_work_metadata,
+        create_work_version_snapshot=module.create_work_version_snapshot,
+    )
+
+
 def test_works_post_kudos_creates_notification_for_uploader(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_ex_post_kudos_notification_test",
     )
-
-    monkeypatch.setattr(module, "enforce_https_termination", _always_https)
-    monkeypatch.setattr(module, "validate_csrf", _always_valid_csrf)
-    monkeypatch.setattr(module, "current_user", _bob_user)
-    monkeypatch.setattr(module, "role_for_user", _role_user)
-    monkeypatch.setattr(module, "get_work", _work_sample)
-    monkeypatch.setattr(module, "can_view_work", _can_view)
-    monkeypatch.setattr(module, "add_work_kudo", _kudo_inserted)
 
     captured: dict[str, str] = {}
 
@@ -97,11 +110,15 @@ def test_works_post_kudos_creates_notification_for_uploader(
         captured["href"] = href
         return 1
 
-    monkeypatch.setattr(module, "create_notification", fake_create_notification)
+    deps = _comic_post_deps(
+        module,
+        create_notification_func=fake_create_notification,
+        add_work_kudo_func=_kudo_inserted,
+    )
 
     request = dummy_request(path="/comic/work-1/kudos", method="POST", form={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/comic/work-1?msg=kudos-saved"
@@ -115,20 +132,11 @@ def test_works_post_comment_creates_notification_for_uploader(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_ex_post_comment_notification_test",
     )
-
-    monkeypatch.setattr(module, "enforce_https_termination", _always_https)
-    monkeypatch.setattr(module, "validate_csrf", _always_valid_csrf)
-    monkeypatch.setattr(module, "current_user", _bob_user)
-    monkeypatch.setattr(module, "role_for_user", _role_user)
-    monkeypatch.setattr(module, "get_work", _work_sample)
-    monkeypatch.setattr(module, "can_view_work", _can_view)
-    monkeypatch.setattr(module, "add_work_comment", _add_comment)
 
     captured: dict[str, str] = {}
 
@@ -149,7 +157,11 @@ def test_works_post_comment_creates_notification_for_uploader(
         captured["href"] = href
         return 1
 
-    monkeypatch.setattr(module, "create_notification", fake_create_notification)
+    deps = _comic_post_deps(
+        module,
+        create_notification_func=fake_create_notification,
+        add_work_comment_func=_add_comment,
+    )
 
     request = dummy_request(
         path="/comic/work-1/comments",
@@ -157,7 +169,7 @@ def test_works_post_comment_creates_notification_for_uploader(
         form={"comment_body": "Great chapter", "chapter_number": "2"},
     )
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/comic/work-1?msg=comment-saved"

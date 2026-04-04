@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
@@ -33,6 +35,7 @@ from fanic.ingest import editor_reorder_gallery
 from fanic.ingest import editor_replace_page_image
 from fanic.ingest import editor_update_chapter
 from fanic.ingest import ingest_editor_page
+from fanic.repository.users import UserRole
 from fanic.repository.users import create_notification
 from fanic.repository.works import add_work_comment
 from fanic.repository.works import add_work_kudo
@@ -41,6 +44,41 @@ from fanic.repository.works import create_work_version_snapshot
 from fanic.repository.works import delete_work
 from fanic.repository.works import get_work
 from fanic.repository.works import update_work_metadata
+
+
+@dataclass(frozen=True, slots=True)
+class ComicPostDependencies:
+    route_tail: Callable[[RequestLike, list[str]], list[str] | None]
+    enforce_https_termination: Callable[[RequestLike, ResponseLike], bool]
+    validate_csrf: Callable[[RequestLike], bool]
+    get_work: Callable[[str], dict[str, object] | None]
+    current_user: Callable[[RequestLike], str | None]
+    role_for_user: Callable[[str | None], UserRole]
+    can_view_work: Callable[[str | None, dict[str, object]], bool]
+    delete_work: Callable[[str], bool]
+    add_work_kudo: Callable[[str, str], bool]
+    add_work_comment: Callable[..., object]
+    create_notification: Callable[..., int]
+    update_work_metadata: Callable[..., object]
+    create_work_version_snapshot: Callable[..., object]
+
+
+def _runtime_deps() -> ComicPostDependencies:
+    return ComicPostDependencies(
+        route_tail=route_tail,
+        enforce_https_termination=enforce_https_termination,
+        validate_csrf=validate_csrf,
+        get_work=get_work,
+        current_user=current_user,
+        role_for_user=role_for_user,
+        can_view_work=can_view_work,
+        delete_work=delete_work,
+        add_work_kudo=add_work_kudo,
+        add_work_comment=add_work_comment,
+        create_notification=create_notification,
+        update_work_metadata=update_work_metadata,
+        create_work_version_snapshot=create_work_version_snapshot,
+    )
 
 
 def _has_selected_file(upload: object | None) -> bool:
@@ -78,25 +116,31 @@ def _normalize_chapter_members(value: object) -> dict[str, list[str]]:
     return normalized
 
 
-def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
-    tail = route_tail(request, ["comic"])
+def main(
+    request: RequestLike,
+    response: ResponseLike,
+    deps: ComicPostDependencies | None = None,
+) -> ResponseLike:
+    deps = deps if deps is not None else _runtime_deps()
+
+    tail = deps.route_tail(request, ["comic"])
     if tail is None or len(tail) != 2:
         return text_error(response, "Not found", 404)
 
-    if not enforce_https_termination(request, response):
+    if not deps.enforce_https_termination(request, response):
         return response
 
-    if not validate_csrf(request):
+    if not deps.validate_csrf(request):
         return text_error(response, "Invalid CSRF token", 403)
 
     work_id = tail[0]
     action = tail[1]
-    work = get_work(work_id)
+    work = deps.get_work(work_id)
     if not work:
         return text_error(response, "Work not found", 404)
 
-    username = current_user(request)
-    user_role = role_for_user(username)
+    username = deps.current_user(request)
+    user_role = deps.role_for_user(username)
     is_admin = is_privileged_role(user_role)
     uploader = str(work.get("uploader_username") if work.get("uploader_username") else "")
     normalized_username = str(username if username else "")
@@ -109,21 +153,21 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         )
         if not ComicPolicy.can_delete(delete_ctx):
             return text_error(response, "Forbidden", 403)
-        _ = delete_work(work_id)
+        _ = deps.delete_work(work_id)
         return _redirect(response, "/")
 
-    if not can_view_work(username, work):
+    if not deps.can_view_work(username, work):
         return text_error(response, "Work not found", 404)
 
     if action == "kudos":
         if not username:
             return _redirect(response, f"/comic/{work_id}?msg=login-required")
-        inserted = add_work_kudo(work_id, username)
+        inserted = deps.add_work_kudo(work_id, username)
         if inserted:
             uploader_username = str(work.get("uploader_username") if work.get("uploader_username") else "")
             if uploader_username and uploader_username != username:
                 work_title = str(work.get("title", "Untitled"))
-                _ = create_notification(
+                _ = deps.create_notification(
                     uploader_username,
                     actor_username=username,
                     work_id=work_id,
@@ -157,12 +201,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         else:
             chapter_number = None
 
-        add_work_comment(work_id, username, body, chapter_number=chapter_number)
+        _ = deps.add_work_comment(work_id, username, body, chapter_number=chapter_number)
         uploader_username = str(work.get("uploader_username") if work.get("uploader_username") else "")
         if uploader_username and uploader_username != username:
             work_title = str(work.get("title", "Untitled"))
             chapter_text = f" on chapter {chapter_number}" if chapter_number is not None else ""
-            _ = create_notification(
+            _ = deps.create_notification(
                 uploader_username,
                 actor_username=username,
                 work_id=work_id,
@@ -456,13 +500,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     ):
         return _redirect(response, f"/comic/{work_id}/edit?msg=explicit-rating-locked")
 
-    update_work_metadata(
+    deps.update_work_metadata(
         work_id,
         metadata,
         editor_username=username,
         edited_by_admin=is_admin,
     )
-    _ = create_work_version_snapshot(
+    _ = deps.create_work_version_snapshot(
         work_id,
         action="metadata-edit",
         actor=username,

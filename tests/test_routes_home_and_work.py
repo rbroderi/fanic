@@ -41,6 +41,43 @@ def _owner_profile_key(username: str) -> str:
     return username
 
 
+def _patch_current_user_and_can_view(
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+    *,
+    current_user_func: Callable[..., str],
+    can_view_work_func: Callable[..., bool],
+) -> None:
+    monkeypatch.setattr(module, "current_user", current_user_func)
+    monkeypatch.setattr(module, "can_view_work", can_view_work_func)
+
+
+def _comic_get_deps(
+    module: ModuleType,
+    *,
+    get_work_func: Callable[[str], dict[str, Any] | None],
+    render_html_template_func: Callable[..., ResponseLike],
+    current_user_func: Callable[..., str | None] = _current_user_alice,
+    can_view_work_func: Callable[..., bool] = _always_true,
+    list_work_versions_func: Callable[[str, int], list[dict[str, Any]]] = lambda *_: [],
+    get_work_version_manifest_func: Callable[[str, str], dict[str, Any] | None] = lambda *_: None,
+) -> object:
+    return module.ComicGetDependencies(
+        get_work=get_work_func,
+        current_user=current_user_func,
+        can_view_work=can_view_work_func,
+        role_for_user=_role_admin,
+        get_page_files=lambda *_: {"image": "cover.jpg"},
+        list_work_comments=lambda *_: [],
+        work_kudos_count=lambda *_: 0,
+        has_user_kudoed_work=lambda *_: False,
+        load_progress=lambda *_: 1,
+        list_work_versions=list_work_versions_func,
+        get_work_version_manifest=get_work_version_manifest_func,
+        render_html_template=render_html_template_func,
+    )
+
+
 def test_home_route_renders_work_links(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -77,8 +114,12 @@ def test_home_route_renders_work_links(
             }
         ]
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    _patch_current_user_and_can_view(
+        monkeypatch,
+        module,
+        current_user_func=fake_current_user,
+        can_view_work_func=fake_can_view_work,
+    )
     monkeypatch.setattr(
         module,
         "list_works",
@@ -805,38 +846,11 @@ def test_work_detail_route_renders_work_page(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_ex_get_test",
     )
-
-    def fake_current_user(request: Any) -> str:
-        _ = request
-        return "alice"
-
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
-
-    def fake_list_work_comments(work_id: str) -> list[dict[str, Any]]:
-        _ = work_id
-        return []
-
-    def fake_work_kudos_count(work_id: str) -> int:
-        _ = work_id
-        return 0
-
-    def fake_has_user_kudoed_work(work_id: str, username: str) -> bool:
-        _ = (work_id, username)
-        return False
-
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "list_work_comments", fake_list_work_comments)
-    monkeypatch.setattr(module, "work_kudos_count", fake_work_kudos_count)
-    monkeypatch.setattr(module, "has_user_kudoed_work", fake_has_user_kudoed_work)
 
     def fake_get_work(work_id: str) -> dict[str, Any]:
         return {
@@ -850,12 +864,6 @@ def test_work_detail_route_renders_work_page(
             "uploader_username": "alice",
             "tags": [],
         }
-
-    monkeypatch.setattr(
-        module,
-        "get_work",
-        fake_get_work,
-    )
 
     rendered: dict[str, str] = {}
 
@@ -874,11 +882,15 @@ def test_work_detail_route_renders_work_page(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    deps = _comic_get_deps(
+        module,
+        get_work_func=fake_get_work,
+        render_html_template_func=fake_render_html_template,
+    )
 
     request = dummy_request(path="/comic/work-1", args={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main_with_deps(request, response, deps)
 
     assert result.status_code == 200
     assert rendered["template"] == "work.html"
@@ -978,8 +990,12 @@ def test_work_edit_route_renders_editor_with_success_status(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    _patch_current_user_and_can_view(
+        monkeypatch,
+        module,
+        current_user_func=fake_current_user,
+        can_view_work_func=fake_can_view_work,
+    )
     monkeypatch.setattr(module, "get_work", fake_get_work)
     monkeypatch.setattr(module, "list_work_page_rows", fake_list_work_page_rows)
     monkeypatch.setattr(module, "list_work_chapters", fake_list_work_chapters)
@@ -1095,8 +1111,12 @@ def test_work_edit_route_renders_explicit_rating_lock_error(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
+    _patch_current_user_and_can_view(
+        monkeypatch,
+        module,
+        current_user_func=fake_current_user,
+        can_view_work_func=fake_can_view_work,
+    )
     monkeypatch.setattr(module, "get_work", fake_get_work)
     monkeypatch.setattr(module, "list_work_page_rows", fake_list_work_page_rows)
     monkeypatch.setattr(module, "list_work_chapters", fake_list_work_chapters)
@@ -1131,20 +1151,11 @@ def test_work_versions_route_renders_selected_version(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_ex_get_test",
     )
-
-    def fake_current_user(request: Any) -> str:
-        _ = request
-        return "alice"
-
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any]:
         return {"id": work_id, "title": "Versioned Work", "uploader_username": "alice"}
@@ -1196,16 +1207,17 @@ def test_work_versions_route_renders_selected_version(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "list_work_versions", fake_list_work_versions)
-    monkeypatch.setattr(module, "get_work_version_manifest", fake_get_work_version_manifest)
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    deps = _comic_get_deps(
+        module,
+        get_work_func=fake_get_work,
+        render_html_template_func=fake_render_html_template,
+        list_work_versions_func=fake_list_work_versions,
+        get_work_version_manifest_func=fake_get_work_version_manifest,
+    )
 
     request = dummy_request(path="/comic/work-1/versions", args={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main_with_deps(request, response, deps)
 
     assert result.status_code == 200
     assert rendered["template"] == "work-versions.html"
@@ -1217,20 +1229,11 @@ def test_work_versions_route_returns_404_for_missing_version(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_missing_ex_get_test",
     )
-
-    def fake_current_user(request: Any) -> str:
-        _ = request
-        return "alice"
-
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any]:
         return {"id": work_id, "title": "Versioned Work", "uploader_username": "alice"}
@@ -1243,15 +1246,17 @@ def test_work_versions_route_returns_404_for_missing_version(
         _ = (work_id, version_id)
         return None
 
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "list_work_versions", fake_list_work_versions)
-    monkeypatch.setattr(module, "get_work_version_manifest", fake_get_work_version_manifest)
+    deps = _comic_get_deps(
+        module,
+        get_work_func=fake_get_work,
+        render_html_template_func=lambda _request, response, *_args, **_kwargs: response,
+        list_work_versions_func=fake_list_work_versions,
+        get_work_version_manifest_func=fake_get_work_version_manifest,
+    )
 
     request = dummy_request(path="/comic/work-1/versions/missing", args={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main_with_deps(request, response, deps)
 
     assert result.status_code == 404
     assert b"Version not found" in result.data
@@ -1303,20 +1308,11 @@ def test_work_versions_route_renders_empty_versions_message(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         "fanicsite_works_versions_empty_test",
     )
-
-    def fake_current_user(request: Any) -> str:
-        _ = request
-        return "alice"
-
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any]:
         return {
@@ -1328,11 +1324,6 @@ def test_work_versions_route_renders_empty_versions_message(
     def fake_list_work_versions(work_id: str, limit: int = 50) -> list[dict[str, Any]]:
         _ = (work_id, limit)
         return []
-
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "list_work_versions", fake_list_work_versions)
 
     captured: dict[str, str] = {}
 
@@ -1349,11 +1340,16 @@ def test_work_versions_route_renders_empty_versions_message(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    deps = _comic_get_deps(
+        module,
+        get_work_func=fake_get_work,
+        render_html_template_func=fake_render_html_template,
+        list_work_versions_func=fake_list_work_versions,
+    )
 
     request = dummy_request(path="/comic/work-1/versions", args={})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main_with_deps(request, response, deps)
 
     assert result.status_code == 200
     assert captured["status"] == "No versions recorded yet."
@@ -1376,20 +1372,11 @@ def test_work_detail_status_messages(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.get.py",
         f"fanicsite_work_status_msg_{msg}",
     )
-
-    def fake_current_user(request: Any) -> str:
-        _ = request
-        return "alice"
-
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any]:
         return {
@@ -1403,25 +1390,6 @@ def test_work_detail_status_messages(
             "uploader_username": "alice",
             "tags": [],
         }
-
-    def fake_list_work_comments(work_id: str) -> list[dict[str, Any]]:
-        _ = work_id
-        return []
-
-    def fake_work_kudos_count(work_id: str) -> int:
-        _ = work_id
-        return 0
-
-    def fake_has_user_kudoed_work(work_id: str, username: str) -> bool:
-        _ = (work_id, username)
-        return False
-
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "list_work_comments", fake_list_work_comments)
-    monkeypatch.setattr(module, "work_kudos_count", fake_work_kudos_count)
-    monkeypatch.setattr(module, "has_user_kudoed_work", fake_has_user_kudoed_work)
 
     captured: dict[str, str] = {}
 
@@ -1439,11 +1407,15 @@ def test_work_detail_status_messages(
         response.set_data("ok")
         return response
 
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+    deps = _comic_get_deps(
+        module,
+        get_work_func=fake_get_work,
+        render_html_template_func=fake_render_html_template,
+    )
 
     request = dummy_request(path="/comic/work-1", args={"msg": msg})
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main_with_deps(request, response, deps)
 
     assert result.status_code == 200
     assert captured["status_class"] == expected_class

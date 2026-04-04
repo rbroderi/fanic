@@ -5,8 +5,6 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 
-import pytest
-
 
 class ResponseLike(Protocol):
     status_code: int
@@ -16,34 +14,132 @@ class ResponseLike(Protocol):
     def set_data(self, data: str | bytes) -> None: ...
 
 
+def _always_https(req: Any, res: Any) -> bool:
+    _ = (req, res)
+    return True
+
+
+def _always_valid_csrf(req: Any) -> bool:
+    _ = req
+    return True
+
+
+def _role_user(_: str | None) -> str:
+    return "user"
+
+
+def _role_admin(_: str | None) -> str:
+    return "admin"
+
+
+def _can_view_work(_username: str | None, _work: dict[str, object]) -> bool:
+    return True
+
+
+def _delete_work_ok(_work_id: str) -> bool:
+    return True
+
+
+def _add_work_kudo(_work_id: str, _username: str) -> bool:
+    return True
+
+
+def _add_work_comment(
+    _work_id: str,
+    _username: str,
+    _body: str,
+    chapter_number: int | None = None,
+) -> object:
+    _ = chapter_number
+    return {"id": "comment-1"}
+
+
+def _create_notification(
+    _username: str,
+    *,
+    actor_username: str,
+    work_id: str | None,
+    kind: str,
+    message: str,
+    href: str,
+) -> int:
+    _ = (actor_username, work_id, kind, message, href)
+    return 1
+
+
+def _update_work_metadata(
+    _work_id: str,
+    _metadata: dict[str, object],
+    *,
+    editor_username: str,
+    edited_by_admin: bool,
+) -> None:
+    _ = (editor_username, edited_by_admin)
+
+
+def _create_work_version_snapshot(
+    _work_id: str,
+    *,
+    action: str,
+    actor: str,
+    details: dict[str, object],
+) -> object:
+    _ = (action, actor, details)
+    return {}
+
+
+def _comic_post_deps(
+    module: ModuleType,
+    *,
+    get_work_func: Callable[[str], dict[str, object] | None],
+    current_user_func: Callable[[Any], str | None],
+    role_for_user_func: Callable[[str | None], str],
+    can_view_work_func: Callable[[str | None, dict[str, object]], bool] = _can_view_work,
+    delete_work_func: Callable[[str], bool] = _delete_work_ok,
+    update_work_metadata_func: Callable[..., object] = _update_work_metadata,
+    create_work_version_snapshot_func: Callable[..., object] = _create_work_version_snapshot,
+) -> object:
+    return module.ComicPostDependencies(
+        route_tail=module.route_tail,
+        enforce_https_termination=_always_https,
+        validate_csrf=_always_valid_csrf,
+        get_work=get_work_func,
+        current_user=current_user_func,
+        role_for_user=role_for_user_func,
+        can_view_work=can_view_work_func,
+        delete_work=delete_work_func,
+        add_work_kudo=_add_work_kudo,
+        add_work_comment=_add_work_comment,
+        create_notification=_create_notification,
+        update_work_metadata=update_work_metadata_func,
+        create_work_version_snapshot=create_work_version_snapshot_func,
+    )
+
+
 def test_comic_delete_forbidden_for_non_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_comic_ex_post_delete_forbidden_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(
+    deps = _comic_post_deps(
         module,
-        "get_work",
-        lambda *_: {
+        get_work_func=lambda *_: {
             "id": "work-1",
             "uploader_username": "alice",
             "rating": "General Audiences",
         },
+        current_user_func=lambda *_: "alice",
+        role_for_user_func=_role_user,
     )
-    monkeypatch.setattr(module, "current_user", lambda *_: "alice")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "user")
 
     request = dummy_request(path="/comic/work-1/delete", method="POST")
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 403
 
@@ -52,31 +148,27 @@ def test_comic_delete_allows_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_comic_ex_post_delete_admin_test",
     )
 
-    monkeypatch.setattr(module, "enforce_https_termination", lambda *_: True)
-    monkeypatch.setattr(module, "validate_csrf", lambda *_: True)
-    monkeypatch.setattr(
+    deps = _comic_post_deps(
         module,
-        "get_work",
-        lambda *_: {
+        get_work_func=lambda *_: {
             "id": "work-1",
             "uploader_username": "alice",
             "rating": "General Audiences",
         },
+        current_user_func=lambda *_: "admin",
+        role_for_user_func=_role_admin,
+        delete_work_func=_delete_work_ok,
     )
-    monkeypatch.setattr(module, "current_user", lambda *_: "admin")
-    monkeypatch.setattr(module, "role_for_user", lambda *_: "admin")
-    monkeypatch.setattr(module, "delete_work", lambda *_: True)
 
     request = dummy_request(path="/comic/work-1/delete", method="POST")
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/"
@@ -86,19 +178,11 @@ def test_non_admin_cannot_lower_explicit_rating(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_edit_post_explicit_lock_test",
     )
-
-    def fake_enforce_https_termination(*_args: Any) -> bool:
-        return True
-
-    def fake_validate_csrf(request: Any) -> bool:
-        _ = request
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any] | None:
         _ = work_id
@@ -144,16 +228,14 @@ def test_non_admin_cannot_lower_explicit_rating(
         called["snapshotted"] = True
         return {}
 
-    monkeypatch.setattr(module, "enforce_https_termination", fake_enforce_https_termination)
-    monkeypatch.setattr(module, "validate_csrf", fake_validate_csrf)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "update_work_metadata", fake_update_work_metadata)
-    monkeypatch.setattr(
+    deps = _comic_post_deps(
         module,
-        "create_work_version_snapshot",
-        fake_create_work_version_snapshot,
+        get_work_func=fake_get_work,
+        current_user_func=fake_current_user,
+        role_for_user_func=_role_user,
+        can_view_work_func=fake_can_view_work,
+        update_work_metadata_func=fake_update_work_metadata,
+        create_work_version_snapshot_func=fake_create_work_version_snapshot,
     )
 
     request = dummy_request(
@@ -176,7 +258,7 @@ def test_non_admin_cannot_lower_explicit_rating(
         },
     )
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/comic/work-1/edit?msg=explicit-rating-locked"
@@ -188,19 +270,11 @@ def test_admin_can_lower_explicit_rating(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
         "fanicsite_works_edit_post_explicit_admin_test",
     )
-
-    def fake_enforce_https_termination(*_args: Any) -> bool:
-        return True
-
-    def fake_validate_csrf(request: Any) -> bool:
-        _ = request
-        return True
 
     def fake_get_work(work_id: str) -> dict[str, Any] | None:
         _ = work_id
@@ -250,17 +324,14 @@ def test_admin_can_lower_explicit_rating(
         captured["snapshot_details"] = details
         return {}
 
-    monkeypatch.setattr(module, "enforce_https_termination", fake_enforce_https_termination)
-    monkeypatch.setattr(module, "validate_csrf", fake_validate_csrf)
-    monkeypatch.setattr(module, "get_work", fake_get_work)
-    monkeypatch.setattr(module, "current_user", fake_current_user)
-    monkeypatch.setattr(module, "role_for_user", lambda username: "admin")
-    monkeypatch.setattr(module, "can_view_work", fake_can_view_work)
-    monkeypatch.setattr(module, "update_work_metadata", fake_update_work_metadata)
-    monkeypatch.setattr(
+    deps = _comic_post_deps(
         module,
-        "create_work_version_snapshot",
-        fake_create_work_version_snapshot,
+        get_work_func=fake_get_work,
+        current_user_func=fake_current_user,
+        role_for_user_func=_role_admin,
+        can_view_work_func=fake_can_view_work,
+        update_work_metadata_func=fake_update_work_metadata,
+        create_work_version_snapshot_func=fake_create_work_version_snapshot,
     )
 
     request = dummy_request(
@@ -283,7 +354,7 @@ def test_admin_can_lower_explicit_rating(
         },
     )
     response = dummy_response()
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/comic/work-1/edit?msg=saved"

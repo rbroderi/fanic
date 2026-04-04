@@ -4,9 +4,12 @@ from urllib.parse import quote
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.fanicsite.user.notifications_helpers import (
+    notification_status,
+)
 from fanic.repository.users import NotificationRow
 from fanic.repository.users import list_user_notifications
 
@@ -72,27 +75,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     rows = list_user_notifications(username, limit=200)
     unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
 
-    status_msg = request.args.get("msg", "").strip()
-    status_text = ""
-    status_class = ""
-    status_hidden = "hidden"
-    if status_msg == "updated":
-        status_text = "Notification updated."
-        status_class = "success"
-        status_hidden = ""
-    elif status_msg == "cleared":
-        status_text = "All notifications marked as read."
-        status_class = "success"
-        status_hidden = ""
+    status = notification_status(request.args.get("msg", ""))
 
     return render_html_template(
         request,
         response,
         "notification.html",
         {
-            "__NOTIFICATION_STATUS__": status_text,
-            "__NOTIFICATION_STATUS_CLASS__": status_class,
-            "__NOTIFICATION_STATUS_HIDDEN_ATTR__": status_hidden,
+            "__NOTIFICATION_STATUS__": status.text,
+            "__NOTIFICATION_STATUS_CLASS__": status.css_class,
+            "__NOTIFICATION_STATUS_HIDDEN_ATTR__": status.hidden_attr,
             "__NOTIFICATION_UNREAD_COUNT__": escape(str(unread_count)),
             "__NOTIFICATION_MARK_ALL_HIDDEN_ATTR__": "" if rows else "hidden",
             "__NOTIFICATION_ITEMS_HTML__": _notifications_html(rows),

@@ -53,11 +53,149 @@ class ComicIngestSessionStartStub:
     queue_position: int
 
 
+def _always_https(_request: Any, _response: Any) -> bool:
+    return True
+
+
+def _always_valid_csrf(_request: Any) -> bool:
+    return True
+
+
+def _current_user_alice(_request: Any) -> str:
+    return "alice"
+
+
+def _validate_cbz_upload_policy_ok(_upload: object) -> str:
+    return ""
+
+
+def _validate_saved_upload_size_ok(_path: Path, _max_bytes: int, _label: str) -> str:
+    return ""
+
+
+def _validate_page_upload_policy_ok(_upload: object) -> str:
+    return ""
+
+
+def _ingest_editor_page_stub(**_kwargs: object) -> dict[str, object]:
+    return {"work_id": "editor-work-1"}
+
+
+def _editor_replace_page_image_stub(**_kwargs: object) -> dict[str, object]:
+    return {"ok": True}
+
+
+def _editor_delete_page_stub(**_kwargs: object) -> dict[str, object]:
+    return {"ok": True}
+
+
+def _editor_move_page_stub(**_kwargs: object) -> dict[str, object]:
+    return {"ok": True}
+
+
+def _editor_reorder_gallery_stub(**_kwargs: object) -> dict[str, object]:
+    return {"ok": True}
+
+
+def _editor_add_chapter_stub(**_kwargs: object) -> dict[str, object]:
+    return {"ok": True}
+
+
+def _editor_delete_chapter_stub(**_kwargs: object) -> bool:
+    return True
+
+
+def _editor_update_chapter_stub(**_kwargs: object) -> bool:
+    return True
+
+
+def _get_work_stub(_work_id: str) -> dict[str, object] | None:
+    return None
+
+
+def _list_work_page_rows_stub(_work_id: str) -> list[object]:
+    return []
+
+
+def _list_work_chapters_stub(_work_id: str) -> list[object]:
+    return []
+
+
+def _get_explicit_threshold_stub() -> float:
+    return 0.5
+
+
+def _admin_aware_detail(
+    _request: Any,
+    *,
+    public_detail: str,
+    exc: BaseException,
+) -> str:
+    _ = exc
+    return public_detail
+
+
+def _no_op_log_exception(
+    _request: Any,
+    *,
+    code: str,
+    exc: BaseException,
+    message: str,
+) -> None:
+    _ = (code, exc, message)
+
+
+def _comic_upload_post_deps(
+    module: ModuleType,
+    *,
+    begin_upload_session_func: Callable[[str], UploadSessionStartStub],
+    begin_comic_ingest_session_func: Callable[..., ComicIngestSessionStartStub],
+    end_upload_session_func: Callable[[str], None],
+    end_comic_ingest_session_func: Callable[[], None],
+    ingest_cbz_func: Callable[..., dict[str, object]],
+    set_progress_func: Callable[..., None],
+    render_upload_page_func: Callable[..., ResponseLike],
+    editor_add_chapter_func: Callable[..., object] = _editor_add_chapter_stub,
+) -> object:
+    return module.ComicUploadPostDependencies(
+        request_id=module.request_id,
+        text_error=module.text_error,
+        enforce_https_termination=_always_https,
+        validate_csrf=_always_valid_csrf,
+        current_user=_current_user_alice,
+        render_upload_page=render_upload_page_func,
+        validate_cbz_upload_policy=_validate_cbz_upload_policy_ok,
+        begin_upload_session=begin_upload_session_func,
+        end_upload_session=end_upload_session_func,
+        validate_saved_upload_size=_validate_saved_upload_size_ok,
+        validate_page_upload_policy=_validate_page_upload_policy_ok,
+        set_progress=set_progress_func,
+        begin_comic_ingest_session=begin_comic_ingest_session_func,
+        end_comic_ingest_session=end_comic_ingest_session_func,
+        ingest_cbz=ingest_cbz_func,
+        ingest_editor_page=_ingest_editor_page_stub,
+        editor_replace_page_image=_editor_replace_page_image_stub,
+        editor_delete_page=_editor_delete_page_stub,
+        editor_move_page=_editor_move_page_stub,
+        editor_reorder_gallery=_editor_reorder_gallery_stub,
+        editor_add_chapter=editor_add_chapter_func,
+        editor_delete_chapter=_editor_delete_chapter_stub,
+        editor_update_chapter=_editor_update_chapter_stub,
+        get_work=_get_work_stub,
+        list_work_page_rows=_list_work_page_rows_stub,
+        list_work_chapters=_list_work_chapters_stub,
+        get_explicit_threshold=_get_explicit_threshold_stub,
+        delete_tree=module.delete_tree,
+        thread_factory=ImmediateThread,
+        log_exception=_no_op_log_exception,
+        admin_aware_detail=_admin_aware_detail,
+    )
+
+
 def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
@@ -68,21 +206,6 @@ def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     render_calls: list[dict[str, object]] = []
     ended_upload_users: list[str] = []
     ended_comic_sessions: list[bool] = []
-
-    def enforce_https_termination_stub(_request: Any, _response: Any) -> bool:
-        return True
-
-    def validate_csrf_stub(_request: Any) -> bool:
-        return True
-
-    def current_user_stub(_request: Any) -> str:
-        return "alice"
-
-    def validate_cbz_upload_policy_stub(_upload: Any) -> str:
-        return ""
-
-    def validate_saved_upload_size_stub(_path: Any, _max_bytes: Any, _label: Any) -> str:
-        return ""
 
     def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
         return UploadSessionStartStub(True, "", 0)
@@ -115,19 +238,16 @@ def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     def fake_set_progress(token: str, **kwargs: object) -> None:
         progress_events.append({"token": token, **kwargs})
 
-    monkeypatch.setattr(module, "enforce_https_termination", enforce_https_termination_stub)
-    monkeypatch.setattr(module, "validate_csrf", validate_csrf_stub)
-    monkeypatch.setattr(module, "current_user", current_user_stub)
-    monkeypatch.setattr(module, "validate_cbz_upload_policy", validate_cbz_upload_policy_stub)
-    monkeypatch.setattr(module, "validate_saved_upload_size", validate_saved_upload_size_stub)
-    monkeypatch.setattr(module, "begin_upload_session", begin_upload_session_stub)
-    monkeypatch.setattr(module, "begin_comic_ingest_session", begin_comic_ingest_session_stub)
-    monkeypatch.setattr(module, "end_upload_session", end_upload_session_stub)
-    monkeypatch.setattr(module, "end_comic_ingest_session", end_comic_ingest_session_stub)
-    monkeypatch.setattr(module, "ingest_cbz", ingest_cbz_stub)
-    monkeypatch.setattr(module, "render_upload_page", fake_render_upload_page)
-    monkeypatch.setattr(module, "set_progress", fake_set_progress)
-    monkeypatch.setattr(module.threading, "Thread", ImmediateThread)
+    deps = _comic_upload_post_deps(
+        module,
+        begin_upload_session_func=begin_upload_session_stub,
+        begin_comic_ingest_session_func=begin_comic_ingest_session_stub,
+        end_upload_session_func=end_upload_session_stub,
+        end_comic_ingest_session_func=end_comic_ingest_session_stub,
+        ingest_cbz_func=ingest_cbz_stub,
+        set_progress_func=fake_set_progress,
+        render_upload_page_func=fake_render_upload_page,
+    )
 
     request = dummy_request(
         path="/comic/upload",
@@ -144,7 +264,7 @@ def test_comic_upload_post_runs_async_worker_and_sets_done_progress(
     )
     response = dummy_response()
 
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 200
     assert render_calls
@@ -168,7 +288,6 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
-    monkeypatch: Any,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
@@ -178,21 +297,6 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     progress_events: list[dict[str, object]] = []
     ended_upload_users: list[str] = []
     ended_comic_sessions: list[bool] = []
-
-    def enforce_https_termination_stub(_request: Any, _response: Any) -> bool:
-        return True
-
-    def validate_csrf_stub(_request: Any) -> bool:
-        return True
-
-    def current_user_stub(_request: Any) -> str:
-        return "alice"
-
-    def validate_cbz_upload_policy_stub(_upload: Any) -> str:
-        return ""
-
-    def validate_saved_upload_size_stub(_path: Any, _max_bytes: Any, _label: Any) -> str:
-        return ""
 
     def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
         return UploadSessionStartStub(True, "", 0)
@@ -216,19 +320,16 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     def render_upload_page_stub(_request: Any, response: ResponseLike, **_kwargs: object) -> ResponseLike:
         return response
 
-    monkeypatch.setattr(module, "enforce_https_termination", enforce_https_termination_stub)
-    monkeypatch.setattr(module, "validate_csrf", validate_csrf_stub)
-    monkeypatch.setattr(module, "current_user", current_user_stub)
-    monkeypatch.setattr(module, "validate_cbz_upload_policy", validate_cbz_upload_policy_stub)
-    monkeypatch.setattr(module, "validate_saved_upload_size", validate_saved_upload_size_stub)
-    monkeypatch.setattr(module, "begin_upload_session", begin_upload_session_stub)
-    monkeypatch.setattr(module, "begin_comic_ingest_session", begin_comic_ingest_session_stub)
-    monkeypatch.setattr(module, "end_upload_session", end_upload_session_stub)
-    monkeypatch.setattr(module, "end_comic_ingest_session", end_comic_ingest_session_stub)
-    monkeypatch.setattr(module, "ingest_cbz", ingest_cbz_stub)
-    monkeypatch.setattr(module, "set_progress", set_progress_stub)
-    monkeypatch.setattr(module, "render_upload_page", render_upload_page_stub)
-    monkeypatch.setattr(module.threading, "Thread", ImmediateThread)
+    deps = _comic_upload_post_deps(
+        module,
+        begin_upload_session_func=begin_upload_session_stub,
+        begin_comic_ingest_session_func=begin_comic_ingest_session_stub,
+        end_upload_session_func=end_upload_session_stub,
+        end_comic_ingest_session_func=end_comic_ingest_session_stub,
+        ingest_cbz_func=ingest_cbz_stub,
+        set_progress_func=set_progress_stub,
+        render_upload_page_func=render_upload_page_stub,
+    )
 
     request = dummy_request(
         path="/comic/upload",
@@ -244,7 +345,7 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     )
     response = dummy_response()
 
-    result = module.main(request, response)
+    result = module.main(request, response, deps=deps)
 
     assert result.status_code == 200
     assert ended_upload_users == ["alice"]
@@ -254,3 +355,91 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     assert throttled_events
     assert throttled_events[-1].get("done") is True
     assert throttled_events[-1].get("ok") is False
+
+
+def test_comic_upload_post_editor_add_chapter_uses_injected_dependency(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
+        "fanicsite_comic_upload_ex_post_editor_add_chapter_deps_test",
+    )
+
+    captured: dict[str, object] = {}
+    render_calls: list[dict[str, object]] = []
+
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
+
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
+        _ = on_queued
+        return ComicIngestSessionStartStub(True, 0, 0)
+
+    def end_upload_session_stub(_username: str) -> None:
+        return None
+
+    def end_comic_ingest_session_stub() -> None:
+        return None
+
+    def ingest_cbz_stub(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"work_id": "unused"}
+
+    def set_progress_stub(_token: str, **_kwargs: object) -> None:
+        return None
+
+    def editor_add_chapter_stub(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"id": "chapter-9", "ok": True}
+
+    def render_upload_page_stub(
+        _request: Any,
+        response: ResponseLike,
+        **kwargs: object,
+    ) -> ResponseLike:
+        render_calls.append(dict(kwargs))
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    deps = _comic_upload_post_deps(
+        module,
+        begin_upload_session_func=begin_upload_session_stub,
+        begin_comic_ingest_session_func=begin_comic_ingest_session_stub,
+        end_upload_session_func=end_upload_session_stub,
+        end_comic_ingest_session_func=end_comic_ingest_session_stub,
+        ingest_cbz_func=ingest_cbz_stub,
+        set_progress_func=set_progress_stub,
+        render_upload_page_func=render_upload_page_stub,
+        editor_add_chapter_func=editor_add_chapter_stub,
+    )
+
+    request = dummy_request(
+        path="/comic/upload",
+        method="POST",
+        form={
+            "action": "editor-add-chapter",
+            "agree_terms": "on",
+            "editor_work_id": "work-42",
+            "editor_title": "Draft",
+            "editor_summary": "Summary",
+            "chapter_title": "Act One",
+            "chapter_start_page": "1",
+            "chapter_end_page": "3",
+        },
+    )
+    response = dummy_response()
+
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 200
+    assert captured["work_id"] == "work-42"
+    assert captured["title"] == "Act One"
+    assert captured["start_page"] == 1
+    assert captured["end_page"] == 3
+    assert captured["uploader_username"] == "alice"
+    assert render_calls
+    assert render_calls[-1]["upload_status_kind"] == "success"
+    assert render_calls[-1]["upload_status_text"] == "Chapter added."

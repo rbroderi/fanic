@@ -1,16 +1,24 @@
 import sqlite3
-import tomllib
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.rate_limit import check_post_rate_limit
-from fanic.cylinder_sites.common.session import current_user
-from fanic.cylinder_sites.common.security import enforce_https_termination
+from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import enforce_https_termination
 from fanic.cylinder_sites.common.security import validate_csrf
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.fanicsite.user.profile_post_helpers import (
+    parse_display_name_form,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_post_helpers import (
+    parse_preference_form,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_post_helpers import parse_theme_enabled
+from fanic.cylinder_sites.fanicsite.user.profile_post_helpers import (
+    profile_action_from_form,
+)
+from fanic.cylinder_sites.fanicsite.user.profile_post_helpers import read_uploaded_theme
 from fanic.repository.users import set_user_prefers_explicit
 from fanic.repository.users import set_user_prefers_mature
 from fanic.repository.users import set_user_theme_preference
@@ -36,17 +44,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if not username:
         return text_error(response, "Forbidden", 403)
 
-    profile_action = request.form.get("profile_action", "preferences").strip()
+    profile_action = profile_action_from_form(request.form)
     if profile_action == "display-name":
-        display_name = request.form.get("display_name", "").strip()
-        is_over_18_raw = request.form.get("is_over_18", "").strip().lower()
-        if is_over_18_raw not in {"yes", "no"}:
+        display_name_form = parse_display_name_form(request.form)
+        if display_name_form is None:
             return _redirect(response, "/user/profile?msg=display-name-invalid")
         try:
             updated = update_user_profile_details(
                 username,
-                display_name=display_name,
-                is_over_18=is_over_18_raw == "yes",
+                display_name=display_name_form.display_name,
+                is_over_18=display_name_form.is_over_18,
             )
         except sqlite3.IntegrityError:
             return _redirect(response, "/user/profile?msg=display-name-taken")
@@ -59,31 +66,19 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return _redirect(response, "/user/profile?msg=display-name-saved")
 
     if profile_action == "theme":
-        custom_theme_enabled = request.form.get("custom_theme_enabled", "") == "on"
-        theme_upload = request.files.get("theme_toml")
-        uploaded_toml_text: str | None = None
-
-        if theme_upload is not None and theme_upload.filename:
-            try:
-                with TemporaryDirectory() as temp_dir:
-                    upload_path = Path(temp_dir) / "theme.toml"
-                    theme_upload.save(upload_path)
-                    uploaded_toml_text = upload_path.read_text(encoding="utf-8")
-                _ = tomllib.loads(uploaded_toml_text)
-            except (OSError, UnicodeDecodeError):
-                return _redirect(response, "/user/profile?msg=theme_upload_error")
-            except tomllib.TOMLDecodeError:
-                return _redirect(response, "/user/profile?msg=theme_parse_error")
+        custom_theme_enabled = parse_theme_enabled(request.form)
+        upload_result = read_uploaded_theme(request.files.get("theme_toml"))
+        if upload_result.error_code:
+            return _redirect(response, f"/user/profile?msg={upload_result.error_code}")
 
         set_user_theme_preference(
             username,
             enabled=custom_theme_enabled,
-            toml_text=uploaded_toml_text,
+            toml_text=upload_result.toml_text,
         )
         return _redirect(response, "/user/profile?msg=theme_saved")
 
-    view_mature = request.form.get("view_mature_rated", "") == "on"
-    view_explicit = request.form.get("view_explicit_rated", "") == "on"
-    set_user_prefers_mature(username, view_mature)
-    set_user_prefers_explicit(username, view_explicit)
+    preference_form = parse_preference_form(request.form)
+    set_user_prefers_mature(username, preference_form.view_mature)
+    set_user_prefers_explicit(username, preference_form.view_explicit)
     return _redirect(response, "/user/profile?msg=saved")

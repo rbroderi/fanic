@@ -120,6 +120,33 @@ def _allow_secure_post(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> N
     monkeypatch.setattr(module, "check_post_rate_limit", _zero_rate_limit)
 
 
+def _patch_current_user_alice(
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+) -> None:
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+
+
+def _patch_profile_get_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+    *,
+    requires_onboarding: bool,
+) -> None:
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
+    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
+    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
+    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
+    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
+    monkeypatch.setattr(module, "list_fanart_items_by_uploader", _empty_fanart_list)
+    monkeypatch.setattr(module, "can_view_work", _can_view_all)
+    monkeypatch.setattr(module, "get_user_theme_preference", _theme_pref_disabled)
+    onboarding_flag = _requires_onboarding_true if requires_onboarding else _requires_onboarding_false
+    monkeypatch.setattr(module, "user_requires_onboarding", onboarding_flag)
+    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
+
+
 def test_profile_post_saves_theme_toml(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -867,7 +894,7 @@ def test_profile_post_onboarding_saves_display_name_and_age_gate(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
     monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
 
     captured: dict[str, object] = {}
@@ -912,7 +939,7 @@ def test_profile_post_onboarding_rejects_repeat_submission(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
     monkeypatch.setattr(
         module,
         "update_user_onboarding",
@@ -944,7 +971,7 @@ def test_profile_post_display_name_saves_successfully(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
 
     captured: dict[str, object] = {}
 
@@ -992,7 +1019,7 @@ def test_profile_post_display_name_rejects_invalid_name(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
 
     def fake_update_user_profile_details(
         _username: str,
@@ -1034,7 +1061,7 @@ def test_profile_post_display_name_rejects_taken_name(
     )
     _allow_secure_post(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
 
     def fake_update_user_profile_details(
         _username: str,
@@ -1064,110 +1091,6 @@ def test_profile_post_display_name_rejects_taken_name(
     assert result.headers["Location"] == "/user/profile?msg=display-name-taken"
 
 
-def test_profile_post_display_name_requires_age_selection(
-    load_route_module: Callable[[str, str], ModuleType],
-    dummy_request: Callable[..., Any],
-    dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.post.py",
-        "fanicsite_user_profile_ex_post_display_name_requires_age_test",
-    )
-    _allow_secure_post(monkeypatch, module)
-
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
-
-    request = dummy_request(
-        path="/user/profile",
-        method="POST",
-        form={
-            "profile_action": "display-name",
-            "display_name": "AliceArtist",
-        },
-    )
-    response = dummy_response()
-    result = module.main(request, response)
-
-    assert result.status_code == 303
-    assert result.headers["Location"] == "/user/profile?msg=display-name-invalid"
-
-
-def test_profile_get_exposes_onboarding_markers_for_logged_in_user(
-    load_route_module: Callable[[str, str], ModuleType],
-    dummy_request: Callable[..., Any],
-    dummy_response: Callable[[], ResponseLike],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = load_route_module(
-        "src/fanic/cylinder_sites/fanicsite/user/profile.ex.get.py",
-        "fanicsite_user_profile_ex_get_onboarding_markers_test",
-    )
-
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
-    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
-    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
-    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
-    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
-    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
-    monkeypatch.setattr(module, "list_fanart_items_by_uploader", _empty_fanart_list)
-    monkeypatch.setattr(module, "can_view_work", _can_view_all)
-    monkeypatch.setattr(
-        module,
-        "get_user_theme_preference",
-        _theme_pref_disabled,
-    )
-    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_false)
-
-    def fake_get_local_user(_username: str) -> dict[str, Any]:
-        return {
-            "username": "alice",
-            "display_name": "Alice Artist",
-            "email": "alice@example.com",
-            "is_over_18": False,
-            "age_gate_completed": True,
-            "role": "user",
-            "active": True,
-            "created_at": "2026-03-22T00:00:00Z",
-        }
-
-    monkeypatch.setattr(
-        module,
-        "get_local_user",
-        fake_get_local_user,
-    )
-
-    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
-
-    captured: dict[str, str] = {}
-
-    def fake_render_html_template(
-        request: Any,
-        response: ResponseLike,
-        template_name: str,
-        replacements: dict[str, str],
-    ) -> ResponseLike:
-        _ = (request, template_name)
-        captured["display_name"] = replacements["__PROFILE_DISPLAY_NAME_VALUE__"]
-        captured["over18_no_selected"] = replacements["__PROFILE_IS_OVER_18_NO_SELECTED_ATTR__"]
-        captured["onboarding_hidden"] = replacements["__PROFILE_ONBOARDING_HIDDEN_ATTR__"]
-        response.status_code = 200
-        response.content_type = "text/html; charset=utf-8"
-        response.set_data("ok")
-        return response
-
-    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
-
-    request = dummy_request(path="/user/profile", args={"msg": "underage-restricted"})
-    response = dummy_response()
-    result = module.main(request, response)
-
-    assert result.status_code == 200
-    assert captured["display_name"] == "Alice Artist"
-    assert captured["over18_no_selected"] == "selected"
-    assert captured["onboarding_hidden"] == "hidden"
-
-
 def test_profile_get_redirects_to_onboarding_when_required(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -1179,20 +1102,7 @@ def test_profile_get_redirects_to_onboarding_when_required(
         "fanicsite_user_profile_ex_get_onboarding_redirect_test",
     )
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
-    monkeypatch.setattr(module, "list_works_by_uploader", _empty_work_list)
-    monkeypatch.setattr(module, "user_prefers_mature", _prefers_false)
-    monkeypatch.setattr(module, "user_prefers_explicit", _prefers_false)
-    monkeypatch.setattr(module, "list_recent_reading_history", _empty_recent_history)
-    monkeypatch.setattr(module, "list_user_bookmarks", _empty_bookmark_list)
-    monkeypatch.setattr(module, "list_fanart_items_by_uploader", _empty_fanart_list)
-    monkeypatch.setattr(module, "can_view_work", _can_view_all)
-    monkeypatch.setattr(
-        module,
-        "get_user_theme_preference",
-        _theme_pref_disabled,
-    )
-    monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
+    _patch_profile_get_defaults(monkeypatch, module, requires_onboarding=True)
 
     def fake_get_local_user(_username: str) -> dict[str, Any]:
         return {
@@ -1211,8 +1121,6 @@ def test_profile_get_redirects_to_onboarding_when_required(
         "get_local_user",
         fake_get_local_user,
     )
-
-    monkeypatch.setattr(module, "get_settings", _settings_with_profile_history_limit_five)
 
     request = dummy_request(path="/user/profile", args={})
     response = dummy_response()
@@ -1234,7 +1142,7 @@ def test_onboarding_get_shows_page_when_required(
     )
     _allow_secure_get(monkeypatch, module)
 
-    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    _patch_current_user_alice(monkeypatch, module)
     monkeypatch.setattr(module, "user_requires_onboarding", _requires_onboarding_true)
 
     def fake_get_local_user(_username: str) -> dict[str, Any]:

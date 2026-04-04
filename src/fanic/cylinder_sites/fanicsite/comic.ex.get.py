@@ -1,3 +1,7 @@
+from collections.abc import Callable
+from collections.abc import Mapping
+from collections.abc import Sequence
+from dataclasses import dataclass
 from html import escape
 from typing import TYPE_CHECKING
 from typing import Any
@@ -12,13 +16,13 @@ else:
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import media_url
 from fanic.cylinder_sites.common.responses import rating_badge_html
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.editor_gallery import render_editor_chapters_html
 from fanic.cylinder_sites.editor_gallery import render_editor_page_gallery_html
 from fanic.cylinder_sites.editor_metadata import RATING_CHOICES
@@ -61,7 +65,44 @@ from fanic.repository.works import load_progress
 from fanic.repository.works import work_kudos_count
 
 
-def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+@dataclass(frozen=True, slots=True)
+class ComicGetDependencies:
+    get_work: Callable[[str], dict[str, Any] | None]
+    current_user: Callable[[RequestLike], str | None]
+    can_view_work: Callable[[str | None, dict[str, Any]], bool]
+    role_for_user: Callable[[str | None], str]
+    get_page_files: Callable[[str, int], Mapping[str, object] | None]
+    list_work_comments: Callable[[str], Sequence[object]]
+    work_kudos_count: Callable[[str], int]
+    has_user_kudoed_work: Callable[[str, str | None], bool]
+    load_progress: Callable[[str, str], int]
+    list_work_versions: Callable[[str, int], Sequence[Mapping[str, object]]]
+    get_work_version_manifest: Callable[[str, str], dict[str, object] | None]
+    render_html_template: Callable[..., ResponseLike]
+
+
+def _runtime_deps() -> ComicGetDependencies:
+    return ComicGetDependencies(
+        get_work=get_work,
+        current_user=current_user,
+        can_view_work=can_view_work,
+        role_for_user=role_for_user,
+        get_page_files=get_page_files,
+        list_work_comments=list_work_comments,
+        work_kudos_count=work_kudos_count,
+        has_user_kudoed_work=has_user_kudoed_work,
+        load_progress=load_progress,
+        list_work_versions=list_work_versions,
+        get_work_version_manifest=get_work_version_manifest,
+        render_html_template=render_html_template,
+    )
+
+
+def _main_with_deps(
+    request: RequestLike,
+    response: ResponseLike,
+    deps: ComicGetDependencies,
+) -> ResponseLike:
     tail = route_tail(request, ["comic"])
     if tail is None:
         return text_error(response, "Not found", 404)
@@ -195,12 +236,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
 
     if len(tail) in {2, 3} and tail[1] == "versions":
         work_id = tail[0]
-        work = get_work(work_id)
+        work = deps.get_work(work_id)
         if not work:
             return text_error(response, "Work not found", 404)
 
-        username = current_user(request)
-        if not can_view_work(username, work):
+        username = deps.current_user(request)
+        if not deps.can_view_work(username, work):
             return text_error(response, "Work not found", 404)
 
         reader_query = {"back": back_href} if back_href else {}
@@ -210,12 +251,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             if reader_query_string
             else f"/tools/reader/{escape(work_id)}"
         )
-        versions = list_work_versions(work_id, limit=50)
+        versions = deps.list_work_versions(work_id, 50)
         if not versions:
             work_href = f"/comic/{escape(work_id)}"
             if back_href:
                 work_href += f"?back={quote(back_href, safe='')}"
-            return render_html_template(
+            return deps.render_html_template(
                 request,
                 response,
                 "work-versions.html",
@@ -237,7 +278,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if not selected_version_id:
             selected_version_id = str(versions[0].get("version_id", ""))
 
-        version_manifest = get_work_version_manifest(work_id, selected_version_id)
+        version_manifest = deps.get_work_version_manifest(work_id, selected_version_id)
         if version_manifest is None:
             return text_error(response, "Version not found", 404)
 
@@ -249,7 +290,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         work_href = f"/comic/{escape(work_id)}"
         if back_href:
             work_href += f"?back={quote(back_href, safe='')}"
-        return render_html_template(
+        return deps.render_html_template(
             request,
             response,
             "work-versions.html",
@@ -273,12 +314,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         return text_error(response, "Not found", 404)
 
     work_id = tail[0]
-    work = get_work(work_id)
+    work = deps.get_work(work_id)
     if not work:
         return text_error(response, "Work not found", 404)
 
-    username = current_user(request)
-    if not can_view_work(username, work):
+    username = deps.current_user(request)
+    if not deps.can_view_work(username, work):
         return text_error(response, "Work not found", 404)
 
     title = escape(str(work.get("title", "Untitled")))
@@ -295,7 +336,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         cover_page_index = int(stripped_cover) if stripped_cover else 1
     else:
         cover_page_index = 1
-    cover_files = get_page_files(work_id, cover_page_index)
+    cover_files = deps.get_page_files(work_id, cover_page_index)
     cover_image_name = str(cover_files["image"]).strip() if cover_files else ""
     work_id_quoted = quote(work_id, safe="")
     if cover_image_name:
@@ -316,15 +357,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         tag_html = "".join(rendered_tags)
 
     uploader = str(work.get("uploader_username") if work.get("uploader_username") else "")
-    user_role = role_for_user(username)
+    user_role = deps.role_for_user(username)
     is_admin = is_privileged_role(user_role)
     can_edit = _can_edit_work(username, uploader, is_admin=is_admin)
     can_delete = is_admin
-    comments = list_work_comments(work_id)
-    kudos = work_kudos_count(work_id)
-    has_kudoed = has_user_kudoed_work(work_id, username)
+    comments = cast(list[dict[str, Any]], list(deps.list_work_comments(work_id)))
+    kudos = deps.work_kudos_count(work_id)
+    has_kudoed = deps.has_user_kudoed_work(work_id, username)
     progress_user_id = username if username else "anon"
-    bookmark_page_index = load_progress(work_id, progress_user_id)
+    bookmark_page_index = deps.load_progress(work_id, progress_user_id)
 
     msg = request.args.get("msg", "").strip()
     work_status = _status_for_work_message(msg)
@@ -340,7 +381,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     if back_href:
         versions_href += f"?back={quote(back_href, safe='')}"
 
-    return render_html_template(
+    return deps.render_html_template(
         request,
         response,
         "work.html",
@@ -372,3 +413,15 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__WORK_BOOKMARK_PAGE_INDEX__": escape(str(bookmark_page_index)),
         },
     )
+
+
+def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
+    return _main_with_deps(request, response, _runtime_deps())
+
+
+def main_with_deps(
+    request: RequestLike,
+    response: ResponseLike,
+    deps: ComicGetDependencies,
+) -> ResponseLike:
+    return _main_with_deps(request, response, deps)
