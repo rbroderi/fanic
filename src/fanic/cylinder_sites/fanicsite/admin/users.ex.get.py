@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from html import escape
+from urllib.parse import urlencode
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
@@ -25,6 +26,30 @@ def _render_fragment_template(template_name: str, replacements: dict[str, str]) 
     for marker, value in replacements.items():
         html = html.replace(marker, value)
     return html
+
+
+def _users_pagination_link_html(page: int, msg: str, label: str) -> str:
+    query: dict[str, str] = {"page": str(page)}
+    if msg:
+        query["msg"] = msg
+    href = f"/admin/users?{urlencode(query)}"
+    return _render_fragment_template(
+        "users-admin-pagination-link.html",
+        {
+            "__USERS_PAGINATION_HREF__": escape(href),
+            "__USERS_PAGINATION_LABEL__": label,
+        },
+    )
+
+
+def _users_pagination_status_html(page: int, total_pages: int) -> str:
+    return _render_fragment_template(
+        "users-admin-pagination-status.html",
+        {
+            "__USERS_PAGINATION_PAGE__": escape(str(page)),
+            "__USERS_PAGINATION_TOTAL_PAGES__": escape(str(total_pages)),
+        },
+    )
 
 
 def _status_replacements(msg: str) -> StatusReplacements:
@@ -120,12 +145,10 @@ def _pagination_html(page: int, total_pages: int, msg: str) -> str:
         return ""
     parts: list[str] = ['<nav class="pagination">']
     if page > 1:
-        prev_qs = f"?page={page - 1}&msg={escape(msg)}" if msg else f"?page={page - 1}"
-        parts.append(f'<a href="/admin/users{prev_qs}">&laquo; Previous</a>')
-    parts.append(f"<span>Page {page} of {total_pages}</span>")
+        parts.append(_users_pagination_link_html(page - 1, msg, "&laquo; Previous"))
+    parts.append(_users_pagination_status_html(page, total_pages))
     if page < total_pages:
-        next_qs = f"?page={page + 1}&msg={escape(msg)}" if msg else f"?page={page + 1}"
-        parts.append(f'<a href="/admin/users{next_qs}">Next &raquo;</a>')
+        parts.append(_users_pagination_link_html(page + 1, msg, "Next &raquo;"))
     parts.append("</nav>")
     return " ".join(parts)
 

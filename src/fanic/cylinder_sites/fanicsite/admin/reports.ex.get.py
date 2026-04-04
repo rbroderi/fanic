@@ -1,5 +1,6 @@
 from html import escape
 from urllib.parse import urlencode
+from urllib.parse import urlsplit
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
@@ -27,6 +28,30 @@ def _render_fragment_template(template_name: str, replacements: dict[str, str]) 
     for marker, value in replacements.items():
         html = html.replace(marker, value)
     return html
+
+
+def _safe_external_url(url: str) -> str:
+    raw_url = url.strip()
+    if not raw_url:
+        return ""
+    parts = urlsplit(raw_url)
+    if parts.scheme.lower() not in {"http", "https"}:
+        return ""
+    if not parts.netloc.strip():
+        return ""
+    return raw_url
+
+
+def _evidence_html(evidence_url_raw: str) -> str:
+    safe_url = _safe_external_url(evidence_url_raw)
+    if not safe_url:
+        return "-"
+    return _render_fragment_template(
+        "reports-admin-evidence-link.html",
+        {
+            "__EVIDENCE_URL__": escape(safe_url),
+        },
+    )
 
 
 def _report_tab(tab: str) -> str:
@@ -58,7 +83,7 @@ def _tab_filter_href(
         query["start_date"] = start_date
     if end_date:
         query["end_date"] = end_date
-    return f"/admin/reports?{urlencode(query)}"
+    return "/admin/reports?" + urlencode(query)
 
 
 def _status_replacements(msg: str) -> StatusReplacements:
@@ -127,7 +152,6 @@ def _report_rows_html(
         reporter_name = escape(report["reporter_name"])
         reporter_email = escape(report["reporter_email"])
         claimed_url = escape(report["claimed_url"])
-        evidence_url = escape(report["evidence_url"])
         details = escape(report["details"]).replace("\n", "<br />")
         reporter_username = escape(report["reporter_username"])
 
@@ -138,9 +162,7 @@ def _report_rows_html(
         )
         reporter_display = f"{reporter_name} ({reporter_username})" if reporter_username else reporter_name
 
-        evidence_html = (
-            f'<a href="{evidence_url}" target="_blank" rel="noopener noreferrer">Evidence</a>' if evidence_url else "-"
-        )
+        evidence_html = _evidence_html(report["evidence_url"])
 
         promote_button_html = (
             '<button type="submit" name="report_action" value="promote-explicit" class="button-muted">Promote to explicit rating</button>'

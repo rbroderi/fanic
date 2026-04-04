@@ -56,7 +56,11 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     back_href = f"{request.path}?{query_string}" if query_string else request.path
 
     work_grid_html = ""
-    view_hidden_input = f'<input type="hidden" name="view" value="{escape(view)}" />'
+    view_hidden_input = (
+        '<input type="hidden" name="view" value="fanart" />'
+        if view == "fanart"
+        else '<input type="hidden" name="view" value="comics" />'
+    )
     if view == "fanart":
         fanart_filters = {
             "q": q,

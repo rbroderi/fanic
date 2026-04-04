@@ -169,7 +169,7 @@
     }
 
     const history = historyArg || loadHistory();
-    historyList.innerHTML = "";
+    historyList.replaceChildren();
     historySection.hidden = history.length === 0;
     if (history.length === 0) {
       return;
@@ -436,9 +436,9 @@
         ingestProgressBar.value = 100;
         ingestProgressBar.max = 100;
         ingestProgressText.textContent = "Upload complete. Loading result...";
-        document.open();
-        document.write(xhr.responseText);
-        document.close();
+        const responseUrl =
+          xhr.responseURL && xhr.responseURL.trim() ? xhr.responseURL : window.location.href;
+        window.location.assign(responseUrl);
         return;
       }
       setButtonsDisabled(false);

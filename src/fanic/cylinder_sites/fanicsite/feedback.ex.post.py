@@ -18,7 +18,8 @@ from fanic.repository.social import add_dmca_report
 def _combined_details(summary: str, details: str) -> str:
     clean_summary = summary.strip()
     clean_details = details.strip()
-    return f"Summary:\n{clean_summary}\n\nDetails:\n{clean_details}"
+    parts = ["Summary:\n", clean_summary, "\n\nDetails:\n", clean_details]
+    return "".join(parts)
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:

@@ -5,6 +5,31 @@
  */
 
 function readBootstrap() {
+  const decodeEscapedJsonText = (text: string) => {
+    const namedEntities: Record<string, string> = {
+      amp: "&",
+      apos: "'",
+      gt: ">",
+      lt: "<",
+      nbsp: " ",
+      quot: '"',
+    };
+
+    return text.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (_full, entityBody: string) => {
+      const rawEntity = String(entityBody || "");
+      if (rawEntity.startsWith("#x") || rawEntity.startsWith("#X")) {
+        const codePoint = Number.parseInt(rawEntity.slice(2), 16);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : `&${rawEntity};`;
+      }
+      if (rawEntity.startsWith("#")) {
+        const codePoint = Number.parseInt(rawEntity.slice(1), 10);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : `&${rawEntity};`;
+      }
+      const decoded = namedEntities[rawEntity.toLowerCase()];
+      return decoded !== undefined ? decoded : `&${rawEntity};`;
+    });
+  };
+
   const bootstrapFromBase64 = () => {
     const node = document.getElementById("readerBootstrapB64") as HTMLInputElement | null;
     if (!node) {
@@ -32,9 +57,7 @@ function readBootstrap() {
   } catch {
     // Some proxies/security layers can HTML-escape embedded JSON text.
     try {
-      const decoder = document.createElement("textarea");
-      decoder.innerHTML = node.textContent;
-      return JSON.parse(decoder.value);
+      return JSON.parse(decodeEscapedJsonText(node.textContent));
     } catch {
       return bootstrapFromBase64();
     }
@@ -647,19 +670,24 @@ function renderChapterSelector() {
   }
 
   const chapters = normalizedChapters();
+  chapterSelect.replaceChildren();
+
   if (!chapters.length) {
-    chapterSelect.innerHTML = '<option value="1">All pages</option>';
+    const allPagesOption = document.createElement("option");
+    allPagesOption.value = "1";
+    allPagesOption.textContent = "All pages";
+    chapterSelect.appendChild(allPagesOption);
     chapterSelect.disabled = true;
     return;
   }
 
   chapterSelect.disabled = false;
-  chapterSelect.innerHTML = chapters
-    .map(
-      (chapter) =>
-        `<option value="${chapter.startPage}">${chapter.title} (pp. ${chapter.startPage}-${chapter.endPage})</option>`,
-    )
-    .join("");
+  for (const chapter of chapters) {
+    const option = document.createElement("option");
+    option.value = String(chapter.startPage);
+    option.textContent = `${chapter.title} (pp. ${chapter.startPage}-${chapter.endPage})`;
+    chapterSelect.appendChild(option);
+  }
 
   chapterSelect.addEventListener("change", () => {
     const page = Number(chapterSelect.value) || 1;
@@ -789,15 +817,32 @@ function renderSidebar() {
     return;
   }
 
-  thumbs.innerHTML = state.pages
-    .map((page) => {
-      const width = Number(page.width) || 0;
-      const height = Number(page.height) || 0;
-      const ratioStyle =
-        width > 0 && height > 0 ? ` style="--thumb-ratio: ${width} / ${height};"` : "";
-      return `<img class="thumb thumb-loading" src="${BLACK_PLACEHOLDER_DATA_URL}" data-src="${page.thumb_url}" data-load-state="idle" data-retry-count="0" alt="Page ${page.index}" data-index="${page.index}" loading="lazy"${ratioStyle} />`;
-    })
-    .join("");
+  thumbs.replaceChildren();
+  const fragment = document.createDocumentFragment();
+
+  for (const page of state.pages) {
+    const width = Number(page?.width) || 0;
+    const height = Number(page?.height) || 0;
+    const pageIndex = Number(page?.index) || 1;
+    const thumbUrl = typeof page?.thumb_url === "string" ? page.thumb_url : "";
+
+    const image = document.createElement("img");
+    image.className = "thumb thumb-loading";
+    image.src = BLACK_PLACEHOLDER_DATA_URL;
+    image.dataset.src = thumbUrl;
+    image.dataset.loadState = "idle";
+    image.dataset.retryCount = "0";
+    image.alt = `Page ${pageIndex}`;
+    image.dataset.index = String(pageIndex);
+    image.loading = "lazy";
+    if (width > 0 && height > 0) {
+      image.style.setProperty("--thumb-ratio", `${width} / ${height}`);
+    }
+
+    fragment.appendChild(image);
+  }
+
+  thumbs.appendChild(fragment);
 
   thumbs.querySelectorAll<HTMLImageElement>(".thumb").forEach((node) => {
     node.addEventListener("click", () => renderPage(Number(node.dataset.index)));
@@ -811,15 +856,31 @@ function renderMobileList() {
     return;
   }
 
-  mobileList.innerHTML = state.pages
-    .map((page) => {
-      const width = Number(page.width) || 0;
-      const height = Number(page.height) || 0;
-      const ratioStyle =
-        width > 0 && height > 0 ? ` style="--mobile-page-ratio: ${width} / ${height};"` : "";
-      return `<img class="mobile-page mobile-page-loading" src="${BLACK_PLACEHOLDER_DATA_URL}" data-src="${page.image_url}" data-load-state="idle" data-retry-count="0" alt="Page ${page.index}" loading="lazy"${ratioStyle} />`;
-    })
-    .join("");
+  mobileList.replaceChildren();
+  const fragment = document.createDocumentFragment();
+
+  for (const page of state.pages) {
+    const width = Number(page?.width) || 0;
+    const height = Number(page?.height) || 0;
+    const pageIndex = Number(page?.index) || 1;
+    const imageUrl = typeof page?.image_url === "string" ? page.image_url : "";
+
+    const image = document.createElement("img");
+    image.className = "mobile-page mobile-page-loading";
+    image.src = BLACK_PLACEHOLDER_DATA_URL;
+    image.dataset.src = imageUrl;
+    image.dataset.loadState = "idle";
+    image.dataset.retryCount = "0";
+    image.alt = `Page ${pageIndex}`;
+    image.loading = "lazy";
+    if (width > 0 && height > 0) {
+      image.style.setProperty("--mobile-page-ratio", `${width} / ${height}`);
+    }
+
+    fragment.appendChild(image);
+  }
+
+  mobileList.appendChild(fragment);
 
   setupMobileProgressiveLoading();
 }

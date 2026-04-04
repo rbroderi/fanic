@@ -1,15 +1,15 @@
 from html import escape
-from textwrap import dedent
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository.tags import TagPopularityRow
 from fanic.repository.tags import list_top_tag_popularity
+from fanic.settings import DYNAMIC_TEMPLATE_DIR
 
 _ALLOWED_TAG_TYPES = {
     "archive_warning",
@@ -20,6 +20,13 @@ _ALLOWED_TAG_TYPES = {
     "category",
     "rating",
 }
+
+
+def _render_fragment_template(template_name: str, replacements: dict[str, str]) -> str:
+    html = (DYNAMIC_TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
+    for marker, value in replacements.items():
+        html = html.replace(marker, value)
+    return html
 
 
 def _tag_type_options_html(selected_type: str) -> str:
@@ -67,19 +74,18 @@ def _rows_html(rows: list[TagPopularityRow]) -> str:
     rendered_rows: list[str] = []
     for row in rows:
         rendered_rows.append(
-            dedent(
-                f"""\
-                <tr>
-                  <td>{escape(row["name"])}</td>
-                  <td><code>{escape(row["slug"])}</code></td>
-                  <td>{escape(row["type"])}</td>
-                  <td>{row["attached_works"]}</td>
-                  <td>{row["seed_count"]}</td>
-                  <td>{row["usage_count"]}</td>
-                  <td><strong>{row["effective_popularity"]}</strong></td>
-                </tr>
-                """
-            ).strip()
+            _render_fragment_template(
+                "tag-popularity-admin-row.html",
+                {
+                    "__TAG_POPULARITY_NAME__": escape(row["name"]),
+                    "__TAG_POPULARITY_SLUG__": escape(row["slug"]),
+                    "__TAG_POPULARITY_TYPE__": escape(row["type"]),
+                    "__TAG_POPULARITY_ATTACHED_WORKS__": escape(str(row["attached_works"])),
+                    "__TAG_POPULARITY_SEED_COUNT__": escape(str(row["seed_count"])),
+                    "__TAG_POPULARITY_USAGE_COUNT__": escape(str(row["usage_count"])),
+                    "__TAG_POPULARITY_EFFECTIVE__": escape(str(row["effective_popularity"])),
+                },
+            )
         )
     return "".join(rendered_rows)
 
