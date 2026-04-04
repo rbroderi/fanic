@@ -144,6 +144,7 @@ class FanicSettings(BaseSettings):
     )
 
     # Core runtime behavior
+    allowed_hosts_csv: str = ""
     csrf_protect: bool
     enable_beartype: bool
     environment: str
@@ -436,6 +437,10 @@ class FanicSettings(BaseSettings):
     @property
     def alpha_invite_codes(self) -> set[str]:
         return {value.strip() for value in self.alpha_invite_codes_csv.split(",") if value.strip()}
+
+    @property
+    def allowed_hosts(self) -> set[str]:
+        return {value.strip().lower() for value in self.allowed_hosts_csv.split(",") if value.strip()}
 
     # Auth feature state
     @property

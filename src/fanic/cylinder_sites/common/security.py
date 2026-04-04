@@ -17,6 +17,7 @@ from fanic.settings import get_settings
 
 ASSET_ROOT = STATIC_ASSETS_DIR.resolve()
 _SETTINGS = get_settings()
+ALLOWED_HOSTS = _SETTINGS.allowed_hosts
 CSRF_COOKIE_NAME = "fanic_csrf"
 REQUIRE_HTTPS = _SETTINGS.require_https_effective
 CSRF_PROTECT = _SETTINGS.csrf_protect_effective
@@ -190,6 +191,18 @@ def request_is_secure(request: RequestLike) -> bool:
     return False
 
 
+def _is_allowed_host(host: str) -> bool:
+    """Validate the host against the configured allowlist to prevent SSRF."""
+    if not ALLOWED_HOSTS:
+        # No allowlist configured; reject all hosts for safety.
+        return False
+    # Normalize and strip port if present (e.g., "example.com:8080" -> "example.com").
+    normalized = host.lower()
+    if ":" in normalized:
+        normalized = normalized.rsplit(":", 1)[0]
+    return normalized in ALLOWED_HOSTS
+
+
 def enforce_https_termination(request: RequestLike, response: ResponseLike | None = None) -> bool:
     if not REQUIRE_HTTPS:
         return True
@@ -197,7 +210,7 @@ def enforce_https_termination(request: RequestLike, response: ResponseLike | Non
         return True
     if response is not None:
         host = _header_value(request, "Host").strip()
-        if host:
+        if host and _is_allowed_host(host):
             response.status_code = 301
             response.content_type = "text/plain; charset=utf-8"
             response.headers["Location"] = f"https://{host}{request.path}"
