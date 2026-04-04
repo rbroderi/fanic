@@ -2,24 +2,25 @@ import json
 from collections.abc import Mapping
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 from typing import cast
-from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED
 from zipfile import ZipFile
 
+from defusedxml import ElementTree as ET
 from pathvalidate import sanitize_filename
 
+from fanic.cylinder_sites.common.logging_utils import log_exception
+from fanic.cylinder_sites.common.logging_utils import request_id
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import json_response
-from fanic.cylinder_sites.common.logging_utils import log_exception
 from fanic.cylinder_sites.common.responses import page_file_for
-from fanic.cylinder_sites.common.logging_utils import request_id
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import send_file
 from fanic.cylinder_sites.common.responses import stable_api_error
 from fanic.cylinder_sites.common.responses import thumb_file_for
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.session import current_user
 from fanic.repository.works import can_view_work
 from fanic.repository.works import get_manifest
 from fanic.repository.works import get_page_files
@@ -34,6 +35,8 @@ from fanic.repository.works import load_progress
 from fanic.repository.works import set_work_cbz_path
 from fanic.settings import CBZ_DIR
 from fanic.utils import slugify
+
+ET_ANY = cast(Any, ET)
 
 
 def _can_view_work(request: RequestLike, work: Mapping[str, object]) -> bool:
@@ -129,10 +132,10 @@ def _build_comicinfo_xml(
     work: Mapping[str, object],
     pages: Sequence[Mapping[str, object]],
 ) -> str:
-    root = ET.Element("ComicInfo")
+    root = ET_ANY.Element("ComicInfo")
 
     def add_text_element(name: str, value: str) -> None:
-        ET.SubElement(root, name).text = value
+        ET_ANY.SubElement(root, name).text = value
 
     # Preserve schema sequence order from ComicInfo v2.0 for strict validator compatibility.
     title = str(work.get("title", "Untitled"))
@@ -202,7 +205,7 @@ def _build_comicinfo_xml(
     add_text_element("AgeRating", age_rating)
 
     cover_page_index = _split_int(work.get("cover_page_index", 1), 1)
-    pages_element = ET.SubElement(root, "Pages")
+    pages_element = ET_ANY.SubElement(root, "Pages")
     for page in pages:
         page_index = _split_int(page.get("page_index", 1), 1)
         image_index = max(0, page_index - 1)
@@ -218,7 +221,7 @@ def _build_comicinfo_xml(
         if height > 0:
             page_attrs["ImageHeight"] = str(height)
 
-        ET.SubElement(pages_element, "Page", attrib=page_attrs)
+        ET_ANY.SubElement(pages_element, "Page", attrib=page_attrs)
 
     main_character = character_names[0] if character_names else ""
     if main_character:
@@ -227,7 +230,7 @@ def _build_comicinfo_xml(
     if warning_names:
         add_text_element("Review", _csv_join(warning_names))
 
-    xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    xml_bytes = ET_ANY.tostring(root, encoding="utf-8", xml_declaration=True)
     return xml_bytes.decode("utf-8")
 
 

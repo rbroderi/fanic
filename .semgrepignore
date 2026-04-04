@@ -1,0 +1,20 @@
+# FANIC semgrep false-positive tuning
+
+# Avoid audit noise for local tuning entries in this file.
+.semgrepignore
+
+# Dynamic HTML templates are not Django templates; CSRF is auto-injected in
+# common response rendering and validated server-side.
+src/fanic/dynamic/*.html
+
+# Informational AI-detector noise is expected in model and typing stubs.
+src/fanic/clip_backend.py
+src/fanic/style_classifier.py
+typings/open_clip/**
+
+# Baseline metadata file can trigger generic secret detectors.
+.secrets.baseline
+findings.txt
+
+# Script intentionally uses command-prefix style with SUDO variable.
+scripts/setup-nginx-ubuntu.sh

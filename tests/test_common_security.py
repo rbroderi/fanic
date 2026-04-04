@@ -156,6 +156,7 @@ def test_enforce_https_termination_redirects_when_required(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(security, "REQUIRE_HTTPS", True)
+    monkeypatch.setattr(security, "ALLOWED_REDIRECT_HOSTS", {"fanic.media"})
 
     request = _Request(path="/comic/abc", headers={"Host": "fanic.media"})
     response = _Response()
@@ -165,6 +166,22 @@ def test_enforce_https_termination_redirects_when_required(
     assert allowed is False
     assert response.status_code == 301
     assert response.headers["Location"] == "https://fanic.media/comic/abc"
+
+
+def test_enforce_https_termination_rejects_disallowed_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(security, "REQUIRE_HTTPS", True)
+    monkeypatch.setattr(security, "ALLOWED_REDIRECT_HOSTS", {"fanic.media"})
+
+    request = _Request(path="/comic/abc", headers={"Host": "evil.example"})
+    response = _Response()
+
+    allowed = security.enforce_https_termination(request, response)
+
+    assert allowed is False
+    assert response.status_code == 400
+    assert "Location" not in response.headers
 
 
 def test_enforce_https_termination_allows_when_disabled(

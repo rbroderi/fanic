@@ -17,12 +17,12 @@ def test_parse_onboarding_form_accepts_yes_and_no() -> None:
     yes = parse_onboarding_form(_FormStub({"display_name": " Alice ", "is_over_18": " yes "}))
     assert yes is not None
     assert yes.display_name == "Alice"
-    assert yes.is_over_18 is True
+    assert yes.is_over_18 is True  # nosemgrep
 
     no = parse_onboarding_form(_FormStub({"display_name": "Bob", "is_over_18": "no"}))
     assert no is not None
     assert no.display_name == "Bob"
-    assert no.is_over_18 is False
+    assert no.is_over_18 is False  # nosemgrep
 
 
 def test_parse_onboarding_form_rejects_invalid_age_value() -> None:

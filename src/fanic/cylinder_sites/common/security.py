@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlsplit
 
 import structlog
 
@@ -26,7 +27,10 @@ ALLOWED_CBZ_EXTENSIONS = set(_SETTINGS.allowed_cbz_extensions)
 ALLOWED_CBZ_CONTENT_TYPES = set(_SETTINGS.allowed_cbz_content_types)
 ALLOWED_PAGE_EXTENSIONS = set(_SETTINGS.allowed_page_extensions)
 ALLOWED_PAGE_CONTENT_TYPES = set(_SETTINGS.allowed_page_content_types)
+_MEDIA_BASE_URL_PARTS = urlsplit(_SETTINGS.media_base_url)
+CANONICAL_HTTPS_HOST = str(_MEDIA_BASE_URL_PARTS.hostname if _MEDIA_BASE_URL_PARTS.hostname else "")
 LOGGER = structlog.get_logger("fanic.http")
+ALLOWED_REDIRECT_HOSTS = set(_SETTINGS.allowed_hosts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +82,20 @@ def _header_value(request: RequestLike, header_name: str) -> str:
     getter = cast(Callable[[str, str], object], headers_obj.get)
     value_obj = getter(header_name, "")
     return str(value_obj)
+
+
+def _normalized_host(host: str) -> str:
+    raw_host = host.strip().lower()
+    if not raw_host:
+        return ""
+
+    if raw_host.startswith("["):
+        closing = raw_host.find("]")
+        if closing == -1:
+            return ""
+        return raw_host[1:closing]
+
+    return raw_host.split(":", 1)[0]
 
 
 def _upload_filename(upload: FileUploadLike) -> str:
@@ -196,12 +214,26 @@ def enforce_https_termination(request: RequestLike, response: ResponseLike | Non
     if request_is_secure(request):
         return True
     if response is not None:
-        host = _header_value(request, "Host").strip()
-        if host:
-            response.status_code = 301
+        host = _normalized_host(_header_value(request, "Host"))
+        if not host:
+            response.status_code = 400
             response.content_type = "text/plain; charset=utf-8"
-            response.headers["Location"] = f"https://{host}{request.path}"
-            response.set_data("Redirecting to HTTPS")
+            response.set_data("Invalid host header")
+            return False
+
+        if host not in ALLOWED_REDIRECT_HOSTS:
+            response.status_code = 400
+            response.content_type = "text/plain; charset=utf-8"
+            response.set_data("Invalid host header")
+            return False
+
+        redirect_host = CANONICAL_HTTPS_HOST if CANONICAL_HTTPS_HOST else host
+        response.status_code = 301
+        response.content_type = "text/plain; charset=utf-8"
+        response.headers["Location"] = (  # nosemgrep
+            f"https://{redirect_host}{request.path}"  # nosemgrep
+        )
+        response.set_data("Redirecting to HTTPS")
     return False
 
 

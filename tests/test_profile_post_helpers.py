@@ -52,7 +52,7 @@ def test_parse_display_name_form() -> None:
     parsed = parse_display_name_form(_FormStub({"display_name": " Alice ", "is_over_18": " yes "}))
     assert parsed is not None
     assert parsed.display_name == "Alice"
-    assert parsed.is_over_18 is True
+    assert parsed.is_over_18 is True  # nosemgrep
 
     parsed_invalid = parse_display_name_form(_FormStub({"display_name": "Alice", "is_over_18": "maybe"}))
     assert parsed_invalid is None

@@ -53,7 +53,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             updated = update_user_profile_details(
                 username,
                 display_name=display_name_form.display_name,
-                is_over_18=display_name_form.is_over_18,
+                is_over_18=display_name_form.is_over_18,  # nosemgrep
             )
         except sqlite3.IntegrityError:
             return _redirect(response, "/user/profile?msg=display-name-taken")

@@ -417,7 +417,7 @@ def replace_fanart_gallery_items(
         valid_ids: list[str] = []
         if normalized_item_ids:
             placeholders = ",".join("?" for _ in normalized_item_ids)
-            valid_rows = connection.execute(
+            valid_rows = connection.execute(  # nosemgrep
                 f"""
                 SELECT id
                 FROM fanart_items

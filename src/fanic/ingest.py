@@ -9,10 +9,10 @@ from io import BytesIO
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import cast
-from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
+from defusedxml import ElementTree as ET
 from PIL import Image
 from PIL import UnidentifiedImageError
 from tqdm import tqdm

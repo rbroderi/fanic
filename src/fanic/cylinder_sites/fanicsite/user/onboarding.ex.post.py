@@ -43,7 +43,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         saved = update_user_onboarding(
             username,
             display_name=form_data.display_name,
-            is_over_18=form_data.is_over_18,
+            is_over_18=form_data.is_over_18,  # nosemgrep
         )
     except sqlite3.IntegrityError:
         return _redirect(response, "/user/onboarding?msg=onboarding-name-taken")

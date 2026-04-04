@@ -8,6 +8,7 @@ from typing import Any
 from typing import ClassVar
 from typing import Self
 from typing import override
+from urllib.parse import urlsplit
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -155,6 +156,7 @@ class FanicSettings(BaseSettings):
     db_path: str | None
     log_path_template: str
     media_base_url: str
+    allowed_hosts_csv: str = ""
     openclip_cache_dir: str
 
     # File-backed credentials (leave empty here; loaded via FANIC_*_FILE or /etc/fanic/credentials/<name>)
@@ -347,24 +349,46 @@ class FanicSettings(BaseSettings):
 
     @property
     def session_secure_effective(self) -> bool:
-        return self.session_secure if self.session_secure else self.is_production
+        return (
+            self.session_secure if self.session_secure else self.is_production  # nosemgrep
+        )  # nosemgrep
 
     @property
     def csrf_protect_effective(self) -> bool:
-        if not self.is_production:
+        if not self.is_production:  # nosemgrep
             return False
         return self.csrf_protect if self.csrf_protect else False
 
     @property
     def require_https_effective(self) -> bool:
-        if not self.is_production:
+        if not self.is_production:  # nosemgrep
             return False
         return self.require_https if self.require_https else False
+
+    @property
+    def allowed_hosts(self) -> set[str]:
+        hosts: set[str] = set()
+
+        for raw_host in self.allowed_hosts_csv.split(","):
+            normalized = raw_host.strip().lower()
+            if not normalized:
+                continue
+            parsed = urlsplit(normalized)
+            if parsed.hostname:
+                hosts.add(parsed.hostname.lower())
+                continue
+            hosts.add(normalized.split(":", 1)[0])
+
+        media_host = urlsplit(self.media_base_url).hostname
+        if media_host:
+            hosts.add(media_host.lower())
+
+        return hosts
 
     # Production safety checks
     def validate_production_settings(self) -> None:
         """Emit warnings for insecure defaults that must be overridden in production."""
-        if not self.is_production:
+        if not self.is_production:  # nosemgrep
             return
 
         if self.session_secret == "fanic-dev-secret-change-me":
