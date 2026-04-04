@@ -8,17 +8,18 @@ from urllib.parse import quote
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import media_url
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.security import route_tail
+from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.repository.works import can_view_work
 from fanic.repository.works import get_manifest
 from fanic.repository.works import get_work
 from fanic.repository.works import get_work_version_manifest
 from fanic.repository.works import load_progress
+from fanic.settings import static_asset_url
 
 
 def _reader_pages_from_version_manifest(
@@ -185,6 +186,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__READER_FANART_COMMENTS_HTML__": "",
             "__READER_BOOTSTRAP_JSON__": bootstrap_json,
             "__READER_BOOTSTRAP_B64__": bootstrap_b64,
-            "__READER_SCRIPT_SRC__": "/static/reader.js?v=20260402-reader-js-fix4",
+            "__READER_SCRIPT_SRC__": static_asset_url("reader", "js"),
         },
     )

@@ -32,6 +32,7 @@ from fanic.repository.users import get_user_theme_preference
 from fanic.settings import DYNAMIC_TEMPLATE_DIR
 from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
+from fanic.settings import static_asset_url
 
 STATIC_ROOT = DYNAMIC_TEMPLATE_DIR
 _SETTINGS = get_settings()
@@ -69,20 +70,20 @@ SITE_FOOTER_HTML = dedent(
     """
 ).strip()
 SITE_HEAD_ASSETS_HTML = dedent(
-    """
+    f"""
     <link rel="icon" href="/static/logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Serif+4:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="{static_asset_url("styles", "css")}" />
     """
 ).strip()
 SITE_COMMON_SCRIPTS_HTML = dedent(
-    """
-    <script src="/static/user-menu.js?v=20260329-logged-out-page"></script>
-    <script src="/static/confirm-actions.js?v=20260401-csp"></script>
-    <script src="/static/queued-images.js?v=20260401-queue"></script>
+    f"""
+    <script src="{static_asset_url("user-menu", "js")}"></script>
+    <script src="{static_asset_url("confirm-actions", "js")}"></script>
+    <script src="{static_asset_url("queued-images", "js")}"></script>
     """
 ).strip()
 
@@ -516,6 +517,10 @@ def render_html_template(
     merged["__SITE_HEAD_ASSETS__"] = SITE_HEAD_ASSETS_HTML
     merged["__SITE_HEADER_HTML__"] = _site_header_html(template_name, merged)
     merged["__SITE_COMMON_SCRIPTS__"] = SITE_COMMON_SCRIPTS_HTML
+    merged["__TAG_AUTOCOMPLETE_SRC__"] = static_asset_url("tag-autocomplete", "js")
+    merged["__WORK_EDIT_SRC__"] = static_asset_url("work-edit", "js")
+    merged["__WORK_PAGE_SRC__"] = static_asset_url("work-page", "js")
+    merged["__COMIC_UPLOAD_PROGRESS_SRC__"] = static_asset_url("comic-upload-progress", "js")
 
     for marker, value in merged.items():
         html = html.replace(marker, value)
@@ -526,7 +531,7 @@ def render_html_template(
         html = html.replace("</head>", f"{custom_theme_link}\n  </head>", 1)
 
     # Add the global footer to styled site pages without editing each template.
-    if "/static/styles.css" in html and "</body>" in html:
+    if "/static/styles" in html and "</body>" in html:
         html = html.replace("</body>", f"{SITE_FOOTER_HTML}\n  </body>", 1)
 
     html = apply_security_markup(request, response, html)

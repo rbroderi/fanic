@@ -3,6 +3,8 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 
+from fanic.settings import static_asset_url
+
 
 class ResponseLike(Protocol):
     status_code: int
@@ -48,4 +50,4 @@ def test_fanart_upload_page_renders_fandom_autocomplete(
     assert 'data-tag-autocomplete="1"' in html
     assert 'data-tag-type="fandom"' in html
     assert '<datalist id="fandomSuggestions">' in html
-    assert '<script src="/static/tag-autocomplete.js"></script>' in html
+    assert f'<script src="{static_asset_url("tag-autocomplete", "js")}"></script>' in html

@@ -493,6 +493,37 @@ STATIC_ASSETS_DIR = DATA_ROOT / "static"
 FANART_DIR = DATA_ROOT / "fanart"
 DYNAMIC_TEMPLATE_DIR = (PACKAGE_ROOT / "dynamic").resolve()
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_FRONTEND_SOURCE_DIR = _REPO_ROOT / "frontend"
+_STATIC_SOURCE_DIR = _REPO_ROOT / "static"
+_ASSET_VERSION_RE = re.compile(r"FANIC_ASSET_VERSION:\s*([A-Za-z0-9._-]+)")
+
+
+def _asset_version_from_source(path: Path) -> str:
+    if not path.exists():
+        return "0"
+    for line in path.read_text(encoding="utf-8").splitlines()[:20]:
+        match = _ASSET_VERSION_RE.search(line)
+        if match:
+            return match.group(1)
+    return "0"
+
+
+def _load_asset_versions() -> dict[str, str]:
+    versions: dict[str, str] = {}
+    versions["styles"] = _asset_version_from_source(_STATIC_SOURCE_DIR / "styles.css")
+    for source_path in sorted(_FRONTEND_SOURCE_DIR.glob("*.ts")):
+        versions[source_path.stem] = _asset_version_from_source(source_path)
+    return versions
+
+
+ASSET_VERSIONS = _load_asset_versions()
+
+
+def static_asset_url(asset_name: str, extension: str) -> str:
+    version = ASSET_VERSIONS.get(asset_name, "0")
+    return f"/static/{asset_name}.v{version}.{extension}"
+
 
 def ensure_storage_dirs() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)

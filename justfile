@@ -68,7 +68,7 @@ basedpyright:
 
 # Run prek hooks against all files.
 prek:
-    bash static/sync-from-storage.sh; uvx prek run --all-files; uvx prek run --all-files
+    bash scripts/sync-from-storage.sh; uvx prek run --all-files; uvx prek run --all-files
 
 # Run pytest with coverage for the src package.
 [windows]
@@ -167,7 +167,7 @@ restart:
 
 [unix]
 restart:
-    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; sudo systemctl daemon-reload; sudo systemctl restart fanic
+    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; npm run frontend:build; sudo systemctl daemon-reload; sudo systemctl restart fanic
 
 # Normalize source file permissions so the fanic service user can read all app code.
 [windows]

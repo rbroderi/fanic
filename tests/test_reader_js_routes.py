@@ -1,10 +1,13 @@
 from pathlib import Path
 
+from fanic.settings import ASSET_VERSIONS
+
 
 def _load_reader_script_text() -> str:
+    reader_version = ASSET_VERSIONS.get("reader", "0")
     candidate_paths = [
         Path("frontend/reader.ts"),
-        Path("/mnt/storage/static/reader.js"),
+        Path(f"/mnt/storage/static/reader.v{reader_version}.js"),
         Path("static/reader.js"),
     ]
     for candidate in candidate_paths:

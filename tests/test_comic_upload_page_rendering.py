@@ -3,6 +3,8 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 
+from fanic.settings import static_asset_url
+
 
 class ResponseLike(Protocol):
     status_code: int
@@ -31,7 +33,7 @@ def test_comic_upload_page_renders_site_placeholders(
     assert "__SITE_HEAD_ASSETS__" not in html
     assert "__SITE_HEADER_HTML__" not in html
     assert "__SITE_COMMON_SCRIPTS__" not in html
-    assert "/static/styles.css" in html
+    assert static_asset_url("styles", "css") in html
 
 
 def test_comic_upload_get_accepts_trailing_slash(

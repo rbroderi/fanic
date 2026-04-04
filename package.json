@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "description": "Frontend TypeScript build for FANIC static assets",
   "scripts": {
-    "frontend:build": "esbuild frontend/*.ts --bundle --minify --target=es2022 --platform=browser --format=iife --outdir=/mnt/storage/static",
-    "frontend:build:dev": "esbuild frontend/*.ts --bundle --sourcemap --target=es2022 --platform=browser --format=iife --outdir=/mnt/storage/static",
+    "frontend:build": "node scripts/build_frontend_assets.mjs",
+    "frontend:build:dev": "node scripts/build_frontend_assets.mjs --dev",
     "frontend:lint": "eslint \"frontend/**/*.ts\"",
     "frontend:lint:fix": "eslint \"frontend/**/*.ts\" --fix",
     "frontend:format": "prettier \"frontend/**/*.ts\" --write",
     "frontend:format:check": "prettier \"frontend/**/*.ts\" --check",
-    "frontend:watch": "esbuild frontend/*.ts --bundle --sourcemap --target=es2022 --platform=browser --format=iife --outdir=/mnt/storage/static --watch",
+    "frontend:watch": "node scripts/build_frontend_assets.mjs --dev --watch",
     "frontend:typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -1,10 +1,13 @@
 from pathlib import Path
 
+from fanic.settings import ASSET_VERSIONS
+
 
 def _load_comic_upload_progress_script_text() -> str:
+    progress_version = ASSET_VERSIONS.get("comic-upload-progress", "0")
     candidate_paths = [
         Path("frontend/comic-upload-progress.ts"),
-        Path("/mnt/storage/static/comic-upload-progress.js"),
+        Path(f"/mnt/storage/static/comic-upload-progress.v{progress_version}.js"),
         Path("static/comic-upload-progress.js"),
     ]
     for candidate in candidate_paths:

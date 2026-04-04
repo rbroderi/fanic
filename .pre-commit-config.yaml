@@ -66,7 +66,7 @@ repos:
 
       - id: sync-static-from-storage
         name: sync-static-from-storage
-        entry: bash static/sync-from-storage.sh
+        entry: bash scripts/sync-from-storage.sh
         language: system
         pass_filenames: false
         always_run: true

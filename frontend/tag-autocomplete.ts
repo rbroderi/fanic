@@ -2,6 +2,7 @@
  * AUTO-GENERATED OUTPUT WARNING:
  * Do not edit the generated static/*.js files directly.
  * Make changes in frontend/*.ts and rebuild.
+ * FANIC_ASSET_VERSION: 20260404
  */
 
 (() => {
@@ -10,6 +11,7 @@
   const MENU_CLASS = "tag-autocomplete-menu";
   const ITEM_CLASS = "tag-autocomplete-item";
   const ITEM_ACTIVE_CLASS = "tag-autocomplete-item-active";
+  let chipEditorSequence = 0;
 
   type TokenInfo = {
     token: string;
@@ -19,9 +21,38 @@
 
   type SuggestionContext = {
     getQuery(): string;
+    getTagType(): string;
     applySuggestion(name: string): void;
     focusField(): void;
+    onSuggestions?(suggestions: string[]): void;
   };
+
+  function bestSuggestionForQuery(query: string, suggestions: string[]): string | null {
+    const trimmed = query.trim();
+    if (!trimmed || suggestions.length === 0) {
+      return null;
+    }
+
+    const queryLower = trimmed.toLowerCase();
+    const ranked = suggestions
+      .map((item) => {
+        const itemLower = item.toLowerCase();
+        if (itemLower === queryLower) {
+          return { item, score: 0 };
+        }
+        if (itemLower.startsWith(queryLower)) {
+          return { item, score: 100 + itemLower.length - queryLower.length };
+        }
+        const idx = itemLower.indexOf(queryLower);
+        if (idx >= 0) {
+          return { item, score: 200 + idx };
+        }
+        return { item, score: 1000 + Math.abs(itemLower.length - queryLower.length) };
+      })
+      .sort((a, b) => a.score - b.score);
+
+    return ranked[0] ? ranked[0].item : null;
+  }
 
   function parseCsv(raw: string): string[] {
     return raw
@@ -140,12 +171,18 @@
   ): Promise<void> {
     const query = context.getQuery().trim();
     if (query.length < 1) {
+      if (context.onSuggestions) {
+        context.onSuggestions([]);
+      }
       closeMenu(menu);
       return;
     }
 
-    const type = input.dataset.tagType ? input.dataset.tagType : "";
+    const type = context.getTagType().trim();
     if (!type) {
+      if (context.onSuggestions) {
+        context.onSuggestions([]);
+      }
       closeMenu(menu);
       return;
     }
@@ -161,12 +198,18 @@
       signal: controller.signal,
     });
     if (!response.ok) {
+      if (context.onSuggestions) {
+        context.onSuggestions([]);
+      }
       closeMenu(menu);
       return;
     }
 
     const responseType = response.headers.get("content-type");
     if (!responseType || !responseType.toLowerCase().includes("application/json")) {
+      if (context.onSuggestions) {
+        context.onSuggestions([]);
+      }
       closeMenu(menu);
       return;
     }
@@ -175,6 +218,9 @@
     const payloadMap = payload as { suggestions?: unknown };
     const suggestionsRaw = Array.isArray(payloadMap.suggestions) ? payloadMap.suggestions : [];
     const suggestions = suggestionsRaw.map((item) => String(item));
+    if (context.onSuggestions) {
+      context.onSuggestions(suggestions);
+    }
     if (suggestions.length === 0) {
       closeMenu(menu);
       return;
@@ -291,21 +337,35 @@
     wrapper.appendChild(menu);
 
     if (chipMode) {
+      input.removeAttribute("list");
       input.hidden = true;
       const chipEditor = document.createElement("input");
       chipEditor.type = "text";
       chipEditor.className = "tag-chip-editor";
+      const sourceId = input.id ? input.id : input.name;
+      const sourceStem = sourceId ? sourceId : `tag-chip-${chipEditorSequence}`;
+      chipEditorSequence += 1;
+      chipEditor.id = `${sourceStem}-chip-editor`;
+      chipEditor.name = `${sourceStem}-chip-editor-ui`;
       chipEditor.placeholder = input.placeholder;
-      chipEditor.setAttribute("autocomplete", "off");
+      chipEditor.setAttribute("autocomplete", "new-password");
       chipEditor.setAttribute("autocapitalize", "off");
       chipEditor.setAttribute("autocorrect", "off");
       chipEditor.spellcheck = false;
+
+      const parentForm = input.form;
+      if (parentForm) {
+        parentForm.addEventListener("submit", () => {
+          chipEditor.disabled = true;
+        });
+      }
 
       const chipList = document.createElement("div");
       chipList.className = "tag-chip-list";
       wrapper.insertBefore(chipList, menu);
 
       const values = uniquePreserveOrder(parseCsv(input.value));
+      let latestSuggestions: string[] = [];
 
       const syncHidden = (): void => {
         input.value = values.join(", ");
@@ -318,14 +378,29 @@
           chip.type = "button";
           chip.className = "tag-chip";
           chip.setAttribute("aria-label", `Remove ${value}`);
-          const remove = document.createElement("span");
-          remove.className = "tag-chip-remove";
-          remove.textContent = "x";
           const label = document.createElement("span");
           label.className = "tag-chip-label";
           label.textContent = value;
-          chip.appendChild(remove);
+
+          const remove = document.createElement("span");
+          remove.className = "tag-chip-remove";
+          remove.setAttribute("aria-hidden", "true");
+          remove.textContent = "x";
+          const icon = document.createElement("i");
+          icon.className = "fa-solid fa-xmark";
+          remove.appendChild(icon);
+
+          remove.addEventListener("click", (event: MouseEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            values.splice(index, 1);
+            syncHidden();
+            renderChips();
+            chipEditor.focus();
+          });
+
           chip.appendChild(label);
+          chip.appendChild(remove);
           chip.addEventListener("click", () => {
             values.splice(index, 1);
             syncHidden();
@@ -352,6 +427,18 @@
         renderChips();
       };
 
+      const addClosestValue = (raw: string): void => {
+        const normalized = raw.trim();
+        if (!normalized) {
+          return;
+        }
+        const chosen = bestSuggestionForQuery(normalized, latestSuggestions);
+        if (!chosen) {
+          return;
+        }
+        addValue(chosen);
+      };
+
       chipEditor.addEventListener("keydown", (event: KeyboardEvent) => {
         if (
           event.key === "Backspace" &&
@@ -367,7 +454,7 @@
 
         if (event.key === "Enter" || event.key === ",") {
           event.preventDefault();
-          addValue(chipEditor.value);
+          addClosestValue(chipEditor.value);
           closeMenu(menu);
         }
       });
@@ -376,7 +463,7 @@
         window.setTimeout(() => {
           const pasted = chipEditor.value;
           if (pasted.includes(",")) {
-            parseCsv(pasted).forEach((value) => addValue(value));
+            parseCsv(pasted).forEach((value) => addClosestValue(value));
             chipEditor.value = "";
             closeMenu(menu);
           }
@@ -390,14 +477,20 @@
           getQuery(): string {
             return chipEditor.value;
           },
+          getTagType(): string {
+            return input.dataset.tagType ? input.dataset.tagType : "";
+          },
           applySuggestion(name: string): void {
             addValue(name);
           },
           focusField(): void {
             chipEditor.focus();
           },
+          onSuggestions(suggestions: string[]): void {
+            latestSuggestions = suggestions;
+          },
         },
-        () => addValue(chipEditor.value),
+        () => addClosestValue(chipEditor.value),
       );
 
       syncHidden();
@@ -409,6 +502,9 @@
       getQuery(): string {
         const caret = input.selectionStart !== null ? input.selectionStart : 0;
         return currentTokenInfo(input.value, caret).token;
+      },
+      getTagType(): string {
+        return input.dataset.tagType ? input.dataset.tagType : "";
       },
       applySuggestion(name: string): void {
         replaceCurrentToken(input, name);

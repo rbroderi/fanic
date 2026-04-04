@@ -36,6 +36,7 @@ from fanic.repository.users import get_user_role
 from fanic.repository.users import user_is_under_18
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
+from fanic.settings import static_asset_url
 from fanic.storage_health import get_fanart_storage_health
 
 PACKAGE_ROOT: Final[Path] = Path(__file__).resolve().parent
@@ -352,7 +353,7 @@ def _invite_page_response(
         <!doctype html><html lang="en"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Alpha Access Required</title>
-        <link rel="stylesheet" href="/static/styles.css" />
+        <link rel="stylesheet" href="{static_asset_url("styles", "css")}" />
         </head>
         <body class="alpha-invite-page">
         <main class="alpha-invite-card">

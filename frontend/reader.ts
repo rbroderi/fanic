@@ -2,6 +2,7 @@
  * AUTO-GENERATED OUTPUT WARNING:
  * Do not edit the generated static/*.js files directly.
  * Make changes in frontend/*.ts and rebuild.
+ * FANIC_ASSET_VERSION: 20260404
  */
 
 function readBootstrap() {
