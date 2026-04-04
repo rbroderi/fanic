@@ -98,7 +98,8 @@ def _load_tags_from_csv(
             if stats["rows_total"] % 200000 == 0:
                 print(f"Processed {stats['rows_total']} rows...")
 
-            ao3_type = (row.get("type") if row.get("type") else "").strip()
+            row_type_raw = row.get("type")
+            ao3_type = row_type_raw.strip() if row_type_raw else ""
             fanic_type = AO3_TO_FANIC_TYPE.get(ao3_type)
             if not fanic_type:
                 stats["rows_unmapped_type"] += 1
@@ -107,18 +108,21 @@ def _load_tags_from_csv(
                 stats["rows_excluded_type"] += 1
                 continue
 
-            canonical_text = (row.get("canonical") if row.get("canonical") else "").strip().lower()
+            canonical_raw = row.get("canonical")
+            canonical_text = canonical_raw.strip().lower() if canonical_raw else ""
             is_canonical = canonical_text == "true"
             if canonical_only and not is_canonical:
                 stats["rows_non_canonical"] += 1
                 continue
 
-            count = _to_int(row.get("cached_count") if row.get("cached_count") else "")
+            count_raw = row.get("cached_count")
+            count = _to_int(count_raw if count_raw else "")
             if count < min_count:
                 stats["rows_below_min_count"] += 1
                 continue
 
-            name = (row.get("name") if row.get("name") else "").strip()
+            name_raw = row.get("name")
+            name = name_raw.strip() if name_raw else ""
             if not name:
                 stats["rows_empty_name"] += 1
                 continue
@@ -139,7 +143,9 @@ def _load_tags_from_csv(
             if candidate.ao3_count > existing.ao3_count:
                 by_slug[tag_slug] = candidate
                 continue
-            if candidate.ao3_count == existing.ao3_count and len(candidate.name) > len(existing.name):
+            if candidate.ao3_count == existing.ao3_count and len(candidate.name) > len(
+                existing.name
+            ):
                 by_slug[tag_slug] = candidate
 
     tags = sorted(by_slug.values(), key=lambda item: item.slug)
@@ -211,7 +217,9 @@ def _write_sql(output_path: Path, tags: list[CanonicalTag]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Convert AO3 tag CSV dumps into Fanic-ready JSON + SQL outputs")
+    parser = argparse.ArgumentParser(
+        description="Convert AO3 tag CSV dumps into Fanic-ready JSON + SQL outputs"
+    )
     parser.add_argument(
         "--source",
         type=Path,

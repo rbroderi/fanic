@@ -82,8 +82,11 @@ def _redact_object(value: object) -> object:
         list_value = cast(list[object], value)
         return [_redact_object(item) for item in list_value]
     if isinstance(value, tuple):
-        tuple_value = cast(tuple[object, ...], value)
-        return tuple(_redact_object(item) for item in tuple_value)
+        redacted_items: list[object] = []
+        for item in value:  # pyright: ignore[reportUnknownVariableType]
+            item_obj = cast(object, item)
+            redacted_items.append(_redact_object(item_obj))
+        return tuple(redacted_items)
     if isinstance(value, str) and len(value) > 500:
         return value[:500]
     return value

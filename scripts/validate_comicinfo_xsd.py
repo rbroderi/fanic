@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def _load_schema_module() -> object:
+def _load_schema_module() -> Any:
     try:
         import xmlschema  # type: ignore[import-not-found]
     except ImportError as exc:

@@ -134,6 +134,14 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: ty-check
+        name: ty-check
+        entry: uvx ty check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: frontend-prettier
         name: frontend-prettier-write
         entry: just frontend format

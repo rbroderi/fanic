@@ -4,6 +4,7 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 from typing import Protocol
+from typing import cast
 
 
 class ResponseLike(Protocol):
@@ -62,6 +63,7 @@ def test_auth0_login_sets_prompt_login(
     result = module.main(request, response)
 
     assert result.status_code == 303
-    kwargs = captured["kwargs"]
-    assert isinstance(kwargs, dict)
+    kwargs_obj = captured["kwargs"]
+    assert isinstance(kwargs_obj, dict)
+    kwargs = cast(dict[str, object], kwargs_obj)
     assert kwargs.get("prompt") == "login"

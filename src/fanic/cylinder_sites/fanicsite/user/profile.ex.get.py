@@ -127,7 +127,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         uploaded_works: list[dict[str, object]] = []
         for work in uploaded_works_raw:
             work_id = str(work.get("id", "")).strip()
-            work_with_counts: dict[str, object] = dict(work)
+            work_with_counts = dict(work.items())
             if work_id:
                 work_with_counts["kudos_count"] = work_kudos_count(work_id)
                 work_with_counts["comments_count"] = len(list_work_comments(work_id))

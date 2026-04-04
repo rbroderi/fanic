@@ -456,7 +456,7 @@ class FanicSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> FanicSettings:
-    return FanicSettings()  # pyright: ignore[reportCallIssue]
+    return FanicSettings()  # pyright: ignore[reportCallIssue] # ty: ignore[missing-argument]
 
 
 _SETTINGS = get_settings()

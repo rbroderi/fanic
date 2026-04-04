@@ -5,11 +5,7 @@ from typing import cast
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 import torch
-
-try:
-    from tqdm import tqdm as tqdm
-except Exception:  # pragma: no cover - optional dependency fallback
-    tqdm = None
+from tqdm import tqdm as tqdm
 
 from fanic.settings import get_settings
 from fanic.torch_helpers import call0
@@ -45,26 +41,13 @@ class _NoopProgress:
 def _build_progress() -> object:
     if not _VERBOSE_LOAD:
         return _NoopProgress()
-    if tqdm is not None:
-        return tqdm(
-            total=3,
-            desc="Loading CLIP backend",
-            unit="step",
-            leave=False,
-            disable=False,
-        )
-    try:
-        from tqdm import tqdm as resolved_tqdm
-
-        return resolved_tqdm(
-            total=3,
-            desc="Loading CLIP backend",
-            unit="step",
-            leave=False,
-            disable=False,
-        )
-    except Exception:
-        return _NoopProgress()
+    return tqdm(
+        total=3,
+        desc="Loading CLIP backend",
+        unit="step",
+        leave=False,
+        disable=False,
+    )
 
 
 def ensure_backend_loaded() -> bool:

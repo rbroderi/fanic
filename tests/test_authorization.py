@@ -10,7 +10,7 @@ from fanic.repository.users import UserRole
 
 def _is_allowed(
     *,
-    action: AuthorizationAction,
+    action: AuthorizationAction | str,
     current_username: str,
     current_role: UserRole,
     owner_username: str = "",
@@ -53,6 +53,7 @@ def _is_allowed(
         return AdminUsersPolicy.can_remove(ctx)
     if action == AuthorizationAction.ADMIN_PATH_ACCESS:
         return AdminPathPolicy.can_access(ctx)
+    return False
 
 
 def test_fanart_delete_item_requires_admin_role() -> None:

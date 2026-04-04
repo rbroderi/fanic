@@ -45,7 +45,7 @@ build-backend = "hatchling.build"
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"
-include = ["src"]
+include = ["src", "tests", "scripts"]
 pythonVersion = "3.13"
 reportUnusedCallResult = "none"
 reportAny = "none"
@@ -60,3 +60,6 @@ force-single-line = true
 
 [tool.coverage.run]
 omit = ["src/fanic/app.py", "src/fanic/main.py"]
+
+[tool.ty.src]
+exclude = ["typings"]
