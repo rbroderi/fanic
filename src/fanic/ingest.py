@@ -68,225 +68,6 @@ type ComicInfoMetadata = dict[str, ComicInfoValue]
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
 
 
-def _natural_member_sort_key(member: str) -> tuple[object, ...]:
-    base_name = Path(member).name
-    parts = _NATURAL_SORT_RE.split(base_name.lower())
-    key: list[object] = []
-    for part in parts:
-        if part.isdigit():
-            key.append(int(part))
-        elif part:
-            key.append(part)
-    return tuple(key)
-
-
-def _cbz_member_directory(member: str) -> str:
-    parent = PurePosixPath(member).parent.as_posix()
-    return "" if parent == "." else parent
-
-
-def _chapter_title_from_cbz_directory(directory: str) -> str:
-    title = directory.strip().strip("/")
-    return title if title else "Untitled Chapter"
-
-
-def _group_cbz_pages_by_directory(
-    image_members: Sequence[str],
-    pages: Sequence[WorkPageRow],
-) -> list[tuple[str, list[str]]]:
-    grouped: dict[str, list[str]] = {}
-    for member, page in zip(image_members, pages):
-        directory = _cbz_member_directory(member)
-        if not directory:
-            continue
-        image_filename = _as_str(page.get("image_filename", ""), "")
-        if not image_filename:
-            continue
-        current = grouped.get(directory)
-        if current is None:
-            grouped[directory] = [image_filename]
-        else:
-            current.append(image_filename)
-    return [(directory, members) for directory, members in grouped.items() if members]
-
-
-def _replace_work_chapters_from_cbz_directories(
-    work_id: str,
-    image_members: Sequence[str],
-    pages: Sequence[WorkPageRow],
-) -> int:
-    existing_chapters = list_work_chapters(work_id)
-    for chapter in existing_chapters:
-        chapter_id = _as_int(chapter.get("id", 0), 0)
-        if chapter_id > 0:
-            _ = delete_work_chapter(work_id, chapter_id)
-
-    grouped_members = _group_cbz_pages_by_directory(image_members, pages)
-    if not grouped_members:
-        return 0
-
-    page_positions: dict[str, int] = {}
-    for page in pages:
-        image_filename = _as_str(page.get("image_filename", ""), "")
-        if not image_filename:
-            continue
-        page_positions[image_filename] = _as_int(page.get("page_index", 0), 0)
-
-    created = 0
-    for directory, members in grouped_members:
-        valid_members = [name for name in members if name in page_positions]
-        if not valid_members:
-            continue
-        positions = [page_positions[name] for name in valid_members]
-        start_page = min(positions)
-        end_page = max(positions)
-        chapter_title = _chapter_title_from_cbz_directory(directory)
-        chapter = add_work_chapter(
-            work_id,
-            title=chapter_title,
-            start_page=start_page,
-            end_page=end_page,
-        )
-        chapter_id = _as_int(chapter.get("id", 0), 0)
-        if chapter_id < 1:
-            continue
-        replace_work_chapter_members(chapter_id, valid_members)
-        created += 1
-
-    return created
-
-
-def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
-    buffer = BytesIO()
-    image.save(buffer, format=fmt, quality=quality)
-    return buffer.getvalue()
-
-
-def _content_addressed_rel_path(data: bytes, extension: str) -> str:
-    digest = hashlib.sha256(data).hexdigest()
-    stripped_ext = extension.strip().lower().lstrip(".")
-    normalized_ext = stripped_ext if stripped_ext else "bin"
-    return f"_objects/{digest[:2]}/{digest}.{normalized_ext}"
-
-
-def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
-    _assert_safe_storage_dir(base_dir)
-    rel_path = _content_addressed_rel_path(data, extension)
-    target = base_dir / rel_path
-    _assert_safe_storage_target(base_dir, target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _assert_path_not_symlink(target.parent)
-    if target.exists():
-        target_stat = target.stat()
-        if target_stat.st_nlink > 1:
-            raise ValueError(f"Unsafe linked upload target detected: {target}")
-        return rel_path
-
-    try:
-        with target.open("xb") as handle:
-            handle.write(data)
-        target_stat = target.stat()
-        if target_stat.st_nlink > 1:
-            delete_file(target, missing_ok=True)
-            raise ValueError(f"Unsafe linked upload target detected: {target}")
-    except FileExistsError:
-        # Another request wrote the same hash concurrently.
-        pass
-    return rel_path
-
-
-def _assert_path_not_symlink(path: Path) -> None:
-    candidate = path
-    while True:
-        if candidate.exists() and candidate.is_symlink():
-            raise ValueError(f"Refusing upload path through symlink: {candidate}")
-        parent = candidate.parent
-        if parent == candidate:
-            break
-        candidate = parent
-
-
-def _assert_safe_storage_dir(base_dir: Path) -> None:
-    resolved_base = base_dir.resolve()
-    resolved_works = WORKS_DIR.resolve()
-    try:
-        _ = resolved_base.relative_to(resolved_works)
-    except ValueError as exc:
-        raise ValueError(f"Upload base directory escapes storage root: {base_dir}") from exc
-    _assert_path_not_symlink(resolved_base)
-
-
-def _assert_safe_storage_target(base_dir: Path, target: Path) -> None:
-    resolved_base = base_dir.resolve()
-    resolved_target_parent = target.parent.resolve()
-    try:
-        _ = resolved_target_parent.relative_to(resolved_base)
-    except ValueError as exc:
-        raise ValueError(f"Upload target escapes storage root: {target}") from exc
-
-
-def _safe_work_dirs(work_id: str) -> tuple[Path, Path, Path]:
-    work_dir = WORKS_DIR / work_id
-    pages_dir = work_dir / "pages"
-    thumbs_dir = work_dir / "thumbs"
-
-    for candidate in (work_dir, pages_dir, thumbs_dir):
-        _assert_safe_storage_dir(candidate)
-
-    work_dir.mkdir(parents=True, exist_ok=True)
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    thumbs_dir.mkdir(parents=True, exist_ok=True)
-
-    return work_dir, pages_dir, thumbs_dir
-
-
-def _quality_for_account_page(account_page_number: int) -> int:
-    base_quality = int(IMAGE_AVIF_QUALITY)
-    if account_page_number <= USER_PAGE_SOFT_CAP:
-        return max(1, base_quality)
-
-    ramp_limit = int(round(USER_PAGE_SOFT_CAP * USER_PAGE_QUALITY_RAMP_MULTIPLIER))
-    if ramp_limit <= USER_PAGE_SOFT_CAP:
-        return 1
-    if account_page_number >= ramp_limit:
-        return 1
-
-    ramp_progress = (account_page_number - USER_PAGE_SOFT_CAP) / (ramp_limit - USER_PAGE_SOFT_CAP)
-    quality_value = round(base_quality - (base_quality - 1) * ramp_progress)
-    return max(1, int(quality_value))
-
-
-def _validate_zip_archive_limits(zip_file: ZipFile) -> None:
-    infos = [info for info in zip_file.infolist() if not info.is_dir()]
-    total_uncompressed = 0
-    total_compressed = 0
-    for info in infos:
-        file_size = int(info.file_size)
-        total_uncompressed += file_size
-        total_compressed += int(info.compress_size)
-        if file_size > MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES:
-            raise ValueError(
-                "CBZ member exceeds maximum allowed uncompressed size "
-                f"({file_size} > {MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES}): {info.filename}"
-            )
-    if total_uncompressed > MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES:
-        raise ValueError(
-            "CBZ exceeds maximum allowed total uncompressed size "
-            f"({total_uncompressed} > {MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES})"
-        )
-    if total_compressed > 0:
-        ratio = total_uncompressed / total_compressed
-        if ratio > 100:
-            raise ValueError(f"CBZ compression ratio is suspiciously high ({ratio:.0f}:1); archive may be a zip bomb")
-
-
-def _assert_image_pixels_within_limit(image: Image.Image, context: str) -> None:
-    width, height = image.size
-    total_pixels = int(width) * int(height)
-    if total_pixels > MAX_UPLOAD_IMAGE_PIXELS:
-        raise ValueError(f"{context} exceeds maximum allowed pixel count ({total_pixels} > {MAX_UPLOAD_IMAGE_PIXELS})")
-
-
 class ModerationBlockedError(ValueError):
     moderation: dict[str, object]
 
@@ -303,43 +84,40 @@ class ModerationBlockedError(ValueError):
         self.moderation = moderation
 
 
-def _prepare_image_for_avif(image: Image.Image) -> Image.Image:
-    # AVIF expects RGB/RGBA-like pixel data; normalize uncommon modes.
-    if image.mode in {"RGBA", "LA"}:
-        return image.convert("RGBA")
-    if image.mode == "P":
-        return image.convert("RGBA")
-    return image.convert("RGB")
-
-
-def _as_int(value: object, default: int = 0) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return default
-        try:
-            return int(stripped)
-        except ValueError:
-            return default
-    return default
-
-
-def _as_str(value: object, default: str = "") -> str:
-    if value is None:
-        return default
-    if isinstance(value, str):
-        return value
-    return str(value)
+def _clean_xml_value(value: str | None) -> str:
+    return (value if value else "").strip()
 
 
 def _comma_split(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _parse_fanic_scan_information(text: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for raw_part in text.split(";"):
+        part = raw_part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        normalized_key = key.strip().lower()
+        normalized_value = value.strip()
+        if not normalized_key or not normalized_value:
+            continue
+        parsed[normalized_key] = normalized_value
+    return parsed
 
 
 def _normalize_rating(value: str) -> str:
@@ -384,44 +162,22 @@ def _normalize_rating(value: str) -> str:
     return rating_aliases.get(normalized, value.strip())
 
 
-def _elevate_rating(current: object, suggested: str | None) -> str:
-    normalized_current = _normalize_rating(str(current if current else "Not Rated"))
-    normalized_suggested = _normalize_rating(str(suggested if suggested else ""))
-    if normalized_suggested == "Explicit" and normalized_current != "Explicit":
-        return "Explicit"
-    return normalized_current
-
-
-def _clean_xml_value(value: str | None) -> str:
-    return (value if value else "").strip()
-
-
-def _dedupe_preserve_order(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
-
-
-def _parse_fanic_scan_information(text: str) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    for raw_part in text.split(";"):
-        part = raw_part.strip()
-        if not part:
-            continue
-        if "=" not in part:
-            continue
-        key, value = part.split("=", 1)
-        normalized_key = key.strip().lower()
-        normalized_value = value.strip()
-        if not normalized_key or not normalized_value:
-            continue
-        parsed[normalized_key] = normalized_value
-    return parsed
+def _as_int(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return int(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def parse_comicinfo_xml(xml_text: str) -> ComicInfoMetadata:
@@ -647,13 +403,28 @@ def extract_comicinfo_metadata_from_cbz(cbz_path: Path) -> ComicInfoMetadata:
         return parse_comicinfo_xml(xml_text)
 
 
-def _load_metadata_from_comicinfo(zip_file: ZipFile) -> ComicInfoMetadata:
-    candidates = [member for member in zip_file.namelist() if member.lower().endswith("comicinfo.xml")]
-    if not candidates:
-        return {}
-
-    xml_text = zip_file.read(candidates[0]).decode("utf-8", errors="replace")
-    return parse_comicinfo_xml(xml_text)
+def _validate_zip_archive_limits(zip_file: ZipFile) -> None:
+    infos = [info for info in zip_file.infolist() if not info.is_dir()]
+    total_uncompressed = 0
+    total_compressed = 0
+    for info in infos:
+        file_size = int(info.file_size)
+        total_uncompressed += file_size
+        total_compressed += int(info.compress_size)
+        if file_size > MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES:
+            raise ValueError(
+                "CBZ member exceeds maximum allowed uncompressed size "
+                f"({file_size} > {MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES}): {info.filename}"
+            )
+    if total_uncompressed > MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES:
+        raise ValueError(
+            "CBZ exceeds maximum allowed total uncompressed size "
+            f"({total_uncompressed} > {MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES})"
+        )
+    if total_compressed > 0:
+        ratio = total_uncompressed / total_compressed
+        if ratio > 100:
+            raise ValueError(f"CBZ compression ratio is suspiciously high ({ratio:.0f}:1); archive may be a zip bomb")
 
 
 def _is_image_member_name(member: str) -> bool:
@@ -668,6 +439,235 @@ def _looks_like_image_bytes(data: bytes) -> bool:
         return True
     except (UnidentifiedImageError, OSError, ValueError):
         return False
+
+
+def _load_metadata_from_comicinfo(zip_file: ZipFile) -> ComicInfoMetadata:
+    candidates = [member for member in zip_file.namelist() if member.lower().endswith("comicinfo.xml")]
+    if not candidates:
+        return {}
+
+    xml_text = zip_file.read(candidates[0]).decode("utf-8", errors="replace")
+    return parse_comicinfo_xml(xml_text)
+
+
+def _natural_member_sort_key(member: str) -> tuple[object, ...]:
+    base_name = Path(member).name
+    parts = _NATURAL_SORT_RE.split(base_name.lower())
+    key: list[object] = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        elif part:
+            key.append(part)
+    return tuple(key)
+
+
+def _cbz_member_directory(member: str) -> str:
+    parent = PurePosixPath(member).parent.as_posix()
+    return "" if parent == "." else parent
+
+
+def _as_str(value: object, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _group_cbz_pages_by_directory(
+    image_members: Sequence[str],
+    pages: Sequence[WorkPageRow],
+) -> list[tuple[str, list[str]]]:
+    grouped: dict[str, list[str]] = {}
+    for member, page in zip(image_members, pages):
+        directory = _cbz_member_directory(member)
+        if not directory:
+            continue
+        image_filename = _as_str(page.get("image_filename", ""), "")
+        if not image_filename:
+            continue
+        current = grouped.get(directory)
+        if current is None:
+            grouped[directory] = [image_filename]
+        else:
+            current.append(image_filename)
+    return [(directory, members) for directory, members in grouped.items() if members]
+
+
+def _chapter_title_from_cbz_directory(directory: str) -> str:
+    title = directory.strip().strip("/")
+    return title if title else "Untitled Chapter"
+
+
+def _replace_work_chapters_from_cbz_directories(
+    work_id: str,
+    image_members: Sequence[str],
+    pages: Sequence[WorkPageRow],
+) -> int:
+    existing_chapters = list_work_chapters(work_id)
+    for chapter in existing_chapters:
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        if chapter_id > 0:
+            _ = delete_work_chapter(work_id, chapter_id)
+
+    grouped_members = _group_cbz_pages_by_directory(image_members, pages)
+    if not grouped_members:
+        return 0
+
+    page_positions: dict[str, int] = {}
+    for page in pages:
+        image_filename = _as_str(page.get("image_filename", ""), "")
+        if not image_filename:
+            continue
+        page_positions[image_filename] = _as_int(page.get("page_index", 0), 0)
+
+    created = 0
+    for directory, members in grouped_members:
+        valid_members = [name for name in members if name in page_positions]
+        if not valid_members:
+            continue
+        positions = [page_positions[name] for name in valid_members]
+        start_page = min(positions)
+        end_page = max(positions)
+        chapter_title = _chapter_title_from_cbz_directory(directory)
+        chapter = add_work_chapter(
+            work_id,
+            title=chapter_title,
+            start_page=start_page,
+            end_page=end_page,
+        )
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        if chapter_id < 1:
+            continue
+        replace_work_chapter_members(chapter_id, valid_members)
+        created += 1
+
+    return created
+
+
+def _assert_path_not_symlink(path: Path) -> None:
+    candidate = path
+    while True:
+        if candidate.exists() and candidate.is_symlink():
+            raise ValueError(f"Refusing upload path through symlink: {candidate}")
+        parent = candidate.parent
+        if parent == candidate:
+            break
+        candidate = parent
+
+
+def _assert_safe_storage_dir(base_dir: Path) -> None:
+    resolved_base = base_dir.resolve()
+    resolved_works = WORKS_DIR.resolve()
+    try:
+        _ = resolved_base.relative_to(resolved_works)
+    except ValueError as exc:
+        raise ValueError(f"Upload base directory escapes storage root: {base_dir}") from exc
+    _assert_path_not_symlink(resolved_base)
+
+
+def _safe_work_dirs(work_id: str) -> tuple[Path, Path, Path]:
+    work_dir = WORKS_DIR / work_id
+    pages_dir = work_dir / "pages"
+    thumbs_dir = work_dir / "thumbs"
+
+    for candidate in (work_dir, pages_dir, thumbs_dir):
+        _assert_safe_storage_dir(candidate)
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+    return work_dir, pages_dir, thumbs_dir
+
+
+def _quality_for_account_page(account_page_number: int) -> int:
+    base_quality = int(IMAGE_AVIF_QUALITY)
+    if account_page_number <= USER_PAGE_SOFT_CAP:
+        return max(1, base_quality)
+
+    ramp_limit = int(round(USER_PAGE_SOFT_CAP * USER_PAGE_QUALITY_RAMP_MULTIPLIER))
+    if ramp_limit <= USER_PAGE_SOFT_CAP:
+        return 1
+    if account_page_number >= ramp_limit:
+        return 1
+
+    ramp_progress = (account_page_number - USER_PAGE_SOFT_CAP) / (ramp_limit - USER_PAGE_SOFT_CAP)
+    quality_value = round(base_quality - (base_quality - 1) * ramp_progress)
+    return max(1, int(quality_value))
+
+
+def _assert_image_pixels_within_limit(image: Image.Image, context: str) -> None:
+    width, height = image.size
+    total_pixels = int(width) * int(height)
+    if total_pixels > MAX_UPLOAD_IMAGE_PIXELS:
+        raise ValueError(f"{context} exceeds maximum allowed pixel count ({total_pixels} > {MAX_UPLOAD_IMAGE_PIXELS})")
+
+
+def _prepare_image_for_avif(image: Image.Image) -> Image.Image:
+    # AVIF expects RGB/RGBA-like pixel data; normalize uncommon modes.
+    if image.mode in {"RGBA", "LA"}:
+        return image.convert("RGBA")
+    if image.mode == "P":
+        return image.convert("RGBA")
+    return image.convert("RGB")
+
+
+def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, format=fmt, quality=quality)
+    return buffer.getvalue()
+
+
+def _content_addressed_rel_path(data: bytes, extension: str) -> str:
+    digest = hashlib.sha256(data).hexdigest()
+    stripped_ext = extension.strip().lower().lstrip(".")
+    normalized_ext = stripped_ext if stripped_ext else "bin"
+    return f"_objects/{digest[:2]}/{digest}.{normalized_ext}"
+
+
+def _assert_safe_storage_target(base_dir: Path, target: Path) -> None:
+    resolved_base = base_dir.resolve()
+    resolved_target_parent = target.parent.resolve()
+    try:
+        _ = resolved_target_parent.relative_to(resolved_base)
+    except ValueError as exc:
+        raise ValueError(f"Upload target escapes storage root: {target}") from exc
+
+
+def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
+    _assert_safe_storage_dir(base_dir)
+    rel_path = _content_addressed_rel_path(data, extension)
+    target = base_dir / rel_path
+    _assert_safe_storage_target(base_dir, target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _assert_path_not_symlink(target.parent)
+    if target.exists():
+        target_stat = target.stat()
+        if target_stat.st_nlink > 1:
+            raise ValueError(f"Unsafe linked upload target detected: {target}")
+        return rel_path
+
+    try:
+        with target.open("xb") as handle:
+            handle.write(data)
+        target_stat = target.stat()
+        if target_stat.st_nlink > 1:
+            delete_file(target, missing_ok=True)
+            raise ValueError(f"Unsafe linked upload target detected: {target}")
+    except FileExistsError:
+        # Another request wrote the same hash concurrently.
+        pass
+    return rel_path
+
+
+def _elevate_rating(current: object, suggested: str | None) -> str:
+    normalized_current = _normalize_rating(str(current if current else "Not Rated"))
+    normalized_suggested = _normalize_rating(str(suggested if suggested else ""))
+    if normalized_suggested == "Explicit" and normalized_current != "Explicit":
+        return "Explicit"
+    return normalized_current
 
 
 def ingest_cbz(
@@ -1038,6 +1038,55 @@ def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, objec
     }
 
 
+def _chapter_seed_members_from_range(
+    page_order: list[str],
+    chapter: WorkChapterRow,
+) -> list[str]:
+    start_page = chapter["start_page"]
+    end_page = chapter["end_page"]
+    page_order_len_or_one = len(page_order) if len(page_order) else 1
+    start_page = max(1, min(start_page, page_order_len_or_one))
+    end_page = max(start_page, min(end_page, len(page_order) if len(page_order) else start_page))
+    return page_order[start_page - 1 : end_page]
+
+
+def _reconcile_chapters_after_page_changes(
+    work_id: str,
+    removed_image_filename: str | None = None,
+) -> None:
+    page_order = list_work_page_image_names(work_id)
+    chapters = list_work_chapters(work_id)
+
+    for chapter in chapters:
+        chapter_id = _as_int(chapter.get("id", 0), 0)
+        title = _as_str(chapter.get("title", "Untitled Chapter"), "Untitled Chapter")
+
+        members = list_work_chapter_members(chapter_id)
+        if not members:
+            members = _chapter_seed_members_from_range(page_order, chapter)
+
+        if removed_image_filename:
+            members = [name for name in members if name != removed_image_filename]
+
+        member_set = {name for name in members if name in page_order}
+        ordered_members = [name for name in page_order if name in member_set]
+
+        if not ordered_members:
+            _ = delete_work_chapter(work_id, chapter_id)
+            continue
+
+        first_pos = page_order.index(ordered_members[0]) + 1
+        last_pos = page_order.index(ordered_members[-1]) + 1
+        _ = update_work_chapter(
+            work_id,
+            chapter_id=chapter_id,
+            title=title,
+            start_page=first_pos,
+            end_page=last_pos,
+        )
+        replace_work_chapter_members(chapter_id, ordered_members)
+
+
 def ingest_editor_page(
     image_path: Path,
     metadata: dict[str, object],
@@ -1279,55 +1328,6 @@ def _require_editor_owner(work_id: str, uploader_username: str) -> dict[str, obj
     if existing_uploader and existing_uploader != uploader_username:
         raise PermissionError("Only the original uploader can manage editor pages")
     return existing_work
-
-
-def _chapter_seed_members_from_range(
-    page_order: list[str],
-    chapter: WorkChapterRow,
-) -> list[str]:
-    start_page = chapter["start_page"]
-    end_page = chapter["end_page"]
-    page_order_len_or_one = len(page_order) if len(page_order) else 1
-    start_page = max(1, min(start_page, page_order_len_or_one))
-    end_page = max(start_page, min(end_page, len(page_order) if len(page_order) else start_page))
-    return page_order[start_page - 1 : end_page]
-
-
-def _reconcile_chapters_after_page_changes(
-    work_id: str,
-    removed_image_filename: str | None = None,
-) -> None:
-    page_order = list_work_page_image_names(work_id)
-    chapters = list_work_chapters(work_id)
-
-    for chapter in chapters:
-        chapter_id = _as_int(chapter.get("id", 0), 0)
-        title = _as_str(chapter.get("title", "Untitled Chapter"), "Untitled Chapter")
-
-        members = list_work_chapter_members(chapter_id)
-        if not members:
-            members = _chapter_seed_members_from_range(page_order, chapter)
-
-        if removed_image_filename:
-            members = [name for name in members if name != removed_image_filename]
-
-        member_set = {name for name in members if name in page_order}
-        ordered_members = [name for name in page_order if name in member_set]
-
-        if not ordered_members:
-            _ = delete_work_chapter(work_id, chapter_id)
-            continue
-
-        first_pos = page_order.index(ordered_members[0]) + 1
-        last_pos = page_order.index(ordered_members[-1]) + 1
-        _ = update_work_chapter(
-            work_id,
-            chapter_id=chapter_id,
-            title=title,
-            start_page=first_pos,
-            end_page=last_pos,
-        )
-        replace_work_chapter_members(chapter_id, ordered_members)
 
 
 def editor_replace_page_image(

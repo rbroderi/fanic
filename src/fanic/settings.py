@@ -72,6 +72,67 @@ _SETTINGS_TOML_PATH = (
 )
 
 
+def parse_byte_size(value: str | int) -> int:
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError("Size must be non-negative")
+        return value
+
+    raw_value = value.strip()
+    if not raw_value:
+        raise ValueError("Size value cannot be empty")
+
+    if raw_value.isdigit():
+        parsed = int(raw_value)
+        if parsed < 0:
+            raise ValueError("Size must be non-negative")
+        return parsed
+
+    match = BytesUnit.parse_match(raw_value)
+    if not match:
+        raise ValueError(f"Invalid byte-size value: {value!r}")
+
+    number_raw = match.group(1)
+    unit_raw = match.group(2)
+    number = float(number_raw)
+    if number < 0:
+        raise ValueError("Size must be non-negative")
+
+    unit = BytesUnit.from_token(unit_raw)
+
+    return unit.to_bytes(number)
+
+
+def _resolve_value_from_file(
+    value: Any,
+    file_env_var_name: str,
+    default_credentials_name: str | None = None,
+) -> Any:
+    if isinstance(value, str) and value.strip():
+        return value
+
+    file_path_raw = os.getenv(file_env_var_name, "").strip()
+    if file_path_raw:
+        file_path = Path(file_path_raw).expanduser()
+        try:
+            return file_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"Unable to read {file_env_var_name} file at '{file_path}'") from exc
+
+    if default_credentials_name:
+        default_path = Path(f"/etc/fanic/credentials/{default_credentials_name}")
+    else:
+        default_path = None
+
+    if default_path is not None and default_path.is_file():
+        try:
+            return default_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"Unable to read credentials file at '{default_path}'") from exc
+
+    return value
+
+
 class FanicSettings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         extra="ignore",
@@ -81,25 +142,6 @@ class FanicSettings(BaseSettings):
         toml_file=_SETTINGS_TOML_PATH,
         validate_default=True,
     )
-
-    @classmethod
-    @override
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        toml_settings = TomlConfigSettingsSource(settings_cls)
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            toml_settings,
-            file_secret_settings,
-        )
 
     # Core runtime behavior
     csrf_protect: bool
@@ -179,6 +221,25 @@ class FanicSettings(BaseSettings):
     image_avif_quality: int
     thumbnail_avif_quality: int
     thumbnail_max_size: str = "720x720"
+
+    @classmethod
+    @override
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        toml_settings = TomlConfigSettingsSource(settings_cls)
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            toml_settings,
+            file_secret_settings,
+        )
 
     # Input normalization
     @field_validator("data_dir", "db_path", mode="before")
@@ -391,67 +452,6 @@ class FanicSettings(BaseSettings):
             and bool(self.auth0_callback_url.strip())
             and bool(self.auth0_logout_return_url.strip())
         )
-
-
-def parse_byte_size(value: str | int) -> int:
-    if isinstance(value, int):
-        if value < 0:
-            raise ValueError("Size must be non-negative")
-        return value
-
-    raw_value = value.strip()
-    if not raw_value:
-        raise ValueError("Size value cannot be empty")
-
-    if raw_value.isdigit():
-        parsed = int(raw_value)
-        if parsed < 0:
-            raise ValueError("Size must be non-negative")
-        return parsed
-
-    match = BytesUnit.parse_match(raw_value)
-    if not match:
-        raise ValueError(f"Invalid byte-size value: {value!r}")
-
-    number_raw = match.group(1)
-    unit_raw = match.group(2)
-    number = float(number_raw)
-    if number < 0:
-        raise ValueError("Size must be non-negative")
-
-    unit = BytesUnit.from_token(unit_raw)
-
-    return unit.to_bytes(number)
-
-
-def _resolve_value_from_file(
-    value: Any,
-    file_env_var_name: str,
-    default_credentials_name: str | None = None,
-) -> Any:
-    if isinstance(value, str) and value.strip():
-        return value
-
-    file_path_raw = os.getenv(file_env_var_name, "").strip()
-    if file_path_raw:
-        file_path = Path(file_path_raw).expanduser()
-        try:
-            return file_path.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise ValueError(f"Unable to read {file_env_var_name} file at '{file_path}'") from exc
-
-    if default_credentials_name:
-        default_path = Path(f"/etc/fanic/credentials/{default_credentials_name}")
-    else:
-        default_path = None
-
-    if default_path is not None and default_path.is_file():
-        try:
-            return default_path.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise ValueError(f"Unable to read credentials file at '{default_path}'") from exc
-
-    return value
 
 
 @lru_cache(maxsize=1)

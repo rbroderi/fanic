@@ -205,6 +205,20 @@ def enforce_https_termination(request: RequestLike, response: ResponseLike | Non
     return False
 
 
+def _request_client_ip(request: RequestLike) -> str:
+    forwarded_for = _header_value(request, "X-Forwarded-For")
+    if forwarded_for:
+        client = forwarded_for.split(",")[0].strip()
+        if client:
+            return client
+
+    remote_addr_obj = getattr(request, "remote_addr", "")
+    remote_addr = str(remote_addr_obj).strip()
+    if remote_addr:
+        return remote_addr
+    return "unknown"
+
+
 def validate_csrf(request: RequestLike) -> bool:
     if not CSRF_PROTECT:
         return True
@@ -228,17 +242,3 @@ def validate_csrf(request: RequestLike) -> bool:
             path=request.path,
         )
     return valid
-
-
-def _request_client_ip(request: RequestLike) -> str:
-    forwarded_for = _header_value(request, "X-Forwarded-For")
-    if forwarded_for:
-        client = forwarded_for.split(",")[0].strip()
-        if client:
-            return client
-
-    remote_addr_obj = getattr(request, "remote_addr", "")
-    remote_addr = str(remote_addr_obj).strip()
-    if remote_addr:
-        return remote_addr
-    return "unknown"

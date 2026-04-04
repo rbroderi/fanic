@@ -35,6 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "autopep695>=1.1.4",
+    "basedpyright>=1.39.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
 ]

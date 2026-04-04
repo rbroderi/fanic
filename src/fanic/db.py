@@ -54,37 +54,26 @@ def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
 
 
 def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
-    if not _table_exists(connection, "users"):
-        return
-
-    user_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info('users')").fetchall()}
-    if "is_over_18" not in user_columns:
-        connection.execute("ALTER TABLE users ADD COLUMN is_over_18 INTEGER")
-    if "age_gate_completed" not in user_columns:
-        connection.execute("ALTER TABLE users ADD COLUMN age_gate_completed INTEGER NOT NULL DEFAULT 1")
-    connection.execute("UPDATE users SET age_gate_completed = 1 WHERE age_gate_completed IS NULL")
-    try:
-        connection.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
-            ON users(lower(display_name))
-            WHERE trim(display_name) <> ''
-            """
-        )
-    except sqlite3.IntegrityError:
-        # Keep startup working for legacy databases that already contain duplicates.
-        pass
-    try:
-        connection.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
-            ON users(lower(email))
-            WHERE email IS NOT NULL AND trim(email) <> ''
-            """
-        )
-    except sqlite3.IntegrityError:
-        # Keep startup working for legacy databases that already contain duplicates.
-        pass
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
+        ON users(lower(display_name))
+        WHERE trim(display_name) <> ''
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_users_display_name_nocase
+        ON users(display_name COLLATE NOCASE)
+        """
+    )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+        ON users(lower(email))
+        WHERE email IS NOT NULL AND trim(email) <> ''
+        """
+    )
 
     connection.execute(
         """
@@ -160,6 +149,18 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE INDEX IF NOT EXISTS idx_fanart_items_title_nocase
+        ON fanart_items(title COLLATE NOCASE)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_items_fandom_nocase
+        ON fanart_items(fandom COLLATE NOCASE)
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS fanart_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fanart_item_id TEXT NOT NULL,
@@ -193,6 +194,582 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         ON tag_popularity(usage_count DESC, seed_count DESC)
         """
     )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_works_title_nocase
+        ON works(title COLLATE NOCASE)
+        """
+    )
+
+    # Build a fanart FTS index for scalable prefix search across uploader/title/summary/fandom.
+    connection.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fanart_search
+        USING fts5(
+            fanart_item_id UNINDEXED,
+            uploader_username,
+            uploader_display_name,
+            title,
+            summary,
+            fandom,
+            tokenize = 'unicode61',
+            prefix = '2 3 4'
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS fanart_search_ai
+        AFTER INSERT ON fanart_items
+        BEGIN
+            INSERT INTO fanart_search(
+                rowid,
+                fanart_item_id,
+                uploader_username,
+                uploader_display_name,
+                title,
+                summary,
+                fandom
+            )
+            VALUES (
+                NEW.rowid,
+                NEW.id,
+                NEW.uploader_username,
+                COALESCE(
+                    NULLIF(
+                        (
+                            SELECT u.display_name
+                            FROM users u
+                            WHERE u.username = NEW.uploader_username
+                            LIMIT 1
+                        ),
+                        ''
+                    ),
+                    NEW.uploader_username
+                ),
+                NEW.title,
+                NEW.summary,
+                NEW.fandom
+            );
+        END
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS fanart_search_ad
+        AFTER DELETE ON fanart_items
+        BEGIN
+            DELETE FROM fanart_search WHERE rowid = OLD.rowid;
+        END
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS fanart_search_au
+        AFTER UPDATE OF id, uploader_username, title, summary, fandom ON fanart_items
+        BEGIN
+            DELETE FROM fanart_search WHERE rowid = OLD.rowid;
+            INSERT INTO fanart_search(
+                rowid,
+                fanart_item_id,
+                uploader_username,
+                uploader_display_name,
+                title,
+                summary,
+                fandom
+            )
+            VALUES (
+                NEW.rowid,
+                NEW.id,
+                NEW.uploader_username,
+                COALESCE(
+                    NULLIF(
+                        (
+                            SELECT u.display_name
+                            FROM users u
+                            WHERE u.username = NEW.uploader_username
+                            LIMIT 1
+                        ),
+                        ''
+                    ),
+                    NEW.uploader_username
+                ),
+                NEW.title,
+                NEW.summary,
+                NEW.fandom
+            );
+        END
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS fanart_search_users_au
+        AFTER UPDATE OF display_name ON users
+        BEGIN
+            DELETE FROM fanart_search
+            WHERE rowid IN (
+                SELECT fi.rowid
+                FROM fanart_items fi
+                WHERE fi.uploader_username = NEW.username
+            );
+            INSERT INTO fanart_search(
+                rowid,
+                fanart_item_id,
+                uploader_username,
+                uploader_display_name,
+                title,
+                summary,
+                fandom
+            )
+            SELECT
+                fi.rowid,
+                fi.id,
+                fi.uploader_username,
+                COALESCE(NULLIF(NEW.display_name, ''), fi.uploader_username),
+                fi.title,
+                fi.summary,
+                fi.fandom
+            FROM fanart_items fi
+            WHERE fi.uploader_username = NEW.username;
+        END
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS fanart_search_users_ai
+        AFTER INSERT ON users
+        BEGIN
+            DELETE FROM fanart_search
+            WHERE rowid IN (
+                SELECT fi.rowid
+                FROM fanart_items fi
+                WHERE fi.uploader_username = NEW.username
+            );
+            INSERT INTO fanart_search(
+                rowid,
+                fanart_item_id,
+                uploader_username,
+                uploader_display_name,
+                title,
+                summary,
+                fandom
+            )
+            SELECT
+                fi.rowid,
+                fi.id,
+                fi.uploader_username,
+                COALESCE(NULLIF(NEW.display_name, ''), fi.uploader_username),
+                fi.title,
+                fi.summary,
+                fi.fandom
+            FROM fanart_items fi
+            WHERE fi.uploader_username = NEW.username;
+        END
+        """
+    )
+
+    fanart_item_count_row = connection.execute("SELECT COUNT(*) AS count FROM fanart_items").fetchone()
+    fanart_search_count_row = connection.execute("SELECT COUNT(*) AS count FROM fanart_search").fetchone()
+    fanart_item_count = int(fanart_item_count_row[0]) if fanart_item_count_row else 0
+    fanart_search_count = int(fanart_search_count_row[0]) if fanart_search_count_row else 0
+    if fanart_search_count != fanart_item_count:
+        connection.execute("DELETE FROM fanart_search")
+        connection.execute(
+            """
+            INSERT INTO fanart_search(
+                rowid,
+                fanart_item_id,
+                uploader_username,
+                uploader_display_name,
+                title,
+                summary,
+                fandom
+            )
+            SELECT
+                fi.rowid,
+                fi.id,
+                fi.uploader_username,
+                COALESCE(NULLIF(u.display_name, ''), fi.uploader_username),
+                fi.title,
+                fi.summary,
+                fi.fandom
+            FROM fanart_items fi
+            LEFT JOIN users u ON u.username = fi.uploader_username
+            """
+        )
+
+    # Build a works FTS index for scalable prefix search across title/summary/fandom/display name.
+    connection.execute(
+        """
+                CREATE VIRTUAL TABLE IF NOT EXISTS works_search
+                USING fts5(
+                    work_id UNINDEXED,
+                    title,
+                    summary,
+                    fandom,
+                    uploader_username,
+                    uploader_display_name,
+                    tokenize = 'unicode61',
+                    prefix = '2 3 4'
+                )
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_ai
+                AFTER INSERT ON works
+                BEGIN
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    VALUES (
+                        NEW.rowid,
+                        NEW.id,
+                        NEW.title,
+                        NEW.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = NEW.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(NEW.uploader_username, ''),
+                        COALESCE(
+                            NULLIF(
+                                (
+                                    SELECT u.display_name
+                                    FROM users u
+                                    WHERE u.username = NEW.uploader_username
+                                    LIMIT 1
+                                ),
+                                ''
+                            ),
+                            COALESCE(NEW.uploader_username, '')
+                        )
+                    );
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_ad
+                AFTER DELETE ON works
+                BEGIN
+                    DELETE FROM works_search WHERE rowid = OLD.rowid;
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_au
+                AFTER UPDATE OF id, title, summary, uploader_username ON works
+                BEGIN
+                    DELETE FROM works_search WHERE rowid = OLD.rowid;
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    VALUES (
+                        NEW.rowid,
+                        NEW.id,
+                        NEW.title,
+                        NEW.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = NEW.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(NEW.uploader_username, ''),
+                        COALESCE(
+                            NULLIF(
+                                (
+                                    SELECT u.display_name
+                                    FROM users u
+                                    WHERE u.username = NEW.uploader_username
+                                    LIMIT 1
+                                ),
+                                ''
+                            ),
+                            COALESCE(NEW.uploader_username, '')
+                        )
+                    );
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_work_tags_ai
+                AFTER INSERT ON work_tags
+                BEGIN
+                    DELETE FROM works_search
+                    WHERE rowid IN (
+                        SELECT w.rowid
+                        FROM works w
+                        WHERE w.id = NEW.work_id
+                    );
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    SELECT
+                        w.rowid,
+                        w.id,
+                        w.title,
+                        w.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = w.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(w.uploader_username, ''),
+                        COALESCE(NULLIF(u.display_name, ''), COALESCE(w.uploader_username, ''))
+                    FROM works w
+                    LEFT JOIN users u ON u.username = w.uploader_username
+                    WHERE w.id = NEW.work_id;
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_work_tags_ad
+                AFTER DELETE ON work_tags
+                BEGIN
+                    DELETE FROM works_search
+                    WHERE rowid IN (
+                        SELECT w.rowid
+                        FROM works w
+                        WHERE w.id = OLD.work_id
+                    );
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    SELECT
+                        w.rowid,
+                        w.id,
+                        w.title,
+                        w.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = w.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(w.uploader_username, ''),
+                        COALESCE(NULLIF(u.display_name, ''), COALESCE(w.uploader_username, ''))
+                    FROM works w
+                    LEFT JOIN users u ON u.username = w.uploader_username
+                    WHERE w.id = OLD.work_id;
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_tags_au
+                AFTER UPDATE OF name, type ON tags
+                BEGIN
+                    DELETE FROM works_search
+                    WHERE rowid IN (
+                        SELECT w.rowid
+                        FROM works w
+                        JOIN work_tags wt ON wt.work_id = w.id
+                        WHERE wt.tag_id = NEW.id
+                    );
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    SELECT
+                        w.rowid,
+                        w.id,
+                        w.title,
+                        w.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt2
+                                JOIN tags t ON t.id = wt2.tag_id
+                                WHERE wt2.work_id = w.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(w.uploader_username, ''),
+                        COALESCE(NULLIF(u.display_name, ''), COALESCE(w.uploader_username, ''))
+                    FROM works w
+                    LEFT JOIN users u ON u.username = w.uploader_username
+                    JOIN work_tags wt ON wt.work_id = w.id
+                    WHERE wt.tag_id = NEW.id;
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_users_ai
+                AFTER INSERT ON users
+                BEGIN
+                    DELETE FROM works_search
+                    WHERE rowid IN (
+                        SELECT w.rowid
+                        FROM works w
+                        WHERE w.uploader_username = NEW.username
+                    );
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    SELECT
+                        w.rowid,
+                        w.id,
+                        w.title,
+                        w.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = w.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(w.uploader_username, ''),
+                        COALESCE(NULLIF(NEW.display_name, ''), COALESCE(w.uploader_username, ''))
+                    FROM works w
+                    WHERE w.uploader_username = NEW.username;
+                END
+                """
+    )
+    connection.execute(
+        """
+                CREATE TRIGGER IF NOT EXISTS works_search_users_au
+                AFTER UPDATE OF display_name ON users
+                BEGIN
+                    DELETE FROM works_search
+                    WHERE rowid IN (
+                        SELECT w.rowid
+                        FROM works w
+                        WHERE w.uploader_username = NEW.username
+                    );
+                    INSERT INTO works_search(
+                        rowid,
+                        work_id,
+                        title,
+                        summary,
+                        fandom,
+                        uploader_username,
+                        uploader_display_name
+                    )
+                    SELECT
+                        w.rowid,
+                        w.id,
+                        w.title,
+                        w.summary,
+                        COALESCE(
+                            (
+                                SELECT group_concat(t.name, ' ')
+                                FROM work_tags wt
+                                JOIN tags t ON t.id = wt.tag_id
+                                WHERE wt.work_id = w.id
+                                  AND t.type = 'fandom'
+                            ),
+                            ''
+                        ),
+                        COALESCE(w.uploader_username, ''),
+                        COALESCE(NULLIF(NEW.display_name, ''), COALESCE(w.uploader_username, ''))
+                    FROM works w
+                    WHERE w.uploader_username = NEW.username;
+                END
+                """
+    )
+
+    work_count_row = connection.execute("SELECT COUNT(*) FROM works").fetchone()
+    work_search_count_row = connection.execute("SELECT COUNT(*) FROM works_search").fetchone()
+    work_count = int(work_count_row[0]) if work_count_row else 0
+    work_search_count = int(work_search_count_row[0]) if work_search_count_row else 0
+    if work_count != work_search_count:
+        connection.execute("DELETE FROM works_search")
+        connection.execute(
+            """
+            INSERT INTO works_search(
+                rowid,
+                work_id,
+                title,
+                summary,
+                fandom,
+                uploader_username,
+                uploader_display_name
+            )
+            SELECT
+                w.rowid,
+                w.id,
+                w.title,
+                w.summary,
+                COALESCE(
+                    (
+                        SELECT group_concat(t.name, ' ')
+                        FROM work_tags wt
+                        JOIN tags t ON t.id = wt.tag_id
+                        WHERE wt.work_id = w.id
+                          AND t.type = 'fandom'
+                    ),
+                    ''
+                ),
+                COALESCE(w.uploader_username, ''),
+                COALESCE(NULLIF(u.display_name, ''), COALESCE(w.uploader_username, ''))
+            FROM works w
+            LEFT JOIN users u ON u.username = w.uploader_username
+            """
+        )
 
     run_runtime_migrations(connection, _table_exists)
 

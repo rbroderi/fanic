@@ -107,6 +107,46 @@ def _sanitize_display_name(display_name: str) -> str:
     return re.sub(r"[^A-Za-z0-9]", "", display_name.strip())
 
 
+def _email_in_use_by_other_username(email: str, username: str) -> bool:
+    normalized_email = email.strip().lower()
+    normalized_username = username.strip()
+    if not normalized_email or not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM users
+            WHERE lower(COALESCE(email, '')) = ?
+              AND username <> ?
+            LIMIT 1
+            """,
+            (normalized_email, normalized_username),
+        ).fetchone()
+    return row is not None
+
+
+def _display_name_in_use_by_other_username(display_name: str, username: str) -> bool:
+    normalized_display_name = display_name.strip().lower()
+    normalized_username = username.strip()
+    if not normalized_display_name or not normalized_username:
+        return False
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM users
+            WHERE lower(display_name) = ?
+              AND username <> ?
+            LIMIT 1
+            """,
+            (normalized_display_name, normalized_username),
+        ).fetchone()
+    return row is not None
+
+
 def upsert_user(
     user_id: str,
     username: str,
@@ -156,6 +196,18 @@ def upsert_user(
                 normalized_role,
             ),
         )
+
+
+def _next_available_display_name(seed: str, username: str) -> str:
+    base = _sanitize_display_name(seed)
+    if not base:
+        base = "User"
+    candidate = base
+    counter = 2
+    while _display_name_in_use_by_other_username(candidate, username):
+        candidate = f"{base}{counter}"
+        counter += 1
+    return candidate
 
 
 def ensure_local_user(username: str, *, role: UserRole = "user") -> None:
@@ -322,58 +374,6 @@ def get_local_user_by_display_name(display_name: str) -> LocalUserRow | None:
         "active": bool(int(row["active"])),
         "created_at": str(row["created_at"]),
     }
-
-
-def _email_in_use_by_other_username(email: str, username: str) -> bool:
-    normalized_email = email.strip().lower()
-    normalized_username = username.strip()
-    if not normalized_email or not normalized_username:
-        return False
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT 1
-            FROM users
-            WHERE lower(COALESCE(email, '')) = ?
-              AND username <> ?
-            LIMIT 1
-            """,
-            (normalized_email, normalized_username),
-        ).fetchone()
-    return row is not None
-
-
-def _display_name_in_use_by_other_username(display_name: str, username: str) -> bool:
-    normalized_display_name = display_name.strip().lower()
-    normalized_username = username.strip()
-    if not normalized_display_name or not normalized_username:
-        return False
-
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT 1
-            FROM users
-            WHERE lower(display_name) = ?
-              AND username <> ?
-            LIMIT 1
-            """,
-            (normalized_display_name, normalized_username),
-        ).fetchone()
-    return row is not None
-
-
-def _next_available_display_name(seed: str, username: str) -> str:
-    base = _sanitize_display_name(seed)
-    if not base:
-        base = "User"
-    candidate = base
-    counter = 2
-    while _display_name_in_use_by_other_username(candidate, username):
-        candidate = f"{base}{counter}"
-        counter += 1
-    return candidate
 
 
 def _local_user_by_email(email: str) -> LocalUserRow | None:

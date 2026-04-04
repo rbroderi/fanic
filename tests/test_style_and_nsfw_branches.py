@@ -101,13 +101,13 @@ class _FakeImageEmbedding:
         _ = (dim, keepdim)
         return 1
 
-    def __truediv__(self, other: object) -> Self:
-        _ = other
-        return self
-
     def __matmul__(self, other: object) -> _FakeLogits:
         _ = other
         return _FakeLogits(self._probs)
+
+    def __truediv__(self, other: object) -> Self:
+        _ = other
+        return self
 
 
 class _FakeModelLogitScale:

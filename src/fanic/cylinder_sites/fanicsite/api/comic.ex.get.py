@@ -250,15 +250,15 @@ def _chapter_members_with_fallback(
     return page_order[start_page - 1 : end_page]
 
 
+def _safe_filename(name: str, fallback: str) -> str:
+    safe = sanitize_filename(name, replacement_text="_").strip(" .")
+    return safe if safe else fallback
+
+
 def _chapter_folder_name(chapter_index: int, title: str) -> str:
     base_slug = slugify(title)
     base = base_slug if base_slug else "chapter"
     return _safe_filename(f"chapter-{chapter_index:03d}-{base}", "chapter")
-
-
-def _safe_filename(name: str, fallback: str) -> str:
-    safe = sanitize_filename(name, replacement_text="_").strip(" .")
-    return safe if safe else fallback
 
 
 def _current_export_key(work_id: str, work: Mapping[str, object]) -> str:

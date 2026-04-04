@@ -35,6 +35,17 @@ JWT_DECODE = cast(JWTDecode, jwt.decode)
 LOGGER = structlog.get_logger("fanic.http")
 
 
+def _header_value(request: RequestLike, header_name: str) -> str:
+    headers_obj = getattr(request, "headers", None)
+    if headers_obj is None:
+        return ""
+    if not hasattr(headers_obj, "get"):
+        return ""
+    getter = cast(Callable[[str, str], object], headers_obj.get)
+    value_obj = getter(header_name, "")
+    return str(value_obj)
+
+
 def request_id(request: RequestLike, response: ResponseLike | None = None) -> str:
     existing = getattr(request, _REQUEST_ID_ATTR, "")
     existing_id = str(existing).strip()
@@ -81,6 +92,45 @@ def _redact_object(value: object) -> object:
 def _items_object_to_dict(items_obj: object) -> dict[str, object]:
     pairs = cast(Iterable[tuple[object, object]], items_obj)
     return {str(key): value for key, value in pairs}
+
+
+def _request_client_ip(request: RequestLike) -> str:
+    forwarded_for = _header_value(request, "X-Forwarded-For")
+    if forwarded_for:
+        client = forwarded_for.split(",")[0].strip()
+        if client:
+            return client
+
+    remote_addr_obj = getattr(request, "remote_addr", "")
+    remote_addr = str(remote_addr_obj).strip()
+    if remote_addr:
+        return remote_addr
+    return "unknown"
+
+
+def decode_session(token: str) -> str | None:
+    try:
+        claims = JWT_DECODE(token, SESSION_SECRET)
+
+        exp = claims.get("exp")
+        if not isinstance(exp, int):
+            return None
+        if exp < int(time.time()):
+            return None
+
+        username = claims.get("sub")
+        if isinstance(username, str):
+            return username
+        return None
+    except (JoseError, ValueError):
+        return None
+
+
+def current_user(request: RequestLike) -> str | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return None
+    return decode_session(token)
 
 
 def request_context_for_log(request: RequestLike) -> dict[str, object]:
@@ -132,53 +182,3 @@ def log_exception(
     if extra:
         event["extra"] = _redact_object(extra)
     LOGGER.exception(message, **event)
-
-
-def _header_value(request: RequestLike, header_name: str) -> str:
-    headers_obj = getattr(request, "headers", None)
-    if headers_obj is None:
-        return ""
-    if not hasattr(headers_obj, "get"):
-        return ""
-    getter = cast(Callable[[str, str], object], headers_obj.get)
-    value_obj = getter(header_name, "")
-    return str(value_obj)
-
-
-def _request_client_ip(request: RequestLike) -> str:
-    forwarded_for = _header_value(request, "X-Forwarded-For")
-    if forwarded_for:
-        client = forwarded_for.split(",")[0].strip()
-        if client:
-            return client
-
-    remote_addr_obj = getattr(request, "remote_addr", "")
-    remote_addr = str(remote_addr_obj).strip()
-    if remote_addr:
-        return remote_addr
-    return "unknown"
-
-
-def decode_session(token: str) -> str | None:
-    try:
-        claims = JWT_DECODE(token, SESSION_SECRET)
-
-        exp = claims.get("exp")
-        if not isinstance(exp, int):
-            return None
-        if exp < int(time.time()):
-            return None
-
-        username = claims.get("sub")
-        if isinstance(username, str):
-            return username
-        return None
-    except (JoseError, ValueError):
-        return None
-
-
-def current_user(request: RequestLike) -> str | None:
-    token = request.cookies.get(SESSION_COOKIE_NAME, "")
-    if not token:
-        return None
-    return decode_session(token)

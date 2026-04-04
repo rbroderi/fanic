@@ -3,10 +3,10 @@ from urllib.parse import urlencode
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.common.responses import text_error
+from fanic.cylinder_sites.common.session import current_user
+from fanic.cylinder_sites.common.session import role_for_user
 from fanic.cylinder_sites.fanicsite_home_helpers import aria_current as _aria_current
 from fanic.cylinder_sites.fanicsite_home_helpers import (
     fanart_items_html as _fanart_items_html,
@@ -16,9 +16,12 @@ from fanic.cylinder_sites.fanicsite_home_helpers import (
     work_grid_html as _work_grid_html,
 )
 from fanic.cylinder_sites.user_roles import is_privileged_role
-from fanic.repository.works import can_view_work
 from fanic.repository.fanart import list_fanart_items
 from fanic.repository.works import list_works
+from fanic.repository.works import user_prefers_explicit
+from fanic.repository.works import user_prefers_mature
+
+COMICS_PER_PAGE = 120
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -33,6 +36,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     tag = request.args.get("tag", "").strip()
     status = request.args.get("status", "").strip()
     sort = request.args.get("sort", "newest").strip()
+    page_raw = request.args.get("page", "").strip()
+    try:
+        page = max(1, int(page_raw)) if page_raw else 1
+    except ValueError:
+        page = 1
+
     filters = {
         "q": q,
         "user": user,
@@ -64,7 +73,16 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             can_delete=can_delete,
         )
     else:
-        works = [work for work in list_works(filters) if can_view_work(username, work)]
+        include_mature = user_prefers_mature(username)
+        include_explicit = user_prefers_explicit(username)
+        comics_filters = {
+            **filters,
+            "limit": str(COMICS_PER_PAGE),
+            "offset": str((page - 1) * COMICS_PER_PAGE),
+            "include_mature": "1" if include_mature else "0",
+            "include_explicit": "1" if include_explicit else "0",
+        }
+        works = list_works(comics_filters)
         work_grid_html = _work_grid_html(works, can_delete, back_href=back_href)
 
     return render_html_template(

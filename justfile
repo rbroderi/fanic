@@ -57,12 +57,17 @@ py-typecheck:
 py-typecheck:
     uvx basedpyright
 
-# Install prek pre-commit hook and hook environments.
-prek-install:
-    uvx prek install --overwrite --install-hooks
+# Run Python type checking directly.
+[windows]
+basedpyright:
+    uv run basedpyright
+
+[unix]
+basedpyright:
+    uv run basedpyright
 
 # Run prek hooks against all files.
-prek-run:
+prek:
     bash static/sync-from-storage.sh; uvx prek run --all-files
 
 # Run pytest with coverage for the src package.

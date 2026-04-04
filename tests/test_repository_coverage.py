@@ -50,6 +50,7 @@ def _ensure_test_runtime_schema(connection: sqlite3.Connection) -> None:
 
 
 def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
+    import fanic.db as db_module
     import fanic.repository.fanart as repository_fanart
     import fanic.repository.social as repository_social
     import fanic.repository.tags as repository_tags
@@ -82,6 +83,7 @@ def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     with sqlite3.connect(db_path, factory=_ManagedTestConnection) as connection:
         connection.executescript(schema_path.read_text(encoding="utf-8"))
         _ensure_test_runtime_schema(connection)
+        db_module._ensure_runtime_schema(connection)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
     def get_test_connection() -> sqlite3.Connection:
         connection = sqlite3.connect(db_path, factory=_ManagedTestConnection)

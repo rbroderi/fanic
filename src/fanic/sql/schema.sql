@@ -242,6 +242,9 @@ CREATE TABLE IF NOT EXISTS dmca_reports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_works_slug ON works(slug);
+CREATE INDEX IF NOT EXISTS idx_works_title_nocase ON works(title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_works_rating_updated_at ON works(rating, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_works_status_updated_at ON works(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type);
 CREATE INDEX IF NOT EXISTS idx_work_tags_work ON work_tags(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_tags_tag ON work_tags(tag_id);
@@ -249,6 +252,8 @@ CREATE INDEX IF NOT EXISTS idx_tag_popularity_usage_seed
 ON tag_popularity(usage_count DESC, seed_count DESC);
 CREATE INDEX IF NOT EXISTS idx_pages_work ON pages(work_id);
 CREATE INDEX IF NOT EXISTS idx_fanart_items_uploader_created_at ON fanart_items(uploader_username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fanart_items_title_nocase ON fanart_items(title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_fanart_items_fandom_nocase ON fanart_items(fandom COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_fanart_galleries_uploader_created_at ON fanart_galleries(uploader_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_gallery_position ON fanart_gallery_items(gallery_id, position ASC, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_fanart_gallery_items_fanart_item ON fanart_gallery_items(fanart_item_id);
@@ -262,6 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_user_bookmarks_username_updated_at ON user_bookma
 CREATE INDEX IF NOT EXISTS idx_notifications_username_created_at ON notifications(username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_username_is_read ON notifications(username, is_read);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_display_name_nocase ON users(display_name COLLATE NOCASE);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 ON users(lower(display_name))
 WHERE trim(display_name) <> '';

@@ -93,12 +93,11 @@ def test_home_route_renders_work_links(
         _ = request
         return "alice"
 
-    def fake_can_view_work(username: str, work: dict[str, Any]) -> bool:
-        _ = (username, work)
-        return True
+    seen_filters: dict[str, Any] = {}
 
     def fake_list_works(filters: dict[str, Any]) -> list[dict[str, Any]]:
-        _ = filters
+        seen_filters.clear()
+        seen_filters.update(filters)
         return [
             {
                 "id": "work-1",
@@ -114,12 +113,9 @@ def test_home_route_renders_work_links(
             }
         ]
 
-    _patch_current_user_and_can_view(
-        monkeypatch,
-        module,
-        current_user_func=fake_current_user,
-        can_view_work_func=fake_can_view_work,
-    )
+    monkeypatch.setattr(module, "current_user", fake_current_user)
+    monkeypatch.setattr(module, "user_prefers_mature", lambda *_: False)
+    monkeypatch.setattr(module, "user_prefers_explicit", lambda *_: False)
     monkeypatch.setattr(
         module,
         "list_works",
@@ -146,6 +142,8 @@ def test_home_route_renders_work_links(
 
     assert result.status_code == 200
     assert b"/comic/work-1" in result.data
+    assert seen_filters["include_mature"] == "0"
+    assert seen_filters["include_explicit"] == "0"
 
 
 def test_home_route_renders_fanart_tab(
@@ -250,7 +248,8 @@ def test_home_route_tab_views_render_quickly(
 
     monkeypatch.setattr(module, "current_user", _current_user_alice)
     monkeypatch.setattr(module, "role_for_user", _role_admin)
-    monkeypatch.setattr(module, "can_view_work", _always_true)
+    monkeypatch.setattr(module, "user_prefers_mature", lambda *_: False)
+    monkeypatch.setattr(module, "user_prefers_explicit", lambda *_: False)
     monkeypatch.setattr(
         module,
         "list_works",

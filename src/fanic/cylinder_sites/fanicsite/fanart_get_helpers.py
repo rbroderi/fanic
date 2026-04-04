@@ -261,6 +261,14 @@ def build_gallery_cbz_bytes(
     return payload.getvalue(), added_files
 
 
+def owner_display_name(work_owner_username: str, works: Sequence[FanartItemRow]) -> str:
+    for work in works:
+        display_name_raw = str(work.get("uploader_display_name", "")).strip()
+        if display_name_raw:
+            return display_name_raw
+    return work_owner_username
+
+
 def work_reader_bootstrap(
     work_owner_profile_key: str,
     works: Sequence[FanartItemRow],
@@ -304,14 +312,6 @@ def work_reader_bootstrap(
         "pages": pages,
         "chapters": [],
     }
-
-
-def owner_display_name(work_owner_username: str, works: Sequence[FanartItemRow]) -> str:
-    for work in works:
-        display_name_raw = str(work.get("uploader_display_name", "")).strip()
-        if display_name_raw:
-            return display_name_raw
-    return work_owner_username
 
 
 def resolve_owner_username(owner_key: str) -> str | None:

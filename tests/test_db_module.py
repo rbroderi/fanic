@@ -17,6 +17,11 @@ def _ensure_runtime_schema_fn() -> Callable[[sqlite3.Connection], None]:
     return cast(Callable[[sqlite3.Connection], None], db._ensure_runtime_schema)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
 
+def _load_schema(connection: sqlite3.Connection) -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "src" / "fanic" / "sql" / "schema.sql"
+    connection.executescript(schema_path.read_text(encoding="utf-8"))
+
+
 def test_managed_connection_closes_on_context_exit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -24,6 +29,12 @@ def test_managed_connection_closes_on_context_exit(
     db_path = tmp_path / "app.sqlite3"
     monkeypatch.setattr(db, "DB_PATH", db_path)
     monkeypatch.setattr(db, "ensure_storage_dirs", lambda: None)
+
+    bootstrap_connection = sqlite3.connect(db_path)
+    try:
+        _load_schema(bootstrap_connection)
+    finally:
+        bootstrap_connection.close()
 
     connection = db.get_connection()
     with connection as active:
@@ -44,16 +55,13 @@ def test_table_exists_helper_detects_existing_and_missing_tables() -> None:
         connection.close()
 
 
-def test_ensure_runtime_schema_noops_without_users_table() -> None:
+def test_ensure_runtime_schema_requires_users_table() -> None:
     ensure_runtime_schema = _ensure_runtime_schema_fn()
     connection = sqlite3.connect(":memory:")
     try:
         connection.execute("CREATE TABLE user_preferences (username TEXT PRIMARY KEY)")
-        ensure_runtime_schema(connection)
-
-        user_count = connection.execute("SELECT COUNT(*) FROM user_preferences").fetchone()
-        assert user_count is not None
-        assert int(user_count[0]) == 0
+        with pytest.raises(sqlite3.OperationalError):
+            ensure_runtime_schema(connection)
     finally:
         connection.close()
 
@@ -62,19 +70,7 @@ def test_ensure_runtime_schema_creates_auth_identity_table_and_indexes() -> None
     ensure_runtime_schema = _ensure_runtime_schema_fn()
     connection = sqlite3.connect(":memory:")
     try:
-        connection.execute(
-            """
-            CREATE TABLE users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                display_name TEXT NOT NULL,
-                email TEXT,
-                active INTEGER NOT NULL DEFAULT 1,
-                role TEXT NOT NULL DEFAULT 'user',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+        _load_schema(connection)
 
         ensure_runtime_schema(connection)
         identity_table = connection.execute(
@@ -97,29 +93,13 @@ def test_ensure_runtime_schema_normalizes_legacy_fanart_paths() -> None:
     ensure_runtime_schema = _ensure_runtime_schema_fn()
     connection = sqlite3.connect(":memory:")
     try:
+        _load_schema(connection)
         connection.execute(
             """
-            CREATE TABLE users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                display_name TEXT NOT NULL,
-                email TEXT,
-                active INTEGER NOT NULL DEFAULT 1,
-                role TEXT NOT NULL DEFAULT 'user',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE fanart_items (
-                id TEXT PRIMARY KEY,
-                uploader_username TEXT NOT NULL,
-                title TEXT NOT NULL,
-                image_filename TEXT NOT NULL,
-                thumb_filename TEXT
-            )
-            """
+            INSERT INTO users (id, username, display_name, active, role)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("user-1", "alice", "AliceArtist", 1, "user"),
         )
         connection.execute(
             """
@@ -144,6 +124,59 @@ def test_ensure_runtime_schema_normalizes_legacy_fanart_paths() -> None:
         assert row is not None
         assert str(row[0]) == "_objects/aa/image.avif"
         assert str(row[1]) == "_objects/aa/thumb.avif"
+    finally:
+        connection.close()
+
+
+def test_ensure_runtime_schema_creates_fanart_search_index_and_syncs_display_name() -> None:
+    ensure_runtime_schema = _ensure_runtime_schema_fn()
+    connection = sqlite3.connect(":memory:")
+    try:
+        _load_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO users (id, username, display_name, active, role)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("user-1", "alice", "AliceArtist", 1, "user"),
+        )
+        connection.execute(
+            """
+            INSERT INTO fanart_items (id, uploader_username, title, summary, fandom, image_filename)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "item-1",
+                "alice",
+                "Clouds",
+                "Paint study",
+                "Skyverse",
+                "_objects/aa/image.avif",
+            ),
+        )
+
+        ensure_runtime_schema(connection)
+
+        index_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'fanart_search'"
+        ).fetchone()
+        assert index_exists is not None
+
+        matched = connection.execute(
+            "SELECT rowid FROM fanart_search WHERE fanart_search MATCH ?",
+            ("Alice*",),
+        ).fetchone()
+        assert matched is not None
+
+        connection.execute(
+            "UPDATE users SET display_name = ? WHERE username = ?",
+            ("SkyPainter", "alice"),
+        )
+        rematched = connection.execute(
+            "SELECT rowid FROM fanart_search WHERE fanart_search MATCH ?",
+            ("SkyP*",),
+        ).fetchone()
+        assert rematched is not None
     finally:
         connection.close()
 

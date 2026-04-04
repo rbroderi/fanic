@@ -1,4 +1,9 @@
 repos:
+  - repo: https://github.com/bwhmather/ssort
+    rev: 0.16.0
+    hooks:
+      - id: ssort
+
   - repo: local
     hooks:
       - id: set-source-permissions

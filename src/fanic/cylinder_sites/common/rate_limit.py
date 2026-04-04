@@ -111,6 +111,27 @@ def auth_lockout_seconds_remaining(request: RequestLike, username: str) -> int:
         return int(locked_until - now)
 
 
+def _prune_stale_auth_entries(now: float) -> None:
+    """Remove expired lockout entries to prevent unbounded memory growth.
+
+    Must be called while holding ``_AUTH_LOCK``.
+    """
+    cutoff = now - AUTH_LOCKOUT_SECONDS * 2
+    stale_keys = [key for key, locked_until in _AUTH_LOCKED_UNTIL.items() if locked_until < cutoff]
+    for key in stale_keys:
+        _AUTH_LOCKED_UNTIL.pop(key, None)
+        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
+
+    if len(_AUTH_LOCKED_UNTIL) <= MAX_TRACKED_RATE_LIMIT_KEYS:
+        return
+
+    overflow = len(_AUTH_LOCKED_UNTIL) - MAX_TRACKED_RATE_LIMIT_KEYS
+    sorted_keys = sorted(_AUTH_LOCKED_UNTIL, key=lambda key: _AUTH_LOCKED_UNTIL.get(key, 0.0))
+    for key in sorted_keys[:overflow]:
+        _AUTH_LOCKED_UNTIL.pop(key, None)
+        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
+
+
 def record_auth_failure(request: RequestLike, username: str) -> int:
     key = _auth_key(request, username)
     client_ip = _request_client_ip(request)
@@ -142,27 +163,6 @@ def record_auth_failure(request: RequestLike, username: str) -> int:
             attempt_count=len(attempts),
         )
         return 0
-
-
-def _prune_stale_auth_entries(now: float) -> None:
-    """Remove expired lockout entries to prevent unbounded memory growth.
-
-    Must be called while holding ``_AUTH_LOCK``.
-    """
-    cutoff = now - AUTH_LOCKOUT_SECONDS * 2
-    stale_keys = [key for key, locked_until in _AUTH_LOCKED_UNTIL.items() if locked_until < cutoff]
-    for key in stale_keys:
-        _AUTH_LOCKED_UNTIL.pop(key, None)
-        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
-
-    if len(_AUTH_LOCKED_UNTIL) <= MAX_TRACKED_RATE_LIMIT_KEYS:
-        return
-
-    overflow = len(_AUTH_LOCKED_UNTIL) - MAX_TRACKED_RATE_LIMIT_KEYS
-    sorted_keys = sorted(_AUTH_LOCKED_UNTIL, key=lambda key: _AUTH_LOCKED_UNTIL.get(key, 0.0))
-    for key in sorted_keys[:overflow]:
-        _AUTH_LOCKED_UNTIL.pop(key, None)
-        _AUTH_FAILURE_TIMESTAMPS.pop(key, None)
 
 
 def _prune_stale_post_rate_entries(now: float) -> None:

@@ -1,5 +1,6 @@
 """fanart repository domain implementation."""
 
+import re
 import sqlite3
 import uuid
 from pathlib import Path
@@ -113,6 +114,24 @@ def _select_fanart_item_by_filter(
     if row is None:
         return None
     return _fanart_item_from_row(row, include_display_name=include_display_name)
+
+
+def _fanart_search_table_exists(connection: sqlite3.Connection) -> bool:
+    row = connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'fanart_search'").fetchone()
+    return row is not None
+
+
+def _require_fanart_search_table(connection: sqlite3.Connection) -> None:
+    if _fanart_search_table_exists(connection):
+        return
+    raise RuntimeError("fanart_search index is required. Run database migrations before serving search.")
+
+
+def _fts_prefix_query(raw_query: str) -> str | None:
+    tokens = re.findall(r"[A-Za-z0-9_]+", raw_query)
+    if not tokens:
+        return None
+    return " ".join(f"{token}*" for token in tokens)
 
 
 def add_fanart_comment(
@@ -523,47 +542,53 @@ def list_fanart_users(
     resolved_filters = filters if filters is not None else {}
     where: list[str] = []
     params: list[object] = []
-
     search = resolved_filters.get("q", "").strip()
-    if search:
-        where.append("(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ?)")
-        like_search = f"%{search}%"
-        params.extend([like_search, like_search, like_search, like_search])
 
-    uploader = resolved_filters.get("user", "").strip()
-    if uploader:
-        where.append("fi.uploader_username LIKE ?")
-        like_uploader = f"%{uploader}%"
-        params.append(like_uploader)
+    with get_connection() as connection:
+        _require_fanart_search_table(connection)
 
-    fandom = resolved_filters.get("fandom", "").strip()
-    if fandom:
-        where.append("fi.fandom LIKE ?")
-        like_fandom = f"%{fandom}%"
-        params.append(like_fandom)
+        if search:
+            fts_query = _fts_prefix_query(search)
+            if fts_query:
+                where.append("fi.rowid IN (SELECT fs.rowid FROM fanart_search fs WHERE fanart_search MATCH ?)")
+                params.append(fts_query)
+            else:
+                where.append("1 = 0")
 
-    tag = resolved_filters.get("tag", "").strip()
-    if tag:
-        where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
-        like_tag = f"%{tag}%"
-        params.extend([like_tag, like_tag])
+        uploader = resolved_filters.get("user", "").strip()
+        if uploader:
+            where.append("fi.uploader_username LIKE ?")
+            like_uploader = f"%{uploader}%"
+            params.append(like_uploader)
 
-    status = resolved_filters.get("status", "").strip()
-    if status == "complete":
-        where.append("fi.summary <> ''")
-    elif status == "in_progress":
-        where.append("fi.summary = ''")
+        fandom = resolved_filters.get("fandom", "").strip()
+        if fandom:
+            where.append("fi.fandom LIKE ?")
+            like_fandom = f"%{fandom}%"
+            params.append(like_fandom)
 
-    sort = resolved_filters.get("sort", "newest").strip()
-    order_by = "latest_created_at DESC, ranked.uploader_username COLLATE NOCASE ASC"
-    if sort == "oldest":
-        order_by = "latest_created_at ASC, ranked.uploader_username COLLATE NOCASE ASC"
-    elif sort == "title_asc":
-        order_by = "ranked.uploader_username COLLATE NOCASE ASC"
-    elif sort == "title_desc":
-        order_by = "ranked.uploader_username COLLATE NOCASE DESC"
+        tag = resolved_filters.get("tag", "").strip()
+        if tag:
+            where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
+            like_tag = f"%{tag}%"
+            params.extend([like_tag, like_tag])
 
-    sql = """
+        status = resolved_filters.get("status", "").strip()
+        if status == "complete":
+            where.append("fi.summary <> ''")
+        elif status == "in_progress":
+            where.append("fi.summary = ''")
+
+        sort = resolved_filters.get("sort", "newest").strip()
+        order_by = "latest_created_at DESC, ranked.uploader_username COLLATE NOCASE ASC"
+        if sort == "oldest":
+            order_by = "latest_created_at ASC, ranked.uploader_username COLLATE NOCASE ASC"
+        elif sort == "title_asc":
+            order_by = "ranked.uploader_username COLLATE NOCASE ASC"
+        elif sort == "title_desc":
+            order_by = "ranked.uploader_username COLLATE NOCASE DESC"
+
+        sql = """
             WITH filtered AS (
                 SELECT
                     fi.id,
@@ -572,9 +597,9 @@ def list_fanart_users(
                     fi.thumb_filename
                 FROM fanart_items fi
     """
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += """
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += """
             ),
             ranked AS (
                 SELECT
@@ -606,11 +631,9 @@ def list_fanart_users(
                 ON counts.uploader_username = ranked.uploader_username
             WHERE ranked.rn = 1
     """
-    sql += f" ORDER BY {order_by}"
-    sql += " LIMIT ?"
-    params.append(int(limit))
-
-    with get_connection() as connection:
+        sql += f" ORDER BY {order_by}"
+        sql += " LIMIT ?"
+        params.append(int(limit))
         rows = connection.execute(sql, params).fetchall()
 
     users: list[FanartUserSummaryRow] = []
@@ -637,49 +660,53 @@ def list_fanart_items(
     resolved_filters = filters if filters is not None else {}
     where: list[str] = []
     params: list[object] = []
-
     search = resolved_filters.get("q", "").strip()
-    if search:
-        where.append(
-            "(fi.uploader_username LIKE ? OR fi.title LIKE ? OR fi.summary LIKE ? OR fi.fandom LIKE ? OR u.display_name LIKE ?)"
-        )
-        like_search = f"%{search}%"
-        params.extend([like_search, like_search, like_search, like_search, like_search])
 
-    uploader = resolved_filters.get("user", "").strip()
-    if uploader:
-        where.append("(fi.uploader_username LIKE ? OR u.display_name LIKE ?)")
-        like_uploader = f"%{uploader}%"
-        params.extend([like_uploader, like_uploader])
+    with get_connection() as connection:
+        _require_fanart_search_table(connection)
 
-    fandom = resolved_filters.get("fandom", "").strip()
-    if fandom:
-        where.append("fi.fandom LIKE ?")
-        like_fandom = f"%{fandom}%"
-        params.append(like_fandom)
+        if search:
+            fts_query = _fts_prefix_query(search)
+            if fts_query:
+                where.append("fi.rowid IN (SELECT fs.rowid FROM fanart_search fs WHERE fanart_search MATCH ?)")
+                params.append(fts_query)
+            else:
+                where.append("1 = 0")
 
-    tag = resolved_filters.get("tag", "").strip()
-    if tag:
-        where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
-        like_tag = f"%{tag}%"
-        params.extend([like_tag, like_tag])
+        uploader = resolved_filters.get("user", "").strip()
+        if uploader:
+            where.append("(fi.uploader_username LIKE ? OR u.display_name LIKE ?)")
+            like_uploader = f"%{uploader}%"
+            params.extend([like_uploader, like_uploader])
 
-    status = resolved_filters.get("status", "").strip()
-    if status == "complete":
-        where.append("fi.summary <> ''")
-    elif status == "in_progress":
-        where.append("fi.summary = ''")
+        fandom = resolved_filters.get("fandom", "").strip()
+        if fandom:
+            where.append("fi.fandom LIKE ?")
+            like_fandom = f"%{fandom}%"
+            params.append(like_fandom)
 
-    sort = resolved_filters.get("sort", "newest").strip()
-    order_by = "fi.created_at DESC, fi.id DESC"
-    if sort == "oldest":
-        order_by = "fi.created_at ASC, fi.id ASC"
-    elif sort == "title_asc":
-        order_by = "fi.title COLLATE NOCASE ASC, fi.id ASC"
-    elif sort == "title_desc":
-        order_by = "fi.title COLLATE NOCASE DESC, fi.id DESC"
+        tag = resolved_filters.get("tag", "").strip()
+        if tag:
+            where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
+            like_tag = f"%{tag}%"
+            params.extend([like_tag, like_tag])
 
-    sql = """
+        status = resolved_filters.get("status", "").strip()
+        if status == "complete":
+            where.append("fi.summary <> ''")
+        elif status == "in_progress":
+            where.append("fi.summary = ''")
+
+        sort = resolved_filters.get("sort", "newest").strip()
+        order_by = "fi.created_at DESC, fi.id DESC"
+        if sort == "oldest":
+            order_by = "fi.created_at ASC, fi.id ASC"
+        elif sort == "title_asc":
+            order_by = "fi.title COLLATE NOCASE ASC, fi.id ASC"
+        elif sort == "title_desc":
+            order_by = "fi.title COLLATE NOCASE DESC, fi.id DESC"
+
+        sql = """
             SELECT fi.id, fi.uploader_username,
                    COALESCE(NULLIF(u.display_name, ''), fi.uploader_username) AS uploader_display_name,
                    fi.title, fi.summary, fi.fandom, fi.rating, fi.image_filename, fi.thumb_filename,
@@ -687,13 +714,11 @@ def list_fanart_items(
             FROM fanart_items fi
             LEFT JOIN users u ON u.username = fi.uploader_username
     """
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY {order_by}"
-    sql += " LIMIT ?"
-    params.append(int(limit))
-
-    with get_connection() as connection:
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += f" ORDER BY {order_by}"
+        sql += " LIMIT ?"
+        params.append(int(limit))
         rows = connection.execute(sql, params).fetchall()
 
     return [_fanart_item_from_row(row, include_display_name=True) for row in rows]

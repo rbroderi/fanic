@@ -134,6 +134,17 @@ JWTDecode = Callable[[str | bytes, object], dict[str, object]]
 JWT_DECODE = cast(JWTDecode, jwt.decode)
 
 
+def _header_value(request: RequestLike, header_name: str) -> str:
+    headers_obj = getattr(request, "headers", None)
+    if headers_obj is None:
+        return ""
+    if not hasattr(headers_obj, "get"):
+        return ""
+    getter = cast(Callable[[str, str], object], headers_obj.get)
+    value_obj = getter(header_name, "")
+    return str(value_obj)
+
+
 def request_id(request: RequestLike, response: ResponseLike | None = None) -> str:
     existing = getattr(request, _REQUEST_ID_ATTR, "")
     existing_id = str(existing).strip()
@@ -150,18 +161,43 @@ def request_id(request: RequestLike, response: ResponseLike | None = None) -> st
     return resolved
 
 
-def is_admin_request(request: RequestLike) -> bool:
-    role = current_user_role(request)
-    return is_privileged_role(role)
-
-
 def role_for_user(username: str | None) -> UserRole:
     return get_user_role(username)
+
+
+def decode_session(token: str) -> str | None:
+    try:
+        claims = JWT_DECODE(token, SESSION_SECRET)
+
+        exp = claims.get("exp")
+        if not isinstance(exp, int):
+            return None
+        if exp < int(time.time()):
+            return None
+
+        username = claims.get("sub")
+        if isinstance(username, str):
+            return username
+        return None
+    except (JoseError, ValueError):
+        return None
+
+
+def current_user(request: RequestLike) -> str | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return None
+    return decode_session(token)
 
 
 def current_user_role(request: RequestLike) -> UserRole:
     username = current_user(request)
     return role_for_user(username)
+
+
+def is_admin_request(request: RequestLike) -> bool:
+    role = current_user_role(request)
+    return is_privileged_role(role)
 
 
 def admin_aware_detail(
@@ -175,6 +211,13 @@ def admin_aware_detail(
     if exc is None:
         return public_detail
     return str(exc) if str(exc) else public_detail
+
+
+def json_response(response: ResponseLike, payload: dict[str, object], status_code: int = 200) -> ResponseLike:
+    response.status_code = status_code
+    response.content_type = "application/json; charset=utf-8"
+    response.set_data(json.dumps(payload, ensure_ascii=True))
+    return response
 
 
 def stable_api_error(
@@ -198,13 +241,6 @@ def stable_api_error(
         },
         status_code,
     )
-
-
-def json_response(response: ResponseLike, payload: dict[str, object], status_code: int = 200) -> ResponseLike:
-    response.status_code = status_code
-    response.content_type = "application/json; charset=utf-8"
-    response.set_data(json.dumps(payload, ensure_ascii=True))
-    return response
 
 
 def text_error(response: ResponseLike, message: str, status_code: int = 404) -> ResponseLike:
@@ -234,17 +270,6 @@ def send_file(response: ResponseLike, path: Path, filename: str | None = None) -
         response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
 
     return response
-
-
-def _header_value(request: RequestLike, header_name: str) -> str:
-    headers_obj = getattr(request, "headers", None)
-    if headers_obj is None:
-        return ""
-    if not hasattr(headers_obj, "get"):
-        return ""
-    getter = cast(Callable[[str, str], object], headers_obj.get)
-    value_obj = getter(header_name, "")
-    return str(value_obj)
 
 
 def _ensure_csrf_token(request: RequestLike, response: ResponseLike) -> str:
@@ -283,31 +308,6 @@ def apply_security_markup(
         return html
     csrf_token = _ensure_csrf_token(request, response)
     return _inject_csrf_inputs(html, csrf_token)
-
-
-def decode_session(token: str) -> str | None:
-    try:
-        claims = JWT_DECODE(token, SESSION_SECRET)
-
-        exp = claims.get("exp")
-        if not isinstance(exp, int):
-            return None
-        if exp < int(time.time()):
-            return None
-
-        username = claims.get("sub")
-        if isinstance(username, str):
-            return username
-        return None
-    except (JoseError, ValueError):
-        return None
-
-
-def current_user(request: RequestLike) -> str | None:
-    token = request.cookies.get(SESSION_COOKIE_NAME, "")
-    if not token:
-        return None
-    return decode_session(token)
 
 
 def user_menu_replacements(request: RequestLike) -> dict[str, str]:
