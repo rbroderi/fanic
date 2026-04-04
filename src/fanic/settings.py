@@ -495,7 +495,6 @@ DYNAMIC_TEMPLATE_DIR = (PACKAGE_ROOT / "dynamic").resolve()
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FRONTEND_SOURCE_DIR = _REPO_ROOT / "frontend"
-_STATIC_SOURCE_DIR = _REPO_ROOT / "static"
 _ASSET_VERSION_RE = re.compile(r"FANIC_ASSET_VERSION:\s*([A-Za-z0-9._-]+)")
 
 
@@ -511,7 +510,7 @@ def _asset_version_from_source(path: Path) -> str:
 
 def _load_asset_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
-    versions["styles"] = _asset_version_from_source(_STATIC_SOURCE_DIR / "styles.css")
+    versions["styles"] = _asset_version_from_source(_FRONTEND_SOURCE_DIR / "styles.css")
     for source_path in sorted(_FRONTEND_SOURCE_DIR.glob("*.ts")):
         versions[source_path.stem] = _asset_version_from_source(source_path)
     return versions

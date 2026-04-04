@@ -19,6 +19,8 @@ if command -v rsync >/dev/null 2>&1; then
 	rsync -a --delete --delete-excluded \
 		--exclude='*.js' \
 		--exclude='*.js.map' \
+		--exclude='*.css' \
+		--exclude='*.css.map' \
 		"${src_dir}/" "${dst_dir}/"
 else
 	find "${dst_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
@@ -28,8 +30,8 @@ else
 		cp -a "${src_dir}/${rel_path#./}" "${target_path}"
 	done < <(
 		cd "${src_dir}"
-		find . -type f ! -name '*.js' ! -name '*.js.map' -print0
+		find . -type f ! -name '*.js' ! -name '*.js.map' ! -name '*.css' ! -name '*.css.map' -print0
 	)
 fi
 
-echo "sync-static: mirrored ${src_dir} -> ${dst_dir} (excluding *.js, *.js.map)"
+echo "sync-static: mirrored ${src_dir} -> ${dst_dir} (excluding *.js, *.js.map, *.css, *.css.map)"

@@ -7,10 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(repoRoot, "frontend");
-const staticSourceDir = path.join(repoRoot, "static");
+const stylesSourcePath = path.join(frontendDir, "styles.css");
 const staticOutputDir = "/mnt/storage/static";
 const versionPattern = /FANIC_ASSET_VERSION:\s*([A-Za-z0-9._-]+)/;
-const versionedStylesPattern = /^styles\.v([A-Za-z0-9._-]+)\.css$/;
 
 function parseArgs(argv) {
   return {
@@ -42,30 +41,6 @@ async function extractVersionFromFile(filePath) {
 async function listFrontendEntries() {
   const names = await fs.readdir(frontendDir);
   return names.filter((name) => name.endsWith(".ts")).sort();
-}
-
-async function resolveVersionedStylesSource() {
-  const names = await fs.readdir(staticSourceDir);
-  const matches = names
-    .map((name) => {
-      const match = name.match(versionedStylesPattern);
-      if (!match) {
-        return null;
-      }
-      return { name, version: match[1] };
-    })
-    .filter((item) => item !== null)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  if (matches.length === 0) {
-    throw new Error(`No versioned stylesheet source found in ${staticSourceDir} (expected styles.v*.css)`);
-  }
-
-  const latest = matches[matches.length - 1];
-  return {
-    path: path.join(staticSourceDir, latest.name),
-    version: latest.version,
-  };
 }
 
 async function loadAssetVersions(entryFiles, stylesVersion) {
@@ -150,14 +125,17 @@ async function run() {
   const args = parseArgs(process.argv.slice(2));
   const entryFiles = await listFrontendEntries();
   const entryPoints = entryFiles.map((fileName) => path.join(frontendDir, fileName));
-  const stylesSource = await resolveVersionedStylesSource();
-  const versions = await loadAssetVersions(entryFiles, stylesSource.version);
+  if (!(await fileExists(stylesSourcePath))) {
+    throw new Error(`Stylesheet source not found: ${stylesSourcePath}`);
+  }
+  const stylesVersion = await extractVersionFromFile(stylesSourcePath);
+  const versions = await loadAssetVersions(entryFiles, stylesVersion);
 
   const onEnd = async (result) => {
     if (result.errors.length > 0) {
       return;
     }
-    await postProcess(entryFiles, versions, stylesSource.path);
+    await postProcess(entryFiles, versions, stylesSourcePath);
   };
 
   const options = buildOptions(entryPoints, args.dev, onEnd);
