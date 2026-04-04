@@ -14,11 +14,11 @@
     "frontend:typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@eslint/js": "^9.36.0",
-    "esbuild": "^0.25.11",
-    "eslint": "^9.36.0",
-    "prettier": "^3.6.2",
-    "typescript-eslint": "^8.44.0",
-    "typescript": "^5.9.2"
+    "@eslint/js": "9.36.0",
+    "esbuild": "0.25.11",
+    "eslint": "9.36.0",
+    "prettier": "3.6.2",
+    "typescript-eslint": "8.44.0",
+    "typescript": "5.9.2"
   }
 }

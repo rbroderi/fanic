@@ -6,6 +6,7 @@
 
 (() => {
   const FIELD_SELECTOR = "input[data-tag-autocomplete='1']";
+  const CHIP_MODE_ATTR = "data-tag-chips";
   const MENU_CLASS = "tag-autocomplete-menu";
   const ITEM_CLASS = "tag-autocomplete-item";
   const ITEM_ACTIVE_CLASS = "tag-autocomplete-item-active";
@@ -15,6 +16,33 @@
     tokenStart: number;
     tokenEnd: number;
   };
+
+  type SuggestionContext = {
+    getQuery(): string;
+    applySuggestion(name: string): void;
+    focusField(): void;
+  };
+
+  function parseCsv(raw: string): string[] {
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+  }
+
+  function uniquePreserveOrder(values: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    values.forEach((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      result.push(value);
+    });
+    return result;
+  }
 
   function currentTokenInfo(value: string, caret: number): TokenInfo {
     const before = value.slice(0, caret);
@@ -108,10 +136,10 @@
     input: HTMLInputElement,
     menu: HTMLDivElement,
     controller: AbortController,
+    context: SuggestionContext,
   ): Promise<void> {
-    const caret = input.selectionStart !== null ? input.selectionStart : 0;
-    const info = currentTokenInfo(input.value, caret);
-    if (info.token.length < 1) {
+    const query = context.getQuery().trim();
+    if (query.length < 1) {
       closeMenu(menu);
       return;
     }
@@ -124,7 +152,7 @@
 
     const url = new URL("/api/tag-suggestions", window.location.origin);
     url.searchParams.set("type", type);
-    url.searchParams.set("q", info.token);
+    url.searchParams.set("q", query);
     url.searchParams.set("limit", "12");
 
     const response = await fetch(url.toString(), {
@@ -147,10 +175,105 @@
     const payloadMap = payload as { suggestions?: unknown };
     const suggestionsRaw = Array.isArray(payloadMap.suggestions) ? payloadMap.suggestions : [];
     const suggestions = suggestionsRaw.map((item) => String(item));
-    renderSuggestions(input, menu, suggestions);
+    if (suggestions.length === 0) {
+      closeMenu(menu);
+      return;
+    }
+
+    menu.innerHTML = "";
+    suggestions.forEach((name) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = ITEM_CLASS;
+      item.textContent = name;
+      item.addEventListener("mousedown", (event: MouseEvent) => {
+        event.preventDefault();
+        context.applySuggestion(name);
+        closeMenu(menu);
+        context.focusField();
+      });
+      menu.appendChild(item);
+    });
+
+    openMenu(menu);
+    setActiveIndex(menu, 0);
+  }
+
+  function wireSuggestionMenu(
+    input: HTMLInputElement,
+    menu: HTMLDivElement,
+    context: SuggestionContext,
+    onEnterWithoutMenu?: () => void,
+  ): void {
+    let pendingController: AbortController | null = null;
+    let debounceTimer: number | null = null;
+
+    const requestSuggestions = (): void => {
+      if (debounceTimer !== null) {
+        window.clearTimeout(debounceTimer);
+      }
+      debounceTimer = window.setTimeout(async () => {
+        if (pendingController) {
+          pendingController.abort();
+        }
+        pendingController = new AbortController();
+        try {
+          await fetchSuggestions(input, menu, pendingController, context);
+        } catch {
+          closeMenu(menu);
+        }
+      }, 120);
+    };
+
+    input.addEventListener("input", requestSuggestions);
+    input.addEventListener("focus", requestSuggestions);
+    input.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (!menu.hidden) {
+        const activeIndex = Number(menu.dataset.activeIndex ? menu.dataset.activeIndex : "-1");
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setActiveIndex(menu, activeIndex + 1);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setActiveIndex(menu, activeIndex - 1);
+          return;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          const items = Array.from(menu.querySelectorAll<HTMLButtonElement>(`.${ITEM_CLASS}`));
+          if (items.length === 0) {
+            return;
+          }
+          const idx = activeIndex >= 0 ? activeIndex : 0;
+          const chosen = items[idx];
+          if (!chosen) {
+            return;
+          }
+          event.preventDefault();
+          context.applySuggestion(chosen.textContent ? chosen.textContent : "");
+          closeMenu(menu);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeMenu(menu);
+          return;
+        }
+      }
+
+      if (event.key === "Enter" && onEnterWithoutMenu) {
+        onEnterWithoutMenu();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      window.setTimeout(() => closeMenu(menu), 120);
+    });
   }
 
   function attachAutocomplete(input: HTMLInputElement): void {
+    const chipMode = input.getAttribute(CHIP_MODE_ATTR) === "1";
     input.setAttribute("autocomplete", "off");
     input.setAttribute("autocapitalize", "off");
     input.setAttribute("autocorrect", "off");
@@ -167,60 +290,132 @@
     menu.dataset.activeIndex = "-1";
     wrapper.appendChild(menu);
 
-    let pendingController: AbortController | null = null;
-    let debounceTimer: number | null = null;
+    if (chipMode) {
+      input.hidden = true;
+      const chipEditor = document.createElement("input");
+      chipEditor.type = "text";
+      chipEditor.className = "tag-chip-editor";
+      chipEditor.placeholder = input.placeholder;
+      chipEditor.setAttribute("autocomplete", "off");
+      chipEditor.setAttribute("autocapitalize", "off");
+      chipEditor.setAttribute("autocorrect", "off");
+      chipEditor.spellcheck = false;
 
-    const requestSuggestions = (): void => {
-      if (debounceTimer !== null) {
-        window.clearTimeout(debounceTimer);
-      }
-      debounceTimer = window.setTimeout(async () => {
-        if (pendingController) {
-          pendingController.abort();
+      const chipList = document.createElement("div");
+      chipList.className = "tag-chip-list";
+      wrapper.insertBefore(chipList, menu);
+
+      const values = uniquePreserveOrder(parseCsv(input.value));
+
+      const syncHidden = (): void => {
+        input.value = values.join(", ");
+      };
+
+      const renderChips = (): void => {
+        chipList.innerHTML = "";
+        values.forEach((value, index) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "tag-chip";
+          chip.setAttribute("aria-label", `Remove ${value}`);
+          const remove = document.createElement("span");
+          remove.className = "tag-chip-remove";
+          remove.textContent = "x";
+          const label = document.createElement("span");
+          label.className = "tag-chip-label";
+          label.textContent = value;
+          chip.appendChild(remove);
+          chip.appendChild(label);
+          chip.addEventListener("click", () => {
+            values.splice(index, 1);
+            syncHidden();
+            renderChips();
+            chipEditor.focus();
+          });
+          chipList.appendChild(chip);
+        });
+        chipList.appendChild(chipEditor);
+      };
+
+      const addValue = (raw: string): void => {
+        const normalized = raw.trim();
+        if (!normalized) {
+          return;
         }
-        pendingController = new AbortController();
-        try {
-          await fetchSuggestions(input, menu, pendingController);
-        } catch {
+        if (values.some((existing) => existing.toLowerCase() === normalized.toLowerCase())) {
+          chipEditor.value = "";
+          return;
+        }
+        values.push(normalized);
+        syncHidden();
+        chipEditor.value = "";
+        renderChips();
+      };
+
+      chipEditor.addEventListener("keydown", (event: KeyboardEvent) => {
+        if (
+          event.key === "Backspace" &&
+          chipEditor.value.trim().length === 0 &&
+          values.length > 0
+        ) {
+          values.pop();
+          syncHidden();
+          renderChips();
+          event.preventDefault();
+          return;
+        }
+
+        if (event.key === "Enter" || event.key === ",") {
+          event.preventDefault();
+          addValue(chipEditor.value);
           closeMenu(menu);
         }
-      }, 120);
-    };
+      });
 
-    input.addEventListener("input", requestSuggestions);
-    input.addEventListener("focus", requestSuggestions);
-    input.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (menu.hidden) {
-        return;
-      }
-      const activeIndex = Number(menu.dataset.activeIndex ? menu.dataset.activeIndex : "-1");
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setActiveIndex(menu, activeIndex + 1);
-      } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setActiveIndex(menu, activeIndex - 1);
-      } else if (event.key === "Enter" || event.key === "Tab") {
-        const items = Array.from(menu.querySelectorAll<HTMLButtonElement>(`.${ITEM_CLASS}`));
-        if (items.length === 0) {
-          return;
-        }
-        const idx = activeIndex >= 0 ? activeIndex : 0;
-        const chosen = items[idx];
-        if (!chosen) {
-          return;
-        }
-        event.preventDefault();
-        replaceCurrentToken(input, chosen.textContent ? chosen.textContent : "");
-        closeMenu(menu);
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        closeMenu(menu);
-      }
-    });
+      chipEditor.addEventListener("paste", () => {
+        window.setTimeout(() => {
+          const pasted = chipEditor.value;
+          if (pasted.includes(",")) {
+            parseCsv(pasted).forEach((value) => addValue(value));
+            chipEditor.value = "";
+            closeMenu(menu);
+          }
+        }, 0);
+      });
 
-    input.addEventListener("blur", () => {
-      window.setTimeout(() => closeMenu(menu), 120);
+      wireSuggestionMenu(
+        chipEditor,
+        menu,
+        {
+          getQuery(): string {
+            return chipEditor.value;
+          },
+          applySuggestion(name: string): void {
+            addValue(name);
+          },
+          focusField(): void {
+            chipEditor.focus();
+          },
+        },
+        () => addValue(chipEditor.value),
+      );
+
+      syncHidden();
+      renderChips();
+      return;
+    }
+
+    wireSuggestionMenu(input, menu, {
+      getQuery(): string {
+        const caret = input.selectionStart !== null ? input.selectionStart : 0;
+        return currentTokenInfo(input.value, caret).token;
+      },
+      applySuggestion(name: string): void {
+        replaceCurrentToken(input, name);
+      },
+      focusField(): void {
+        input.focus();
+      },
     });
   }
 

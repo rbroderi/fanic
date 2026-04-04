@@ -176,10 +176,7 @@ def gallery_manage_form_html(
     lines: list[str] = [
         '<section class="card">',
         f"<h3>Manage {gallery_name}</h3>",
-        (
-            f'<form method="post" action="/fanart/{safe_owner}/galleries/update-items">'
-            f'<input type="hidden" name="gallery_slug" value="{gallery_slug}" />'
-        ),
+        f'<form method="post" action="/fanart/{safe_owner}/galleries/update-items"><input type="hidden" name="gallery_slug" value="{gallery_slug}" />',
     ]
 
     if not works:

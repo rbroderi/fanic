@@ -32,6 +32,10 @@ TAG_FIELD_TO_TYPE = {
 _FTS_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
 
+def _csv_terms(raw: str) -> list[str]:
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
 class WorkComment(TypedDict):
     id: int
     username: str
@@ -703,48 +707,46 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
         else:
             where.append("1 = 0")
 
-    status = filters.get("status")
-    if status:
-        where.append("w.status = ?")
-        params.append(status)
-
-    rating = filters.get("rating")
-    if rating:
-        where.append("w.rating = ?")
-        params.append(rating)
-
-    tag = filters.get("tag")
-    if tag:
-        normalized_tag = tag.strip().lower()
-        tag_like = f"%{normalized_tag}%"
+    tag_terms = _csv_terms(filters.get("tag", ""))
+    if tag_terms:
+        per_term_clauses: list[str] = []
+        for term in tag_terms:
+            per_term_clauses.append("(t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?)")
+            normalized_term = term.lower()
+            term_like = f"%{normalized_term}%"
+            params.append(slugify(term))
+            params.append(term_like)
+            params.append(term_like)
         where.append(
             "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id "
-            "WHERE wt.work_id = w.id AND (t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?))"
+            "WHERE wt.work_id = w.id AND (" + " OR ".join(per_term_clauses) + "))"
         )
-        params.append(slugify(tag))
-        params.append(tag_like)
-        params.append(tag_like)
 
-    fandom = filters.get("fandom")
-    if fandom:
-        normalized_fandom = fandom.strip().lower()
-        fandom_like = f"%{normalized_fandom}%"
+    fandom_terms = _csv_terms(filters.get("fandom", ""))
+    if fandom_terms:
+        per_term_clauses = []
+        for term in fandom_terms:
+            per_term_clauses.append("(t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?)")
+            normalized_term = term.lower()
+            term_like = f"%{normalized_term}%"
+            params.append(slugify(term))
+            params.append(term_like)
+            params.append(term_like)
         where.append(
             "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id "
-            "WHERE wt.work_id = w.id AND t.type = 'fandom' "
-            "AND (t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?))"
+            "WHERE wt.work_id = w.id AND t.type = 'fandom' AND (" + " OR ".join(per_term_clauses) + "))"
         )
-        params.append(slugify(fandom))
-        params.append(fandom_like)
-        params.append(fandom_like)
 
-    user_filter = filters.get("user", "").strip()
-    if user_filter:
-        normalized_user = user_filter.lower()
-        user_like = f"%{normalized_user}%"
-        where.append("(lower(w.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)")
-        params.append(user_like)
-        params.append(user_like)
+    user_terms = _csv_terms(filters.get("user", ""))
+    if user_terms:
+        per_term_clauses = []
+        for term in user_terms:
+            normalized_term = term.lower()
+            term_like = f"%{normalized_term}%"
+            per_term_clauses.append("(lower(w.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)")
+            params.append(term_like)
+            params.append(term_like)
+        where.append("(" + " OR ".join(per_term_clauses) + ")")
 
     sort = filters.get("sort", "newest")
     order_by = "w.updated_at DESC"

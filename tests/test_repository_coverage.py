@@ -765,9 +765,20 @@ def test_fanart_crud_and_lookup_helpers(
     assert len(user_filtered_users) == 1
     assert user_filtered_users[0]["uploader_username"] == "alice"
 
+    user_filtered_users_csv = repository.list_fanart_users({"user": "ALI, bo"}, limit=20)
+    assert len(user_filtered_users_csv) == 2
+    assert {row["uploader_username"] for row in user_filtered_users_csv} == {
+        "alice",
+        "bob",
+    }
+
     fandom_users = repository.list_fanart_users({"fandom": "skyverse"}, limit=20)
     assert len(fandom_users) == 1
     assert fandom_users[0]["uploader_username"] == "alice"
+
+    fandom_users_csv = repository.list_fanart_users({"fandom": "skyverse, mech"}, limit=20)
+    assert len(fandom_users_csv) == 2
+    assert {row["uploader_username"] for row in fandom_users_csv} == {"alice", "bob"}
 
     complete_users = repository.list_fanart_users({"status": "complete"}, limit=20)
     assert len(complete_users) == 1
@@ -796,13 +807,25 @@ def test_fanart_crud_and_lookup_helpers(
     assert len(user_items_case) == 1
     assert user_items_case[0]["id"] == "fanart-1"
 
+    user_items_csv = repository.list_fanart_items({"user": "ALI, bo"}, limit=20)
+    assert len(user_items_csv) == 2
+    assert {row["id"] for row in user_items_csv} == {"fanart-1", "fanart-2"}
+
     fandom_items = repository.list_fanart_items({"fandom": "skyverse"}, limit=20)
     assert len(fandom_items) == 1
     assert fandom_items[0]["id"] == "fanart-1"
 
+    fandom_items_csv = repository.list_fanart_items({"fandom": "skyverse, mech"}, limit=20)
+    assert len(fandom_items_csv) == 2
+    assert {row["id"] for row in fandom_items_csv} == {"fanart-1", "fanart-2"}
+
     partial_tag_items = repository.list_fanart_items({"tag": "sky"}, limit=20)
     assert len(partial_tag_items) == 1
     assert partial_tag_items[0]["id"] == "fanart-1"
+
+    partial_tag_items_csv = repository.list_fanart_items({"tag": "sky, robot"}, limit=20)
+    assert len(partial_tag_items_csv) == 2
+    assert {row["id"] for row in partial_tag_items_csv} == {"fanart-1", "fanart-2"}
 
     complete_items = repository.list_fanart_items({"status": "complete"}, limit=20)
     assert len(complete_items) == 1

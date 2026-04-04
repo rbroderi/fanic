@@ -134,6 +134,10 @@ def _fts_prefix_query(raw_query: str) -> str | None:
     return " ".join(f"{token}*" for token in tokens)
 
 
+def _csv_terms(raw: str) -> list[str]:
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
 def add_fanart_comment(
     fanart_item_id: str,
     username: str,
@@ -555,30 +559,41 @@ def list_fanart_users(
             else:
                 where.append("1 = 0")
 
-        uploader = resolved_filters.get("user", "").strip()
-        if uploader:
-            normalized_uploader = uploader.lower()
-            like_uploader = f"%{normalized_uploader}%"
-            where.append(
-                "(lower(fi.uploader_username) LIKE ? OR EXISTS ("
-                "SELECT 1 FROM users u WHERE lower(u.username) = lower(fi.uploader_username) "
-                "AND lower(u.display_name) LIKE ?))"
-            )
-            params.extend([like_uploader, like_uploader])
+        user_terms = _csv_terms(resolved_filters.get("user", ""))
+        if user_terms:
+            per_term_clauses: list[str] = []
+            for term in user_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append(
+                    "(lower(fi.uploader_username) LIKE ? OR EXISTS ("
+                    "SELECT 1 FROM users u WHERE lower(u.username) = lower(fi.uploader_username) "
+                    "AND lower(u.display_name) LIKE ?))"
+                )
+                params.extend([like_term, like_term])
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
-        fandom = resolved_filters.get("fandom", "").strip()
-        if fandom:
-            normalized_fandom = fandom.lower()
-            where.append("lower(fi.fandom) LIKE ?")
-            like_fandom = f"%{normalized_fandom}%"
-            params.append(like_fandom)
+        fandom_terms = _csv_terms(resolved_filters.get("fandom", ""))
+        if fandom_terms:
+            per_term_clauses = []
+            for term in fandom_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append("lower(fi.fandom) LIKE ?")
+                params.append(like_term)
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
-        tag = resolved_filters.get("tag", "").strip()
-        if tag:
-            normalized_tag = tag.lower()
-            where.append("(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)")
-            like_tag = f"%{normalized_tag}%"
-            params.extend([like_tag, like_tag, like_tag])
+        tag_terms = _csv_terms(resolved_filters.get("tag", ""))
+        if tag_terms:
+            per_term_clauses = []
+            for term in tag_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append(
+                    "(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)"
+                )
+                params.extend([like_term, like_term, like_term])
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
         status = resolved_filters.get("status", "").strip()
         if status == "complete":
@@ -680,26 +695,39 @@ def list_fanart_items(
             else:
                 where.append("1 = 0")
 
-        uploader = resolved_filters.get("user", "").strip()
-        if uploader:
-            normalized_uploader = uploader.lower()
-            where.append("(lower(fi.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)")
-            like_uploader = f"%{normalized_uploader}%"
-            params.extend([like_uploader, like_uploader])
+        user_terms = _csv_terms(resolved_filters.get("user", ""))
+        if user_terms:
+            per_term_clauses: list[str] = []
+            for term in user_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append(
+                    "(lower(fi.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)"
+                )
+                params.extend([like_term, like_term])
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
-        fandom = resolved_filters.get("fandom", "").strip()
-        if fandom:
-            normalized_fandom = fandom.lower()
-            where.append("lower(fi.fandom) LIKE ?")
-            like_fandom = f"%{normalized_fandom}%"
-            params.append(like_fandom)
+        fandom_terms = _csv_terms(resolved_filters.get("fandom", ""))
+        if fandom_terms:
+            per_term_clauses = []
+            for term in fandom_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append("lower(fi.fandom) LIKE ?")
+                params.append(like_term)
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
-        tag = resolved_filters.get("tag", "").strip()
-        if tag:
-            normalized_tag = tag.lower()
-            where.append("(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)")
-            like_tag = f"%{normalized_tag}%"
-            params.extend([like_tag, like_tag, like_tag])
+        tag_terms = _csv_terms(resolved_filters.get("tag", ""))
+        if tag_terms:
+            per_term_clauses = []
+            for term in tag_terms:
+                normalized_term = term.lower()
+                like_term = f"%{normalized_term}%"
+                per_term_clauses.append(
+                    "(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)"
+                )
+                params.extend([like_term, like_term, like_term])
+            where.append("(" + " OR ".join(per_term_clauses) + ")")
 
         status = resolved_filters.get("status", "").strip()
         if status == "complete":

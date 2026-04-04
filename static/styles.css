@@ -65,6 +65,53 @@
   background: rgba(255, 165, 0, 0.14);
 }
 
+.tag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 2.75rem;
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.tag-chip-editor {
+  flex: 1 1 9rem;
+  min-width: 8rem;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.3rem 0.15rem;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line) 55%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-soft) 75%, var(--paper) 25%);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+.tag-chip-remove {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 75%, var(--ink) 25%);
+}
+
+.tag-chip-label {
+  white-space: nowrap;
+}
+
 .report-modal {
   position: fixed;
   inset: 0;

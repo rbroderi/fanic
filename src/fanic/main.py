@@ -83,7 +83,8 @@ def _compile_frontend_assets() -> int:
         return ERROR
 
     try:
-        completed = subprocess.run(
+        # npm_path is resolved via shutil.which("npm") and argv is fixed (no user-controlled interpolation).
+        completed = subprocess.run(  # nosemgrep: opt.semgrep.semgrep-official.python.lang.security.audit.dangerous-subprocess-use-audit
             [npm_path, "run", "frontend:build"],
             cwd=repo_root,
             check=False,
