@@ -18,4 +18,3 @@ else:
 @contextmanager
 def track(msg: str, log=..., exc=...) -> Generator[None, Any, None]:
     ...
-

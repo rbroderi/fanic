@@ -22,7 +22,7 @@ class MeanPooler(nn.Module):
     """Mean pooling"""
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         ...
-    
+
 
 
 @register_pooler
@@ -30,7 +30,7 @@ class MaxPooler(nn.Module):
     """Max pooling"""
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         ...
-    
+
 
 
 @register_pooler
@@ -38,10 +38,10 @@ class ClsPooler(nn.Module):
     """CLS token pooling"""
     def __init__(self, use_pooler_output=...) -> None:
         ...
-    
+
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         ...
-    
+
 
 
 @register_pooler
@@ -51,10 +51,10 @@ class ClsLastHiddenStatePooler(nn.Module):
     """
     def __init__(self) -> None:
         ...
-    
+
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         ...
-    
+
 
 
 class HFTextEncoder(nn.Module):
@@ -62,19 +62,16 @@ class HFTextEncoder(nn.Module):
     output_tokens: torch.jit.Final[bool]
     def __init__(self, model_name_or_path: str, output_dim: int, config: PretrainedConfig = ..., pooler_type: str = ..., proj_type: str = ..., pretrained: bool = ..., output_tokens: bool = ...) -> None:
         ...
-    
+
     def forward(self, x: TensorType) -> tuple[Any, Any] | Any:
         ...
-    
+
     def lock(self, unlocked_layers: int = ..., freeze_layer_norm: bool = ...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
     def init_parameters(self) -> None:
         ...
-    
-
-

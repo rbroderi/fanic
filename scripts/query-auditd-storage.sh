@@ -7,7 +7,7 @@ PATH_FILTER=""
 DELETIONS_ONLY="0"
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: scripts/query-auditd-storage.sh [options]
 
 Options:
@@ -24,47 +24,47 @@ EOF
 }
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --key)
-      RULE_KEY="$2"
-      shift 2
-      ;;
-    --since)
-      SINCE="$2"
-      shift 2
-      ;;
-    --path)
-      PATH_FILTER="$2"
-      shift 2
-      ;;
-    --deletions)
-      DELETIONS_ONLY="1"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
+	case "$1" in
+	--key)
+		RULE_KEY="$2"
+		shift 2
+		;;
+	--since)
+		SINCE="$2"
+		shift 2
+		;;
+	--path)
+		PATH_FILTER="$2"
+		shift 2
+		;;
+	--deletions)
+		DELETIONS_ONLY="1"
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown argument: $1" >&2
+		usage
+		exit 1
+		;;
+	esac
 done
 
 if ! command -v ausearch >/dev/null 2>&1; then
-  echo "ausearch not found. Install auditd tooling first." >&2
-  exit 127
+	echo "ausearch not found. Install auditd tooling first." >&2
+	exit 127
 fi
 
 ARGS=(-k "${RULE_KEY}" -i --start "${SINCE}")
 if [[ -n "${PATH_FILTER}" ]]; then
-  ARGS+=(-f "${PATH_FILTER}")
+	ARGS+=(-f "${PATH_FILTER}")
 fi
 
 if [[ "${DELETIONS_ONLY}" != "1" ]]; then
-  exec ausearch "${ARGS[@]}"
+	exec ausearch "${ARGS[@]}"
 fi
 
 ausearch "${ARGS[@]}" | awk '

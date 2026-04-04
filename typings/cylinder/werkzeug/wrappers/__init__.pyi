@@ -93,7 +93,7 @@ class Response(_SansIOResponse):
     response: t.Iterable[str] | t.Iterable[bytes]
     def __init__(self, response: t.Iterable[bytes] | bytes | t.Iterable[str] | str | None = ..., status: int | str | HTTPStatus | None = ..., headers: t.Mapping[str, str | t.Iterable[str]] | t.Iterable[tuple[str, str]] | None = ..., mimetype: str | None = ..., content_type: str | None = ..., direct_passthrough: bool = ...) -> None:
         ...
-    
+
     def call_on_close(self, func: t.Callable[[], t.Any]) -> t.Callable[[], t.Any]:
         """Adds a function to the internal list of functions that should
         be called as part of closing down the response.  Since 0.7 this
@@ -103,10 +103,10 @@ class Response(_SansIOResponse):
         .. versionadded:: 0.6
         """
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
     @classmethod
     def force_type(cls, response: Response, environ: WSGIEnvironment | None = ...) -> Response:
         """Enforce that the WSGI response is a response object of the current
@@ -137,7 +137,7 @@ class Response(_SansIOResponse):
         :return: a response object.
         """
         ...
-    
+
     @classmethod
     def from_app(cls, app: WSGIApplication, environ: WSGIEnvironment, buffered: bool = ...) -> Response:
         """Create a new response object from an application output.  This
@@ -153,15 +153,15 @@ class Response(_SansIOResponse):
         :return: a response object.
         """
         ...
-    
+
     @t.overload
     def get_data(self, as_text: t.Literal[False] = ...) -> bytes:
         ...
-    
+
     @t.overload
     def get_data(self, as_text: t.Literal[True]) -> str:
         ...
-    
+
     def get_data(self, as_text: bool = ...) -> bytes | str:
         """The string representation of the response body.  Whenever you call
         this property the response iterable is encoded and flattened.  This
@@ -176,7 +176,7 @@ class Response(_SansIOResponse):
         .. versionadded:: 0.9
         """
         ...
-    
+
     def set_data(self, value: bytes | str) -> None:
         """Sets a new string as response.  The value must be a string or
         bytes. If a string is set it's encoded to the charset of the
@@ -185,12 +185,12 @@ class Response(_SansIOResponse):
         .. versionadded:: 0.9
         """
         ...
-    
+
     data = ...
     def calculate_content_length(self) -> int | None:
         """Returns the content length if available or `None` otherwise."""
         ...
-    
+
     def make_sequence(self) -> None:
         """Converts the response iterator in a list.  By default this happens
         automatically if required.  If `implicit_sequence_conversion` is
@@ -200,7 +200,7 @@ class Response(_SansIOResponse):
         .. versionadded:: 0.6
         """
         ...
-    
+
     def iter_encoded(self) -> t.Iterator[bytes]:
         """Iter the response encoded with the encoding of the response.
         If the response object is invoked as WSGI application the return
@@ -208,7 +208,7 @@ class Response(_SansIOResponse):
         :attr:`direct_passthrough` was activated.
         """
         ...
-    
+
     @property
     def is_streamed(self) -> bool:
         """If the response is streamed (the response is not an iterable with
@@ -220,7 +220,7 @@ class Response(_SansIOResponse):
         filtering that should not take place for streamed responses.
         """
         ...
-    
+
     @property
     def is_sequence(self) -> bool:
         """If the iterator is buffered, this property will be `True`.  A
@@ -230,7 +230,7 @@ class Response(_SansIOResponse):
         .. versionadded:: 0.6
         """
         ...
-    
+
     def close(self) -> None:
         """Close the wrapped response if possible.  You can also use the object
         in a with statement which will automatically close it.
@@ -239,19 +239,19 @@ class Response(_SansIOResponse):
            Can now be used in a with statement.
         """
         ...
-    
+
     def __enter__(self) -> Response:
         ...
-    
+
     def __exit__(self, exc_type, exc_value, tb) -> None:
         ...
-    
+
     def freeze(self) -> None:
         """Make the response object ready to be pickled. Does the
         following:
 
         *   Buffer the response into a list, ignoring
-            :attr:`implicity_sequence_conversion` and
+            :attr:`implicitly_sequence_conversion` and
             :attr:`direct_passthrough`.
         *   Set the ``Content-Length`` header.
         *   Generate an ``ETag`` header if one is not already set.
@@ -266,7 +266,7 @@ class Response(_SansIOResponse):
             The ``Content-Length`` header is set.
         """
         ...
-    
+
     def get_wsgi_headers(self, environ: WSGIEnvironment) -> Headers:
         """This is automatically called right before the response is started
         and returns headers modified for the given environment.  It returns a
@@ -292,7 +292,7 @@ class Response(_SansIOResponse):
                  object.
         """
         ...
-    
+
     def get_app_iter(self, environ: WSGIEnvironment) -> t.Iterable[bytes]:
         """Returns the application iterator for the given environ.  Depending
         on the request method and the current status code the return value
@@ -308,7 +308,7 @@ class Response(_SansIOResponse):
         :return: a response iterable.
         """
         ...
-    
+
     def get_wsgi_response(self, environ: WSGIEnvironment) -> tuple[t.Iterable[bytes], str, list[tuple[str, str]]]:
         """Returns the final WSGI response as tuple.  The first item in
         the tuple is the application iterator, the second the status and
@@ -323,7 +323,7 @@ class Response(_SansIOResponse):
         :return: an ``(app_iter, status, headers)`` tuple.
         """
         ...
-    
+
     def __call__(self, environ: WSGIEnvironment, start_response: StartResponse) -> t.Iterable[bytes]:
         """Process this response as WSGI application.
 
@@ -333,7 +333,7 @@ class Response(_SansIOResponse):
         :return: an application iterator
         """
         ...
-    
+
     json_module = json
     @property
     def json(self) -> t.Any | None:
@@ -343,15 +343,15 @@ class Response(_SansIOResponse):
         Calls :meth:`get_json` with default arguments.
         """
         ...
-    
+
     @t.overload
     def get_json(self, force: bool = ..., silent: t.Literal[False] = ...) -> t.Any:
         ...
-    
+
     @t.overload
     def get_json(self, force: bool = ..., silent: bool = ...) -> t.Any | None:
         ...
-    
+
     def get_json(self, force: bool = ..., silent: bool = ...) -> t.Any | None:
         """Parse :attr:`data` as JSON. Useful during testing.
 
@@ -366,12 +366,12 @@ class Response(_SansIOResponse):
             instead.
         """
         ...
-    
+
     @cached_property
     def stream(self) -> ResponseStream:
         """The response iterable as write-only stream."""
         ...
-    
+
     def make_conditional(self, request_or_environ: WSGIEnvironment | Request, accept_ranges: bool | str = ..., complete_length: int | None = ...) -> Response:
         """Make the response conditional to the request.  This method works
         best if an etag was defined for the response already.  The `add_etag`
@@ -413,7 +413,7 @@ class Response(_SansIOResponse):
             raising a 416 Range Not Satisfiable error.
         """
         ...
-    
+
     def add_etag(self, overwrite: bool = ..., weak: bool = ...) -> None:
         """Add an etag for the current response if there is none yet.
 
@@ -422,7 +422,7 @@ class Response(_SansIOResponse):
             available in some environments.
         """
         ...
-    
+
 
 
 class ResponseStream:
@@ -433,28 +433,25 @@ class ResponseStream:
     mode = ...
     def __init__(self, response: Response) -> None:
         ...
-    
+
     def write(self, value: bytes) -> int:
         ...
-    
+
     def writelines(self, seq: t.Iterable[bytes]) -> None:
         ...
-    
+
     def close(self) -> None:
         ...
-    
+
     def flush(self) -> None:
         ...
-    
+
     def isatty(self) -> bool:
         ...
-    
+
     def tell(self) -> int:
         ...
-    
+
     @property
     def encoding(self) -> str:
         ...
-    
-
-

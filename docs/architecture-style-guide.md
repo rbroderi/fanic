@@ -14,7 +14,8 @@
 
 - Keep route handlers short and dispatch to focused helper functions.
 - Prefer small action handlers over long if/elif chains for tail-based routing.
-- Keep shared request helpers in common modules (for example non-empty checks and form list extraction).
+- Keep shared request helpers in common modules (for example non-empty checks
+  and form list extraction).
 
 ## Service Layer Rules
 
@@ -22,7 +23,8 @@
   - authorization
   - validation
   - one or more repository operations
-- Service return values should be explicit and structured (for example dataclass result objects).
+- Service return values should be explicit and structured (for example dataclass
+  result objects).
 - Keep service APIs independent from concrete HTTP request objects.
 
 ## Repository Rules
@@ -35,7 +37,8 @@
 
 - Keep field-level validation helpers in shared modules under common.
 - Avoid duplicating tiny validators across routes.
-- Use explicit conversion/defaulting (prefer ternary style for coalescing defaults).
+- Use explicit conversion/defaulting (prefer ternary style for coalescing
+  defaults).
 
 ## Scripting Rules (Audit/Tooling)
 

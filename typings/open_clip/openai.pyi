@@ -36,4 +36,3 @@ def load_openai_model(name: str, precision: Optional[str] = ..., device: Optiona
         A torchvision transform that converts a PIL image into a tensor that the returned model can take as its input
     """
     ...
-

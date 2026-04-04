@@ -13,34 +13,34 @@ def gather_features(image_features, text_features, local_loss=..., gather_with_g
 class ClipLoss(nn.Module):
     def __init__(self, local_loss=..., gather_with_grad=..., cache_labels=..., rank=..., world_size=..., use_horovod=...) -> None:
         ...
-    
+
     def get_ground_truth(self, device, num_logits) -> torch.Tensor:
         ...
-    
+
     def get_logits(self, image_features, text_features, logit_scale, logit_bias=...) -> tuple[Any, Any]:
         ...
-    
+
     def forward(self, image_features, text_features, logit_scale, logit_bias=..., output_dict=...) -> dict[str, Tensor] | Tensor:
         ...
-    
+
 
 
 class CoCaLoss(ClipLoss):
     def __init__(self, caption_loss_weight, clip_loss_weight, pad_id=..., local_loss=..., gather_with_grad=..., cache_labels=..., rank=..., world_size=..., use_horovod=...) -> None:
         ...
-    
+
     def forward(self, image_features, text_features, logits, labels, logit_scale, output_dict=...) -> dict[str, Any | Tensor] | tuple[Any | Tensor, Any]:
         ...
-    
+
 
 
 class DistillClipLoss(ClipLoss):
     def dist_loss(self, teacher_logits, student_logits):
         ...
-    
+
     def forward(self, image_features, text_features, logit_scale, dist_image_features, dist_text_features, dist_logit_scale, output_dict=...) -> dict[str, Tensor | Any] | tuple[Tensor, Any]:
         ...
-    
+
 
 
 def neighbour_exchange(from_rank, to_rank, tensor, group=...) -> Tensor:
@@ -53,11 +53,11 @@ class NeighbourExchange(torch.autograd.Function):
     @staticmethod
     def forward(ctx, from_rank, to_rank, group, tensor) -> Tensor:
         ...
-    
+
     @staticmethod
     def backward(ctx, grad_output) -> tuple[None, None, None, Any | None]:
         ...
-    
+
 
 
 def neighbour_exchange_with_grad(from_rank, to_rank, tensor, group=...) -> Any | None:
@@ -67,11 +67,11 @@ class NeighbourExchangeBidir(torch.autograd.Function):
     @staticmethod
     def forward(ctx, left_rank, right_rank, group, tensor_to_left, tensor_to_right) -> tuple[Tensor, Tensor]:
         ...
-    
+
     @staticmethod
     def backward(ctx, *grad_outputs) -> Any:
         ...
-    
+
 
 
 def neighbour_exchange_bidir_with_grad(left_rank, right_rank, tensor_to_left, tensor_to_right, group=...) -> Any | None:
@@ -89,15 +89,12 @@ class SigLipLoss(nn.Module):
     """
     def __init__(self, cache_labels: bool = ..., rank: int = ..., world_size: int = ..., dist_impl: Optional[str] = ...) -> None:
         ...
-    
+
     def get_ground_truth(self, device, dtype, num_logits, negative_only=...) -> torch.Tensor:
         ...
-    
+
     def get_logits(self, image_features, text_features, logit_scale, logit_bias=...):
         ...
-    
+
     def forward(self, image_features, text_features, logit_scale, logit_bias, output_dict=...) -> dict[str, Any]:
         ...
-    
-
-

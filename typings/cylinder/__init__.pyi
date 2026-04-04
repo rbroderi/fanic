@@ -56,7 +56,7 @@ class DirectFileServe:
     @staticmethod
     def main(response):
         ...
-    
+
 
 
 class CustomQueueHandler(logging.handlers.QueueHandler):
@@ -65,13 +65,13 @@ class CustomQueueHandler(logging.handlers.QueueHandler):
     """
     def prepare(self, record) -> LogRecord:
         ...
-    
+
 
 
 class EvictQueue(queue.Queue):
     def put(self, item, block=..., timeout=...) -> None:
         ...
-    
+
 
 
 class RedirectCustomClass(werkzeug.exceptions.HTTPException):
@@ -101,5 +101,3 @@ class RedirectTemporaryRedirect(RedirectCustomClass):
 class RedirectPermanentRedirect(RedirectCustomClass):
     code = ...
     name = ...
-
-

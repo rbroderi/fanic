@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: scripts/setup-nginx-ubuntu.sh [options]
 
 Options:
@@ -32,99 +32,99 @@ EOF
 }
 
 prompt_default() {
-  local message="$1"
-  local default="$2"
-  local value
-  read -r -p "${message} [${default}]: " value
-  if [[ -z "${value}" ]]; then
-    printf '%s\n' "${default}"
-  else
-    printf '%s\n' "${value}"
-  fi
+	local message="$1"
+	local default="$2"
+	local value
+	read -r -p "${message} [${default}]: " value
+	if [[ -z "${value}" ]]; then
+		printf '%s\n' "${default}"
+	else
+		printf '%s\n' "${value}"
+	fi
 }
 
 require_cmd() {
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    echo "Required command not found: ${cmd}" >&2
-    exit 1
-  fi
+	local cmd="$1"
+	if ! command -v "${cmd}" >/dev/null 2>&1; then
+		echo "Required command not found: ${cmd}" >&2
+		exit 1
+	fi
 }
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --listen-port)
-      LISTEN_PORT="$2"
-      shift 2
-      ;;
-    --wsgi-host)
-      WSGI_HOST="$2"
-      shift 2
-      ;;
-    --wsgi-port)
-      WSGI_PORT="$2"
-      shift 2
-      ;;
-    --server-name)
-      SERVER_NAME="$2"
-      shift 2
-      ;;
-    --repo-root)
-      REPO_ROOT="$2"
-      shift 2
-      ;;
-    --storage-root)
-      STORAGE_ROOT="$2"
-      shift 2
-      ;;
-    --skip-install)
-      SKIP_INSTALL="true"
-      shift
-      ;;
-    --no-prompt)
-      NO_PROMPT="true"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
+	case "$1" in
+	--listen-port)
+		LISTEN_PORT="$2"
+		shift 2
+		;;
+	--wsgi-host)
+		WSGI_HOST="$2"
+		shift 2
+		;;
+	--wsgi-port)
+		WSGI_PORT="$2"
+		shift 2
+		;;
+	--server-name)
+		SERVER_NAME="$2"
+		shift 2
+		;;
+	--repo-root)
+		REPO_ROOT="$2"
+		shift 2
+		;;
+	--storage-root)
+		STORAGE_ROOT="$2"
+		shift 2
+		;;
+	--skip-install)
+		SKIP_INSTALL="true"
+		shift
+		;;
+	--no-prompt)
+		NO_PROMPT="true"
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown argument: $1" >&2
+		usage
+		exit 1
+		;;
+	esac
 done
 
 require_cmd realpath
 
 if [[ -z "${REPO_ROOT}" ]]; then
-  REPO_ROOT="${DEFAULT_REPO_ROOT}"
+	REPO_ROOT="${DEFAULT_REPO_ROOT}"
 fi
 REPO_ROOT="$(realpath "${REPO_ROOT}")"
 
 if [[ -z "${STORAGE_ROOT}" ]]; then
-  STORAGE_ROOT="${REPO_ROOT}/src/storage"
+	STORAGE_ROOT="${REPO_ROOT}/src/storage"
 fi
 STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
 
 if [[ "${NO_PROMPT}" != "true" ]]; then
-  echo
-  echo "FANIC nginx setup for Ubuntu"
-  echo "This config serves /cbz and /static from storage and proxies all other routes to WSGI."
-  echo
+	echo
+	echo "FANIC nginx setup for Ubuntu"
+	echo "This config serves /cbz and /static from storage and proxies all other routes to WSGI."
+	echo
 
-  LISTEN_PORT="$(prompt_default "Local listen port" "${LISTEN_PORT}")"
-  WSGI_HOST="$(prompt_default "WSGI host" "${WSGI_HOST}")"
-  WSGI_PORT="$(prompt_default "WSGI port" "${WSGI_PORT}")"
-  SERVER_NAME="$(prompt_default "nginx server_name" "${SERVER_NAME}")"
-  REPO_ROOT="$(prompt_default "Repo root" "${REPO_ROOT}")"
-  STORAGE_ROOT="$(prompt_default "Storage root" "${STORAGE_ROOT}")"
-  INSTALL_ANSWER="$(prompt_default "Install nginx with apt if missing? (yes/no)" "yes")"
-  if [[ "${INSTALL_ANSWER,,}" != "yes" ]]; then
-    SKIP_INSTALL="true"
-  fi
+	LISTEN_PORT="$(prompt_default "Local listen port" "${LISTEN_PORT}")"
+	WSGI_HOST="$(prompt_default "WSGI host" "${WSGI_HOST}")"
+	WSGI_PORT="$(prompt_default "WSGI port" "${WSGI_PORT}")"
+	SERVER_NAME="$(prompt_default "nginx server_name" "${SERVER_NAME}")"
+	REPO_ROOT="$(prompt_default "Repo root" "${REPO_ROOT}")"
+	STORAGE_ROOT="$(prompt_default "Storage root" "${STORAGE_ROOT}")"
+	INSTALL_ANSWER="$(prompt_default "Install nginx with apt if missing? (yes/no)" "yes")"
+	if [[ "${INSTALL_ANSWER,,}" != "yes" ]]; then
+		SKIP_INSTALL="true"
+	fi
 fi
 
 REPO_ROOT="$(realpath "${REPO_ROOT}")"
@@ -135,24 +135,24 @@ FANART_DIR="${STORAGE_ROOT}/fanart"
 WORKS_DIR="${STORAGE_ROOT}/works"
 
 for dir_path in "${CBZ_DIR}" "${STATIC_DIR}" "${FANART_DIR}" "${WORKS_DIR}"; do
-  if [[ ! -d "${dir_path}" ]]; then
-    echo "Expected directory not found: ${dir_path}" >&2
-    exit 1
-  fi
+	if [[ ! -d "${dir_path}" ]]; then
+		echo "Expected directory not found: ${dir_path}" >&2
+		exit 1
+	fi
 done
 
 SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
-  require_cmd sudo
-  SUDO="sudo"
+	require_cmd sudo
+	SUDO="sudo"
 fi
 
 if [[ "${SKIP_INSTALL}" != "true" ]]; then
-  if ! command -v nginx >/dev/null 2>&1; then
-    echo "Installing nginx package"
-    ${SUDO} apt-get update
-    ${SUDO} apt-get install -y "${NGINX_PKG}"
-  fi
+	if ! command -v nginx >/dev/null 2>&1; then
+		echo "Installing nginx package"
+		${SUDO} apt-get update
+		${SUDO} apt-get install -y "${NGINX_PKG}"
+	fi
 fi
 
 require_cmd nginx
@@ -164,9 +164,9 @@ DEFAULT_SITE="${SITES_ENABLED}/default"
 ENABLED_LINK="${SITES_ENABLED}/fanic.conf"
 
 if [[ -f "${CONF_PATH}" ]]; then
-  backup_path="${CONF_PATH}.bak.$(date +%Y%m%d%H%M%S)"
-  ${SUDO} cp "${CONF_PATH}" "${backup_path}"
-  echo "Backed up existing config to ${backup_path}"
+	backup_path="${CONF_PATH}.bak.$(date +%Y%m%d%H%M%S)"
+	${SUDO} cp "${CONF_PATH}" "${backup_path}"
+	echo "Backed up existing config to ${backup_path}"
 fi
 
 cat <<EOF | ${SUDO} tee "${CONF_PATH}" >/dev/null
@@ -238,11 +238,11 @@ EOF
 echo "Wrote nginx config to ${CONF_PATH}"
 
 if [[ -L "${DEFAULT_SITE}" || -f "${DEFAULT_SITE}" ]]; then
-  ${SUDO} rm -f "${DEFAULT_SITE}"
+	${SUDO} rm -f "${DEFAULT_SITE}"
 fi
 
 if [[ -L "${ENABLED_LINK}" || -f "${ENABLED_LINK}" ]]; then
-  ${SUDO} rm -f "${ENABLED_LINK}"
+	${SUDO} rm -f "${ENABLED_LINK}"
 fi
 ${SUDO} ln -s "${CONF_PATH}" "${ENABLED_LINK}"
 
@@ -250,11 +250,11 @@ echo "Validating nginx config"
 ${SUDO} nginx -t
 
 if ${SUDO} systemctl is-active --quiet nginx; then
-  echo "Reloading nginx"
-  ${SUDO} systemctl reload nginx
+	echo "Reloading nginx"
+	${SUDO} systemctl reload nginx
 else
-  echo "Starting nginx"
-  ${SUDO} systemctl enable --now nginx
+	echo "Starting nginx"
+	${SUDO} systemctl enable --now nginx
 fi
 
 echo

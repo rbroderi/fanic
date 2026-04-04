@@ -10,29 +10,29 @@ class LayerNormFp32(nn.LayerNorm):
     """Subclass torch's LayerNorm to handle fp16 (by casting to float32 and back)."""
     def forward(self, x: torch.Tensor) -> Tensor:
         ...
-    
+
 
 
 class LayerNorm(nn.LayerNorm):
     """Subclass torch's LayerNorm (with cast back to input dtype)."""
     def forward(self, x: torch.Tensor) -> Tensor:
         ...
-    
+
 
 
 class QuickGELU(nn.Module):
     def forward(self, x: torch.Tensor) -> Tensor:
         ...
-    
+
 
 
 class LayerScale(nn.Module):
     def __init__(self, dim, init_values=..., inplace=...) -> None:
         ...
-    
+
     def forward(self, x):
         ...
-    
+
 
 
 class PatchDropout(nn.Module):
@@ -41,117 +41,117 @@ class PatchDropout(nn.Module):
     """
     def __init__(self, prob: float = ..., exclude_first_token: bool = ...) -> None:
         ...
-    
+
     def forward(self, x) -> Tensor:
         ...
-    
+
 
 
 class Attention(nn.Module):
     def __init__(self, dim: int, num_heads: int = ..., qkv_bias: bool = ..., qk_norm: bool = ..., scaled_cosine: bool = ..., scale_heads: bool = ..., inner_norm: bool = ..., logit_scale_max: float = ..., norm_layer: Type[nn.Module] = ..., attn_drop: float = ..., proj_drop: float = ...) -> None:
         ...
-    
+
     def forward(self, x, attn_mask: Optional[torch.Tensor] = ...) -> Any:
         ...
-    
+
 
 
 class AttentionalPooler(nn.Module):
     def __init__(self, d_model: int, context_dim: int, n_head: int = ..., n_queries: int = ..., norm_layer: Callable = ...) -> None:
         ...
-    
+
     def forward(self, x: torch.Tensor) -> Any:
         ...
-    
+
 
 
 class ResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, mlp_ratio: float = ..., ls_init_value: float = ..., act_layer: Callable = ..., norm_layer: Callable = ..., is_cross_attention: bool = ..., batch_first: bool = ...) -> None:
         ...
-    
+
     def get_weight_dtype(self) -> torch.dtype:
         ...
-    
+
     def attention(self, q_x: torch.Tensor, k_x: Optional[torch.Tensor] = ..., v_x: Optional[torch.Tensor] = ..., attn_mask: Optional[torch.Tensor] = ...) -> Any:
         ...
-    
+
     def forward(self, q_x: torch.Tensor, k_x: Optional[torch.Tensor] = ..., v_x: Optional[torch.Tensor] = ..., attn_mask: Optional[torch.Tensor] = ...) -> Any:
         ...
-    
+
 
 
 class CustomResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, mlp_ratio: float = ..., ls_init_value: float = ..., act_layer: Type[nn.Module] = ..., norm_layer: Type[nn.Module] = ..., qk_norm: bool = ..., scale_cosine_attn: bool = ..., scale_heads: bool = ..., scale_attn_inner: bool = ..., scale_attn: bool = ..., scale_fc: bool = ..., batch_first: bool = ...) -> None:
         ...
-    
+
     def get_weight_dtype(self) -> torch.dtype:
         ...
-    
+
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ...) -> Tensor:
         ...
-    
+
 
 
 class CustomTransformer(nn.Module):
     """ A custom transformer that can use different block types. """
     def __init__(self, width: int, layers: int, heads: int, mlp_ratio: float = ..., ls_init_value: float = ..., act_layer: Type[nn.Module] = ..., norm_layer: Type[nn.Module] = ..., batch_first: bool = ..., block_types: Union[str, List[str]] = ...) -> None:
         ...
-    
+
     def get_cast_dtype(self) -> torch.dtype:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ..., indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ...) -> tuple[Tensor, list[Any]]:
         ...
-    
+
     def prune_intermediate_layers(self, indices: Union[int, List[int]] = ...) -> List[int]:
         """ Prune layers not required for specified intermediates.
         """
         ...
-    
+
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ...) -> Tensor:
         ...
-    
+
 
 
 class Transformer(nn.Module):
     def __init__(self, width: int, layers: int, heads: int, mlp_ratio: float = ..., ls_init_value: float = ..., act_layer: Type[nn.Module] = ..., norm_layer: Type[nn.Module] = ..., batch_first: bool = ..., block_type: Optional[str] = ..., qk_norm: bool = ..., scaled_cosine_attn: bool = ..., scale_heads: bool = ..., scale_attn_inner: bool = ..., scale_attn: bool = ..., scale_fc: bool = ...) -> None:
         ...
-    
+
     def get_cast_dtype(self) -> torch.dtype:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ..., indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ...) -> tuple[Tensor, list[Any]]:
         ...
-    
+
     def prune_intermediate_layers(self, indices: Union[int, List[int]] = ...) -> List[int]:
         """ Prune layers not required for specified intermediates.
         """
         ...
-    
+
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ...) -> Tensor:
         ...
-    
+
 
 
 class VisionTransformer(nn.Module):
     output_tokens: torch.jit.Final[bool]
     def __init__(self, image_size: int, patch_size: int, width: int, layers: int, heads: int, mlp_ratio: float, ls_init_value: float = ..., attentional_pool: bool = ..., attn_pooler_queries: int = ..., attn_pooler_heads: int = ..., output_dim: int = ..., patch_dropout: float = ..., no_ln_pre: bool = ..., pos_embed_type: str = ..., pool_type: str = ..., final_ln_after_pool: bool = ..., act_layer: Callable = ..., norm_layer: Callable = ..., output_tokens: bool = ..., block_type: Optional[str] = ..., qk_norm: bool = ..., scaled_cosine_attn: bool = ..., scale_heads: bool = ..., scale_attn_inner: bool = ..., scale_attn: bool = ..., scale_fc: bool = ...) -> None:
         ...
-    
+
     def lock(self, unlocked_groups: int = ..., freeze_bn_stats: bool = ...) -> None:
         ...
-    
+
     def init_parameters(self) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = ...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def no_weight_decay(self) -> set[str]:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., output_fmt: str = ..., output_extra_tokens: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -167,15 +167,15 @@ class VisionTransformer(nn.Module):
 
         """
         ...
-    
+
     def prune_intermediate_layers(self, indices: Union[int, List[int]] = ..., prune_norm: bool = ..., prune_head: bool = ...) -> List[int]:
         """ Prune layers not required for specified intermediates.
         """
         ...
-    
+
     def forward(self, x: torch.Tensor) -> tuple[Tensor, Tensor] | Tensor:
         ...
-    
+
 
 
 def text_global_pool(x: torch.Tensor, text: Optional[torch.Tensor] = ..., pool_type: str = ..., eos_token_id: Optional[int] = ...) -> torch.Tensor:
@@ -185,14 +185,14 @@ class TextTransformer(nn.Module):
     output_tokens: torch.jit.Final[bool]
     def __init__(self, context_length: int = ..., vocab_size: int = ..., width: int = ..., heads: int = ..., layers: int = ..., mlp_ratio: float = ..., ls_init_value: float = ..., output_dim: Optional[int] = ..., embed_cls: bool = ..., no_causal_mask: bool = ..., use_pad_mask: bool = ..., correct_cls_mask: bool = ..., pad_id: int = ..., eos_id: int = ..., pool_type: str = ..., proj_type: str = ..., proj_bias: bool = ..., act_layer: Type[nn.Module] = ..., norm_layer: Type[nn.Module] = ..., output_tokens: bool = ..., block_type: Optional[str] = ..., qk_norm: bool = ..., scaled_cosine_attn: bool = ..., scale_heads: bool = ..., scale_attn_inner: bool = ..., scale_attn: bool = ..., scale_fc: bool = ...) -> None:
         ...
-    
+
     def init_parameters(self) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
     def lock(self, unlocked_layers: int = ..., freeze_layer_norm: bool = ...) -> None:
         """
         Lock the text transformer layers, optionally leaving some layers unlocked.
@@ -202,14 +202,14 @@ class TextTransformer(nn.Module):
             freeze_layer_norm: LayerNorm freeze (only for API compatibility, not functional)
         """
         ...
-    
+
     @torch.jit.ignore
     def no_weight_decay(self) -> set[str]:
         ...
-    
+
     def build_causal_mask(self) -> Tensor:
         ...
-    
+
     def forward_intermediates(self, text: torch.Tensor, indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., output_fmt: str = ..., output_extra_tokens: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -225,37 +225,37 @@ class TextTransformer(nn.Module):
 
         """
         ...
-    
+
     def prune_intermediate_layers(self, indices: Union[int, List[int]] = ..., prune_norm: bool = ..., prune_head: bool = ...) -> List[int]:
         """ Prune layers not required for specified intermediates.
         """
         ...
-    
+
     def forward(self, text) -> tuple[Any | Tensor, Any] | Any | Tensor:
         ...
-    
+
 
 
 class MultimodalTransformer(Transformer):
     def __init__(self, width: int, layers: int, heads: int, context_length: int = ..., mlp_ratio: float = ..., ls_init_value: float = ..., act_layer: Type[nn.Module] = ..., norm_layer: Type[nn.Module] = ..., output_dim: int = ..., batch_first: bool = ...) -> None:
         ...
-    
+
     def init_parameters(self) -> None:
         ...
-    
+
     def build_attention_mask(self) -> Tensor:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = ..., indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ...):
         ...
-    
+
     def forward(self, image_embs, text_embs) -> Any:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
 
 
 def lock_text_tower(model: nn.Module, unlocked_layers: int = ...) -> None:
@@ -271,4 +271,3 @@ def lock_text_tower(model: nn.Module, unlocked_layers: int = ...) -> None:
         unlocked_layers: Number of layers to leave unlocked (from the end)
     """
     ...
-

@@ -6,31 +6,31 @@ src_dir="${FANIC_STATIC_SOURCE:-/mnt/storage/static}"
 dst_dir="${repo_root}/static"
 
 if [[ ! -d "${src_dir}" ]]; then
-  echo "sync-static: source missing, skipping: ${src_dir}"
-  exit 0
+	echo "sync-static: source missing, skipping: ${src_dir}"
+	exit 0
 fi
 
 if [[ ! -d "${dst_dir}" ]]; then
-  echo "sync-static: destination missing, skipping: ${dst_dir}"
-  exit 0
+	echo "sync-static: destination missing, skipping: ${dst_dir}"
+	exit 0
 fi
 
 if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete --delete-excluded \
-    --exclude='*.js' \
-    --exclude='*.js.map' \
-    --filter='P sync-from-storage.sh' \
-    "${src_dir}/" "${dst_dir}/"
+	rsync -a --delete --delete-excluded \
+		--exclude='*.js' \
+		--exclude='*.js.map' \
+		--filter='P sync-from-storage.sh' \
+		"${src_dir}/" "${dst_dir}/"
 else
-  find "${dst_dir}" -mindepth 1 -maxdepth 1 ! -name "sync-from-storage.sh" -exec rm -rf {} +
-  while IFS= read -r -d '' rel_path; do
-    target_path="${dst_dir}/${rel_path#./}"
-    mkdir -p "$(dirname "${target_path}")"
-    cp -a "${src_dir}/${rel_path#./}" "${target_path}"
-  done < <(
-    cd "${src_dir}"
-    find . -type f ! -name '*.js' ! -name '*.js.map' -print0
-  )
+	find "${dst_dir}" -mindepth 1 -maxdepth 1 ! -name "sync-from-storage.sh" -exec rm -rf {} +
+	while IFS= read -r -d '' rel_path; do
+		target_path="${dst_dir}/${rel_path#./}"
+		mkdir -p "$(dirname "${target_path}")"
+		cp -a "${src_dir}/${rel_path#./}" "${target_path}"
+	done < <(
+		cd "${src_dir}"
+		find . -type f ! -name '*.js' ! -name '*.js.map' -print0
+	)
 fi
 
 echo "sync-static: synced ${src_dir} -> ${dst_dir}"

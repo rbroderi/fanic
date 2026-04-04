@@ -348,4 +348,3 @@ def initialize_nsfw_model() -> bool:
 
 if _SETTINGS.preload_models:
     _ = initialize_nsfw_model()
-

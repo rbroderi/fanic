@@ -6,6 +6,3 @@ __all__ = ("classproperty", )
 class classproperty(property):
     def __get__(self, instance, cls=...) -> Any:
         ...
-    
-
-

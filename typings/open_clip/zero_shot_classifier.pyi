@@ -35,4 +35,3 @@ def build_zero_shot_classifier_legacy(model, tokenizer, classnames: Sequence[str
         use_tqdm: Enable TQDM progress bar.
     """
     ...
-

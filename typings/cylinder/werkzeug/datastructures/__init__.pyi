@@ -27,7 +27,7 @@ class ImmutableList[V](ImmutableListMixin, list[V]):
     """
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class TypeConversionDict[K, V](dict[K, V]):
@@ -40,23 +40,23 @@ class TypeConversionDict[K, V](dict[K, V]):
     @t.overload
     def get(self, key: K) -> V | None:
         ...
-    
+
     @t.overload
     def get(self, key: K, default: V) -> V:
         ...
-    
+
     @t.overload
     def get[T](self, key: K, default: T) -> V | T:
         ...
-    
+
     @t.overload
     def get[T](self, key: str, type: cabc.Callable[[V], T]) -> T | None:
         ...
-    
+
     @t.overload
     def get[T](self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
         ...
-    
+
     def get[T](self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
         """Return the default value if the requested data doesn't exist.
         If `type` is provided and is a callable it should convert the value,
@@ -83,7 +83,7 @@ class TypeConversionDict[K, V](dict[K, V]):
            Returns the default value on :exc:`TypeError`, too.
         """
         ...
-    
+
 
 
 class ImmutableTypeConversionDict[K, V](ImmutableDictMixin[K, V], TypeConversionDict[K, V]):
@@ -98,10 +98,10 @@ class ImmutableTypeConversionDict[K, V](ImmutableDictMixin[K, V], TypeConversion
         like for any other python immutable type (eg: :class:`tuple`).
         """
         ...
-    
+
     def __copy__(self) -> te.Self:
         ...
-    
+
 
 
 class MultiDict[K, V](TypeConversionDict[K, V]):
@@ -149,16 +149,16 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
     """
     def __init__(self, mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]] | None) = ...) -> None:
         ...
-    
+
     def __getstate__(self) -> t.Any:
         ...
-    
+
     def __setstate__(self, value: t.Any) -> None:
         ...
-    
+
     def __iter__(self) -> cabc.Iterator[K]:
         ...
-    
+
     def __getitem__(self, key: K) -> V:
         """Return the first data value for this key;
         raises KeyError if not found.
@@ -167,7 +167,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         :raise KeyError: if the key does not exist.
         """
         ...
-    
+
     def __setitem__(self, key: K, value: V) -> None:
         """Like :meth:`add` but removes an existing key first.
 
@@ -175,7 +175,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         :param value: the value to set.
         """
         ...
-    
+
     def add(self, key: K, value: V) -> None:
         """Adds a new value for the key.
 
@@ -185,15 +185,15 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         :param value: the value to add.
         """
         ...
-    
+
     @t.overload
     def getlist(self, key: K) -> list[V]:
         ...
-    
+
     @t.overload
     def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
-    
+
     def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         """Return the list of items for a given key. If that key is not in the
         `MultiDict`, the return value will be an empty list.  Just like `get`,
@@ -209,7 +209,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
             Catches ``TypeError`` in addition to ``ValueError``.
         """
         ...
-    
+
     def setlist(self, key: K, new_list: cabc.Iterable[V]) -> None:
         """Remove the old values for a key and add new ones.  Note that the list
         you pass the values in will be shallow-copied before it is inserted in
@@ -227,15 +227,15 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
                          are removed first.
         """
         ...
-    
+
     @t.overload
     def setdefault(self, key: K) -> None:
         ...
-    
+
     @t.overload
     def setdefault(self, key: K, default: V) -> V:
         ...
-    
+
     def setdefault(self, key: K, default: V | None = ...) -> V | None:
         """Returns the value for the key if it is in the dict, otherwise it
         returns `default` and sets that value for `key`.
@@ -245,7 +245,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
                         in the dict.  If not further specified it's `None`.
         """
         ...
-    
+
     def setlistdefault(self, key: K, default_list: cabc.Iterable[V] | None = ...) -> list[V]:
         """Like `setdefault` but sets multiple values.  The list returned
         is not a copy, but the list that is actually used internally.  This
@@ -264,7 +264,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         :return: a :class:`list`
         """
         ...
-    
+
     def items(self, multi: bool = ...) -> cabc.Iterable[tuple[K, V]]:
         """Return an iterator of ``(key, value)`` pairs.
 
@@ -273,16 +273,16 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
                       contain pairs for the first value of each key.
         """
         ...
-    
+
     def lists(self) -> cabc.Iterable[tuple[K, list[V]]]:
         """Return a iterator of ``(key, values)`` pairs, where values is the list
         of all values associated with the key."""
         ...
-    
+
     def values(self) -> cabc.Iterable[V]:
         """Returns an iterator of the first value on every key's value list."""
         ...
-    
+
     def listvalues(self) -> cabc.Iterable[list[V]]:
         """Return an iterator of all values associated with a key.  Zipping
         :meth:`keys` and this is the same as calling :meth:`lists`:
@@ -292,23 +292,23 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         True
         """
         ...
-    
+
     def copy(self) -> te.Self:
         """Return a shallow copy of this object."""
         ...
-    
+
     def deepcopy(self, memo: t.Any = ...) -> te.Self:
         """Return a deep copy of this object."""
         ...
-    
+
     @t.overload
     def to_dict(self, flat: t.Literal[True] = ...) -> dict[K, V]:
         ...
-    
+
     @t.overload
     def to_dict(self, flat: t.Literal[False]) -> dict[K, list[V]]:
         ...
-    
+
     def to_dict(self, flat: bool = ...) -> dict[K, V] | dict[K, list[V]]:
         """Return the contents as regular dict.  If `flat` is `True` the
         returned dict will only have the first item present, if `flat` is
@@ -320,7 +320,7 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         :return: a :class:`dict`
         """
         ...
-    
+
     def update(self, mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]])) -> None:
         """update() extends rather than replaces existing key lists:
 
@@ -340,25 +340,25 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
         MultiDict([])
         """
         ...
-    
+
     def __or__(self, other: cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]]) -> MultiDict[K, V]:
         ...
-    
+
     def __ior__(self, other: (cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]])) -> te.Self:
         ...
-    
+
     @t.overload
     def pop(self, key: K) -> V:
         ...
-    
+
     @t.overload
     def pop(self, key: K, default: V) -> V:
         ...
-    
+
     @t.overload
     def pop[T](self, key: K, default: T) -> V | T:
         ...
-    
+
     def pop[T](self, key: K, default: V | T = ...) -> V | T:
         """Pop the first item for a list on the dict.  Afterwards the
         key is removed from the dict, so additional values are discarded:
@@ -374,11 +374,11 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
                         not in the dictionary.
         """
         ...
-    
+
     def popitem(self) -> tuple[K, V]:
         """Pop an item from the dict."""
         ...
-    
+
     def poplist(self, key: K) -> list[V]:
         """Pop the list for a key from the dict.  If the key is not in the dict
         an empty list is returned.
@@ -388,20 +388,20 @@ class MultiDict[K, V](TypeConversionDict[K, V]):
            raising an error.
         """
         ...
-    
+
     def popitemlist(self) -> tuple[K, list[V]]:
         """Pop a ``(key, list)`` tuple from the dict."""
         ...
-    
+
     def __copy__(self) -> te.Self:
         ...
-    
+
     def __deepcopy__(self, memo: t.Any) -> te.Self:
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class _omd_bucket[K, V]():
@@ -413,10 +413,10 @@ class _omd_bucket[K, V]():
     __slots__ = ...
     def __init__(self, omd: _OrderedMultiDict[K, V], key: K, value: V) -> None:
         ...
-    
+
     def unlink(self, omd: _OrderedMultiDict[K, V]) -> None:
         ...
-    
+
 
 
 class _OrderedMultiDict[K, V](MultiDict[K, V]):
@@ -439,94 +439,94 @@ class _OrderedMultiDict[K, V](MultiDict[K, V]):
     """
     def __init__(self, mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]] | None) = ...) -> None:
         ...
-    
+
     def __eq__(self, other: object) -> bool:
         ...
-    
+
     __hash__ = ...
     def __reduce_ex__(self, protocol: t.SupportsIndex) -> t.Any:
         ...
-    
+
     def __getstate__(self) -> t.Any:
         ...
-    
+
     def __setstate__(self, values: t.Any) -> None:
         ...
-    
+
     def __getitem__(self, key: K) -> V:
         ...
-    
+
     def __setitem__(self, key: K, value: V) -> None:
         ...
-    
+
     def __delitem__(self, key: K) -> None:
         ...
-    
+
     def keys(self) -> cabc.Iterable[K]:
         ...
-    
+
     def __iter__(self) -> cabc.Iterator[K]:
         ...
-    
+
     def values(self) -> cabc.Iterable[V]:
         ...
-    
+
     def items(self, multi: bool = ...) -> cabc.Iterable[tuple[K, V]]:
         ...
-    
+
     def lists(self) -> cabc.Iterable[tuple[K, list[V]]]:
         ...
-    
+
     def listvalues(self) -> cabc.Iterable[list[V]]:
         ...
-    
+
     def add(self, key: K, value: V) -> None:
         ...
-    
+
     @t.overload
     def getlist(self, key: K) -> list[V]:
         ...
-    
+
     @t.overload
     def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
-    
+
     def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         ...
-    
+
     def setlist(self, key: K, new_list: cabc.Iterable[V]) -> None:
         ...
-    
+
     def setlistdefault(self, key: t.Any, default_list: t.Any = ...) -> t.NoReturn:
         ...
-    
+
     def update(self, mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]])) -> None:
         ...
-    
+
     def poplist(self, key: K) -> list[V]:
         ...
-    
+
     @t.overload
     def pop(self, key: K) -> V:
         ...
-    
+
     @t.overload
     def pop(self, key: K, default: V) -> V:
         ...
-    
+
     @t.overload
     def pop[T](self, key: K, default: T) -> V | T:
         ...
-    
+
     def pop[T](self, key: K, default: V | T = ...) -> V | T:
         ...
-    
+
     def popitem(self) -> tuple[K, V]:
         ...
-    
+
     def popitemlist(self) -> tuple[K, list[V]]:
         ...
-    
+
 
 
 class CombinedMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
@@ -553,77 +553,77 @@ class CombinedMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
     """
     def __reduce_ex__(self, protocol: t.SupportsIndex) -> t.Any:
         ...
-    
+
     def __init__(self, dicts: cabc.Iterable[MultiDict[K, V]] | None = ...) -> None:
         ...
-    
+
     @classmethod
     def fromkeys(cls, keys: t.Any, value: t.Any = ...) -> t.NoReturn:
         ...
-    
+
     def __getitem__(self, key: K) -> V:
         ...
-    
+
     @t.overload
     def get(self, key: K) -> V | None:
         ...
-    
+
     @t.overload
     def get(self, key: K, default: V) -> V:
         ...
-    
+
     @t.overload
     def get[T](self, key: K, default: T) -> V | T:
         ...
-    
+
     @t.overload
     def get[T](self, key: str, type: cabc.Callable[[V], T]) -> T | None:
         ...
-    
+
     @t.overload
     def get[T](self, key: str, default: T, type: cabc.Callable[[V], T]) -> T:
         ...
-    
+
     def get[T](self, key: K, default: V | T | None = ..., type: cabc.Callable[[V], T] | None = ...) -> V | T | None:
         ...
-    
+
     @t.overload
     def getlist(self, key: K) -> list[V]:
         ...
-    
+
     @t.overload
     def getlist[T](self, key: K, type: cabc.Callable[[V], T]) -> list[T]:
         ...
-    
+
     def getlist[T](self, key: K, type: cabc.Callable[[V], T] | None = ...) -> list[V] | list[T]:
         ...
-    
+
     def keys(self) -> cabc.Iterable[K]:
         ...
-    
+
     def __iter__(self) -> cabc.Iterator[K]:
         ...
-    
+
     @t.overload
     def items(self) -> cabc.Iterable[tuple[K, V]]:
         ...
-    
+
     @t.overload
     def items(self, multi: t.Literal[True]) -> cabc.Iterable[tuple[K, list[V]]]:
         ...
-    
+
     def items(self, multi: bool = ...) -> cabc.Iterable[tuple[K, V]] | cabc.Iterable[tuple[K, list[V]]]:
         ...
-    
+
     def values(self) -> cabc.Iterable[V]:
         ...
-    
+
     def lists(self) -> cabc.Iterable[tuple[K, list[V]]]:
         ...
-    
+
     def listvalues(self) -> cabc.Iterable[list[V]]:
         ...
-    
+
     def copy(self) -> MultiDict[K, V]:
         """Return a shallow mutable copy of this object.
 
@@ -635,16 +635,16 @@ class CombinedMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
             Return a mutable :class:`MultiDict`.
         """
         ...
-    
+
     def __len__(self) -> int:
         ...
-    
+
     def __contains__(self, key: K) -> bool:
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class ImmutableDict[K, V](ImmutableDictMixin[K, V], dict[K, V]):
@@ -654,17 +654,17 @@ class ImmutableDict[K, V](ImmutableDictMixin[K, V], dict[K, V]):
     """
     def __repr__(self) -> str:
         ...
-    
+
     def copy(self) -> dict[K, V]:
         """Return a shallow mutable copy of this object.  Keep in mind that
         the standard library's :func:`copy` function is a no-op for this class
         like for any other python immutable type (eg: :class:`tuple`).
         """
         ...
-    
+
     def __copy__(self) -> te.Self:
         ...
-    
+
 
 
 class ImmutableMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
@@ -678,10 +678,10 @@ class ImmutableMultiDict[K, V](ImmutableMultiDictMixin[K, V], MultiDict[K, V]):
         like for any other python immutable type (eg: :class:`tuple`).
         """
         ...
-    
+
     def __copy__(self) -> te.Self:
         ...
-    
+
 
 
 class _ImmutableOrderedMultiDict[K, V](ImmutableMultiDictMixin[K, V], _OrderedMultiDict[K, V]):
@@ -694,17 +694,17 @@ class _ImmutableOrderedMultiDict[K, V](ImmutableMultiDictMixin[K, V], _OrderedMu
     """
     def __init__(self, mapping: (MultiDict[K, V] | cabc.Mapping[K, V | list[V] | tuple[V, ...] | set[V]] | cabc.Iterable[tuple[K, V]] | None) = ...) -> None:
         ...
-    
+
     def copy(self) -> _OrderedMultiDict[K, V]:
         """Return a shallow mutable copy of this object.  Keep in mind that
         the standard library's :func:`copy` function is a no-op for this class
         like for any other python immutable type (eg: :class:`tuple`).
         """
         ...
-    
+
     def __copy__(self) -> te.Self:
         ...
-    
+
 
 
 class CallbackDict[K, V](UpdateDictMixin[K, V], dict[K, V]):
@@ -713,10 +713,10 @@ class CallbackDict[K, V](UpdateDictMixin[K, V], dict[K, V]):
     """
     def __init__(self, initial: cabc.Mapping[K, V] | cabc.Iterable[tuple[K, V]] | None = ..., on_update: cabc.Callable[[te.Self], None] | None = ...) -> None:
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class HeaderSet(cabc.MutableSet[str]):
@@ -733,11 +733,11 @@ class HeaderSet(cabc.MutableSet[str]):
     """
     def __init__(self, headers: cabc.Iterable[str] | None = ..., on_update: cabc.Callable[[te.Self], None] | None = ...) -> None:
         ...
-    
+
     def add(self, header: str) -> None:
         """Add a new header to the set."""
         ...
-    
+
     def remove(self: te.Self, header: str) -> None:
         """Remove a header from the set.  This raises an :exc:`KeyError` if the
         header is not in the set.
@@ -749,28 +749,28 @@ class HeaderSet(cabc.MutableSet[str]):
         :param header: the header to be removed.
         """
         ...
-    
+
     def update(self: te.Self, iterable: cabc.Iterable[str]) -> None:
         """Add all the headers from the iterable to the set.
 
         :param iterable: updates the set with the items from the iterable.
         """
         ...
-    
+
     def discard(self, header: str) -> None:
         """Like :meth:`remove` but ignores errors.
 
         :param header: the header to be discarded.
         """
         ...
-    
+
     def find(self, header: str) -> int:
         """Return the index of the header in the set or return -1 if not found.
 
         :param header: the header to be looked up.
         """
         ...
-    
+
     def index(self, header: str) -> int:
         """Return the index of the header in the set or raise an
         :exc:`IndexError`.
@@ -778,11 +778,11 @@ class HeaderSet(cabc.MutableSet[str]):
         :param header: the header to be looked up.
         """
         ...
-    
+
     def clear(self: te.Self) -> None:
         """Clear the set."""
         ...
-    
+
     def as_set(self, preserve_casing: bool = ...) -> set[str]:
         """Return the set as real python set type.  When calling this, all
         the items are converted to lowercase and the ordering is lost.
@@ -793,40 +793,39 @@ class HeaderSet(cabc.MutableSet[str]):
                                 be lowercase.
         """
         ...
-    
+
     def to_header(self) -> str:
         """Convert the header set into an HTTP header string."""
         ...
-    
+
     def __getitem__(self, idx: t.SupportsIndex) -> str:
         ...
-    
+
     def __delitem__(self: te.Self, idx: t.SupportsIndex) -> None:
         ...
-    
+
     def __setitem__(self: te.Self, idx: t.SupportsIndex, value: str) -> None:
         ...
-    
+
     def __contains__(self, header: str) -> bool:
         ...
-    
+
     def __len__(self) -> int:
         ...
-    
+
     def __iter__(self) -> cabc.Iterator[str]:
         ...
-    
+
     def __bool__(self) -> bool:
         ...
-    
+
     def __str__(self) -> str:
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 def __getattr__(name: str) -> t.Any:
     ...
-

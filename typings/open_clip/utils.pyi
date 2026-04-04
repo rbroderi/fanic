@@ -51,4 +51,3 @@ def feature_take_indices(num_features: int, indices: Optional[Union[int, List[in
         List (or set) of absolute (from beginning) indices, Maximum index
     """
     ...
-

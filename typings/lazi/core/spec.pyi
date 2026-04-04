@@ -33,7 +33,7 @@ class Spec(ModuleSpec):
     @cached_property
     def source_tag(self) -> str:
         ...
-    
+
     class Level(IntEnum):
         __str__ = ...
         NONE = ...
@@ -45,16 +45,13 @@ class Spec(ModuleSpec):
         @classmethod
         def get(cls, level: str | int) -> Spec.Level:
             ...
-        
-    
-    
+
+
+
     level: Level
     def __init__(self, finder: Finder, spec: ModuleSpec, path: list[str] | None, target: ModuleType | None) -> None:
         ...
-    
+
     @cached_property
     def hook(self) -> bool:
         ...
-    
-
-

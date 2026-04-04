@@ -22,17 +22,17 @@ class MultimodalCfg(CLIPTextCfg):
 class CoCa(nn.Module):
     def __init__(self, embed_dim, multimodal_cfg: MultimodalCfg, text_cfg: CLIPTextCfg, vision_cfg: CLIPVisionCfg, quick_gelu: bool = ..., init_logit_scale: float = ..., init_logit_bias: Optional[float] = ..., nonscalar_logit_scale: bool = ..., cast_dtype: Optional[torch.dtype] = ..., pad_id: int = ...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = ...) -> None:
         ...
-    
+
     def encode_image(self, images, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def encode_text(self, text, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def forward_intermediates(self, image: Optional[torch.Tensor] = ..., text: Optional[torch.Tensor] = ..., image_indices: Optional[Union[int, List[int]]] = ..., text_indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., image_output_fmt: str = ..., image_output_extra_tokens: bool = ..., text_output_fmt: str = ..., text_output_extra_tokens: bool = ..., output_logits: bool = ..., output_logit_scale_bias: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -55,15 +55,14 @@ class CoCa(nn.Module):
 
         """
         ...
-    
+
     def forward(self, image, text: Optional[torch.Tensor] = ..., image_latent: Optional[torch.Tensor] = ..., image_embs: Optional[torch.Tensor] = ..., output_labels: bool = ...) -> dict[str, Tensor | None] | dict[str, Tensor | Any | None]:
         ...
-    
+
     def generate(self, image, text=..., seq_len=..., max_seq_len=..., temperature=..., generation_type=..., top_p=..., top_k=..., pad_token_id=..., eos_token_id=..., sot_token_id=..., num_beams=..., num_beam_groups=..., min_seq_len=..., stopping_criteria=..., repetition_penalty=..., fixed_output_length=...) -> Tensor:
         ...
-    
+
 
 
 def prepare_inputs_for_generation(input_ids, image_inputs, past=..., **kwargs) -> dict[str, Any | None]:
     ...
-

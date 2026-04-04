@@ -17,12 +17,9 @@ class Module(ModuleType):
     __spec__: Spec
     def __init__(self, spec: Spec, module: ModuleType) -> None:
         ...
-    
+
     def __getattribute__(self, attr) -> Any:
         ...
-    
-    def __setattr__(self, attr, valu) -> None:
+
+    def __setattr__(self, attr, value) -> None:
         ...
-    
-
-

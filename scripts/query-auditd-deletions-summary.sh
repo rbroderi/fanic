@@ -6,7 +6,7 @@ SINCE="recent"
 PATH_FILTER="/mnt/storage/fanart"
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: scripts/query-auditd-deletions-summary.sh [options]
 
 Options:
@@ -23,38 +23,38 @@ EOF
 }
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --key)
-      RULE_KEY="$2"
-      shift 2
-      ;;
-    --since)
-      SINCE="$2"
-      shift 2
-      ;;
-    --path)
-      PATH_FILTER="$2"
-      shift 2
-      ;;
-    --no-path-filter)
-      PATH_FILTER=""
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
+	case "$1" in
+	--key)
+		RULE_KEY="$2"
+		shift 2
+		;;
+	--since)
+		SINCE="$2"
+		shift 2
+		;;
+	--path)
+		PATH_FILTER="$2"
+		shift 2
+		;;
+	--no-path-filter)
+		PATH_FILTER=""
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown argument: $1" >&2
+		usage
+		exit 1
+		;;
+	esac
 done
 
 if ! command -v ausearch >/dev/null 2>&1; then
-  echo "ausearch not found. Install auditd tooling first." >&2
-  exit 127
+	echo "ausearch not found. Install auditd tooling first." >&2
+	exit 127
 fi
 
 tmp_file="$(mktemp)"
@@ -62,7 +62,7 @@ trap 'rm -f "$tmp_file"' EXIT
 
 args=(-k "${RULE_KEY}" -i --start "${SINCE}")
 if [[ -n "${PATH_FILTER}" ]]; then
-  args+=(-f "${PATH_FILTER}")
+	args+=(-f "${PATH_FILTER}")
 fi
 
 set +e
@@ -71,17 +71,17 @@ exit_code=$?
 set -e
 
 if [[ "${exit_code}" -ne 0 ]]; then
-  if [[ "${exit_code}" -eq 1 ]]; then
-    echo "No deletion events found."
-    exit 0
-  fi
-  echo "ausearch failed with exit code ${exit_code}" >&2
-  exit "${exit_code}"
+	if [[ "${exit_code}" -eq 1 ]]; then
+		echo "No deletion events found."
+		exit 0
+	fi
+	echo "ausearch failed with exit code ${exit_code}" >&2
+	exit "${exit_code}"
 fi
 
 if ! grep -q "type=SYSCALL" "${tmp_file}"; then
-  echo "No deletion events found."
-  exit 0
+	echo "No deletion events found."
+	exit 0
 fi
 
 awk '

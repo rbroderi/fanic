@@ -54,24 +54,21 @@ class Conf(ModuleType):
     __CONF_NO_CACHING_DFL: bool = ...
     def __init__(self) -> None:
         ...
-    
+
     def __iter__(self) -> Iterator[tuple[str, object]]:
         ...
-    
+
     def get(self) -> dict:
         ...
-    
+
     def clear(self) -> None:
         ...
-    
+
     def __mods__(self) -> Iterator[ModuleInfo]:
         ...
-    
+
     def __getattr__(self, attr: str) -> object:
         ...
-    
+
     def __setattr__(self, attr: str, value: object) -> None:
         ...
-    
-
-

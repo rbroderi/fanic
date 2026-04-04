@@ -60,16 +60,16 @@ def canonicalize_text(text, *, keep_punctuation_exact_string=..., trans_punctuat
 class SimpleTokenizer:
     def __init__(self, bpe_path: str = ..., additional_special_tokens: Optional[List[str]] = ..., context_length: Optional[int] = ..., clean: str = ..., reduction_mask: str = ...) -> None:
         ...
-    
+
     def bpe(self, token) -> str | LiteralString:
         ...
-    
+
     def encode(self, text) -> list[Any]:
         ...
-    
+
     def decode(self, tokens) -> str:
         ...
-    
+
     def __call__(self, texts: Union[str, List[str]], context_length: Optional[int] = ...) -> torch.LongTensor:
         """ Returns the tokenized representation of given input string(s)
 
@@ -85,7 +85,7 @@ class SimpleTokenizer:
         A two-dimensional tensor containing the resulting tokens, shape = [number of input strings, context_length]
         """
         ...
-    
+
 
 
 _tokenizer = ...
@@ -115,16 +115,16 @@ class HFTokenizer:
     """HuggingFace tokenizer wrapper with support for custom tokenization modes"""
     def __init__(self, tokenizer_name: str, context_length: Optional[int] = ..., clean: str = ..., strip_sep_token: bool = ..., language: Optional[str] = ..., cache_dir: Optional[str] = ..., tokenizer_mode: Optional[str] = ..., **kwargs) -> None:
         ...
-    
+
     def save_pretrained(self, dest) -> None:
         ...
-    
+
     def __call__(self, texts: Union[str, List[str]], context_length: Optional[int] = ...) -> torch.Tensor:
         ...
-    
+
     def set_language(self, src_lang) -> None:
         ...
-    
+
 
 
 class SigLipTokenizer:
@@ -136,12 +136,9 @@ class SigLipTokenizer:
     VOCAB_FILES = ...
     def __init__(self, tokenizer_name: str, context_length: Optional[int] = ...) -> None:
         ...
-    
+
     def save_pretrained(self, dest) -> None:
         ...
-    
+
     def __call__(self, texts: Union[str, List[str]], context_length: Optional[int] = ...) -> torch.Tensor:
         ...
-    
-
-

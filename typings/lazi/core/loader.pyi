@@ -29,31 +29,28 @@ class Loader(_Loader):
         EXEC = ...
         LOAD = ...
         DEAD = ...
-    
-    
+
+
     class Exception(ImportError):
         ...
-    
-    
+
+
     class Error(Exception):
         ldr: Loader
         exc: BaseException
         def __init__(self, ldr: Loader, exc: BaseException, msg: str, /) -> None:
             ...
-        
-    
-    
+
+
+
     def __init__(self, spec: Spec) -> None:
         ...
-    
+
     def create_module(self, spec: Spec | None = ...) -> ModuleType | None:
         ...
-    
+
     def exec_module(self, module: Module, force: bool | None = ..., /) -> None:
         ...
-    
+
     def invalidate_caches(self, keep: bool = ...) -> None:
         ...
-    
-
-

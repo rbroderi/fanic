@@ -37,17 +37,17 @@ class _Helper:
     """
     def __repr__(self) -> str:
         ...
-    
+
     def __call__(self, topic: t.Any | None = ...) -> None:
         ...
-    
+
 
 
 helper = ...
 class DebugReprGenerator:
     def __init__(self) -> None:
         ...
-    
+
     list_repr = ...
     tuple_repr = ...
     set_repr = ...
@@ -55,33 +55,30 @@ class DebugReprGenerator:
     deque_repr = ...
     def regex_repr(self, obj: t.Pattern[t.AnyStr]) -> str:
         ...
-    
+
     def string_repr(self, obj: str | bytes, limit: int = ...) -> str:
         ...
-    
+
     def dict_repr(self, d: dict[int, None] | dict[str, int] | dict[str | int, int], recursive: bool, limit: int = ...) -> str:
         ...
-    
+
     def object_repr(self, obj: t.Any) -> str:
         ...
-    
+
     def dispatch_repr(self, obj: t.Any, recursive: bool) -> str:
         ...
-    
+
     def fallback_repr(self) -> str:
         ...
-    
+
     def repr(self, obj: object) -> str:
         ...
-    
+
     def dump_object(self, obj: object) -> str:
         ...
-    
+
     def dump_locals(self, d: dict[str, t.Any]) -> str:
         ...
-    
+
     def render_object_dump(self, items: list[tuple[str, str]], title: str, repr: str | None = ...) -> str:
         ...
-    
-
-

@@ -7,7 +7,7 @@ RULE_KEY="fanic_storage"
 DELETE_KEY="fanic_storage_delete"
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: scripts/setup-auditd-storage-watch.sh [options]
 
 Options:
@@ -23,58 +23,58 @@ EOF
 }
 
 require_cmd() {
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    echo "Required command not found: ${cmd}" >&2
-    exit 1
-  fi
+	local cmd="$1"
+	if ! command -v "${cmd}" >/dev/null 2>&1; then
+		echo "Required command not found: ${cmd}" >&2
+		exit 1
+	fi
 }
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --watch-path)
-      WATCH_PATH="$2"
-      shift 2
-      ;;
-    --rules-path)
-      RULES_PATH="$2"
-      shift 2
-      ;;
-    --key)
-      RULE_KEY="$2"
-      shift 2
-      ;;
-    --delete-key)
-      DELETE_KEY="$2"
-      shift 2
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
+	case "$1" in
+	--watch-path)
+		WATCH_PATH="$2"
+		shift 2
+		;;
+	--rules-path)
+		RULES_PATH="$2"
+		shift 2
+		;;
+	--key)
+		RULE_KEY="$2"
+		shift 2
+		;;
+	--delete-key)
+		DELETE_KEY="$2"
+		shift 2
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown argument: $1" >&2
+		usage
+		exit 1
+		;;
+	esac
 done
 
 if [[ "${EUID}" -ne 0 ]]; then
-  echo "This script must run as root (use sudo)." >&2
-  exit 1
+	echo "This script must run as root (use sudo)." >&2
+	exit 1
 fi
 
 if [[ ! -d "${WATCH_PATH}" ]]; then
-  echo "Watch path does not exist: ${WATCH_PATH}" >&2
-  exit 1
+	echo "Watch path does not exist: ${WATCH_PATH}" >&2
+	exit 1
 fi
 
 require_cmd augenrules
 require_cmd auditctl
 
 if ! command -v ausearch >/dev/null 2>&1; then
-  echo "warning: ausearch not found. Install auditd package for query tooling." >&2
+	echo "warning: ausearch not found. Install auditd package for query tooling." >&2
 fi
 
 mkdir -p "$(dirname "${RULES_PATH}")"
@@ -89,9 +89,9 @@ EOF
 chmod 640 "${RULES_PATH}"
 
 if command -v systemctl >/dev/null 2>&1; then
-  if systemctl list-unit-files | grep -q '^auditd\.service'; then
-    systemctl enable --now auditd >/dev/null 2>&1 || true
-  fi
+	if systemctl list-unit-files | grep -q '^auditd\.service'; then
+		systemctl enable --now auditd >/dev/null 2>&1 || true
+	fi
 fi
 
 augenrules --load

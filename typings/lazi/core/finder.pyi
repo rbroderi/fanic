@@ -31,29 +31,29 @@ class Finder(MetaPathFinder):
     specs: dict[str, Spec]
     def __init__(self, **CONF) -> None:
         ...
-    
+
     def __del__(self) -> None:
         ...
-    
+
     def __enter__(self) -> Finder:
         ...
-    
+
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         ...
-    
+
     @classmethod
     def lazy(cls, name: str, package: str | None = ..., **CONF) -> ModuleType:
         ...
-    
+
     def find_spec(self, name: str, path: list[str] | None = ..., target: ModuleType | None = ...) -> Spec | None:
         ...
-    
+
     def get_level(self, full_name: str) -> Spec.Level:
         ...
-    
+
     def invalidate_caches(self) -> None:
         ...
-    
+
 
 
 __finder__: Finder = ...

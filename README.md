@@ -1,24 +1,39 @@
 # FANIC: Fan Archive Nexus for Illustrated Comics
 
-[![Ruff](https://github.com/rbroderi/fanic/actions/workflows/ruff.yml/badge.svg)](https://github.com/rbroderi/fanic/actions/workflows/ruff.yml)
-[![autopep695](https://github.com/rbroderi/fanic/actions/workflows/autopep695.yml/badge.svg)](https://github.com/rbroderi/fanic/actions/workflows/autopep695.yml)
-[![pyupgrade](https://github.com/rbroderi/fanic/actions/workflows/pyupgrade.yml/badge.svg)](https://github.com/rbroderi/fanic/actions/workflows/pyupgrade.yml)
-[![ComicInfo XSD](https://github.com/rbroderi/fanic/actions/workflows/comicinfo-xsd.yml/badge.svg)](https://github.com/rbroderi/fanic/actions/workflows/comicinfo-xsd.yml)
+Workflow checks:
 
-FANIC is a self-hosted web archive for fan-made comics and illustrations. Upload CBZ archives, browse works with rich tagging, read in the browser with keyboard navigation and saved progress, and share fanart — all backed by AI-powered content moderation.
+- [Ruff](.github/workflows/ruff.yml)
+- [autopep695](.github/workflows/autopep695.yml)
+- [pyupgrade](.github/workflows/pyupgrade.yml)
+- [ComicInfo XSD](.github/workflows/comicinfo-xsd.yml)
 
-The project is built on [Cylinder](https://github.com/rbroderi/cylinder) (a file-based WSGI routing framework), SQLite, and OpenCLIP for moderation. During the current **alpha trial** period, access can be gated behind invite codes.
+FANIC is a self-hosted web archive for fan-made comics and illustrations. Upload
+CBZ archives, browse works with rich tagging, read in the browser with keyboard
+navigation and saved progress, and share fanart — all backed by AI-powered
+content moderation.
 
-### Highlights
+The project is built on [Cylinder](https://github.com/rbroderi/cylinder) (a
+file-based WSGI routing framework), SQLite, and OpenCLIP for moderation. During
+the current **alpha trial** period, access can be gated behind invite codes.
 
-- **Comic reader** — keyboard page-flip, sidebar thumbnails, bookmarks, and per-user reading progress.
-- **CBZ ingest pipeline** — extract pages from CBZ archives, auto-generate AVIF thumbnails, parse `ComicInfo.xml` or JSON metadata.
-- **Structured tagging** — fandom, character, relationship, and freeform tags with synonym canonicalization.
-- **Fanart gallery** — community-uploaded illustrations with content-addressed storage.
-- **AI moderation** — OpenCLIP-based style classifier (blocks photorealistic uploads) and NSFW detector with configurable thresholds.
-- **User system** — profiles, bookmarks, notifications (kudos/comments), reading history.
-- **Admin dashboard** — user management, role-based access, DMCA/feedback report tracking.
-- **Backup & restore** — full ZIP export of database + media with pre-restore safety snapshots.
+## Highlights
+
+- **Comic reader** — keyboard page-flip, sidebar thumbnails, bookmarks, and
+  per-user reading progress.
+- **CBZ ingest pipeline** — extract pages from CBZ archives, auto-generate AVIF
+  thumbnails, parse `ComicInfo.xml` or JSON metadata.
+- **Structured tagging** — fandom, character, relationship, and freeform tags
+  with synonym canonicalization.
+- **Fanart gallery** — community-uploaded illustrations with content-addressed
+  storage.
+- **AI moderation** — OpenCLIP-based style classifier (blocks photorealistic
+  uploads) and NSFW detector with configurable thresholds.
+- **User system** — profiles, bookmarks, notifications (kudos/comments), reading
+  history.
+- **Admin dashboard** — user management, role-based access, DMCA/feedback report
+  tracking.
+- **Backup & restore** — full ZIP export of database + media with pre-restore
+  safety snapshots.
 
 ## Examples
 
@@ -34,13 +49,13 @@ uv venv
 uv sync
 ```
 
-2. Initialize the database.
+1. Initialize the database.
 
 ```powershell
 uv run fanic init-db
 ```
 
-3. Ingest a CBZ.
+1. Ingest a CBZ.
 
 ```powershell
 uv run fanic ingest C:\path\to\comic.cbz --metadata C:\path\to\metadata.json
@@ -53,30 +68,30 @@ uv run fanic convert-thumbs-avif --dry-run
 uv run fanic convert-thumbs-avif
 ```
 
-4. Run the site.
+1. Run the site.
 
 ```powershell
 uv run fanic serve --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000.
+Open <http://127.0.0.1:8000>.
 
 ## CLI Commands
 
-| Command | Purpose |
-|---------|---------|
-| `fanic init-db` | Initialize the SQLite schema and storage directories |
-| `fanic ingest <cbz>` | Ingest a CBZ archive (optional `--metadata` JSON) |
-| `fanic serve` | Run the local WSGI server (`--host`, `--port`) |
-| `fanic convert-thumbs-avif` | Batch-convert page thumbnails to AVIF (`--dry-run` supported) |
-| `fanic backup-data` | Create a ZIP backup of the database and media |
-| `fanic restore-data <zip>` | Restore from a backup archive |
+- `fanic init-db`: Initialize the SQLite schema and storage directories.
+- `fanic ingest <cbz>`: Ingest a CBZ archive (optional `--metadata` JSON).
+- `fanic serve`: Run the local WSGI server (`--host`, `--port`).
+- `fanic convert-thumbs-avif`: Batch-convert page thumbnails to AVIF
+  (`--dry-run` supported).
+- `fanic backup-data`: Create a ZIP backup of the database and media.
+- `fanic restore-data <zip>`: Restore from a backup archive.
 
 ## Architecture Overview
 
-FANIC uses **file-based routing** via Cylinder. Each route handler lives in a file whose path mirrors the URL:
+FANIC uses **file-based routing** via Cylinder. Each route handler lives in a
+file whose path mirrors the URL:
 
-```
+```text
 src/fanic/cylinder_sites/fanicsite/
 ├── ex.get.py                          → GET  /
 ├── comic.ex.get.py                    → GET  /comic/{work_id}
@@ -119,99 +134,115 @@ src/fanic/cylinder_sites/fanicsite/
 
 Key modules:
 
-| Module | Role |
-|--------|------|
-| `cylinder_main.py` | WSGI app factory, middleware (CSRF, session, alpha gate) |
-| `db.py` | SQLite schema, migrations, query helpers |
-| `repository.py` | Data-access layer (works, tags, users, bookmarks, notifications) |
-| `ingest.py` | CBZ extraction, AVIF conversion, metadata parsing |
-| `moderation.py` | Two-gate content filter (style + NSFW) |
-| `clip_backend.py` | OpenCLIP model loading and inference |
-| `style_classifier.py` | Image style classification (illustrated, anime, photorealistic, …) |
-| `nsfw_detector.py` | NSFW scoring via CLIP text-image similarity |
-| `fanart.py` | Fanart upload, content-addressed storage, auto-rating |
-| `settings.py` | Pydantic-based configuration from environment variables |
+- `cylinder_main.py`: WSGI app factory and middleware (CSRF, session,
+  alpha gate).
+- `db.py`: SQLite schema, migrations, and query helpers.
+- `repository.py`: Data-access layer for works, tags, users, bookmarks,
+  and notifications.
+- `ingest.py`: CBZ extraction, AVIF conversion, and metadata parsing.
+- `moderation.py`: Two-gate content filter (style + NSFW).
+- `clip_backend.py`: OpenCLIP model loading and inference.
+- `style_classifier.py`: Image style classification (illustrated, anime,
+  photorealistic, etc.).
+- `nsfw_detector.py`: NSFW scoring via CLIP text-image similarity.
+- `fanart.py`: Fanart upload, content-addressed storage, auto-rating.
+- `settings.py`: Pydantic-based configuration from environment variables.
 
 ## Content Moderation
 
-Every uploaded image passes through a two-gate AI pipeline before it is accepted:
+Every uploaded image passes through a two-gate AI pipeline before it is
+accepted:
 
-1. **Style gate** — An OpenCLIP ViT-L-14 model classifies the image style (`illustrated`, `anime`, `painterly`, `cgi`, or `photorealistic`). Photorealistic images are rejected outright because FANIC is an illustrated-content archive.
-2. **NSFW gate** — CLIP text-image similarity scores the image as `sfw` or `explicit`. Images above the configurable threshold (`FANIC_EXPLICIT_THRESHOLD`, default 0.7) are blocked.
+1. **Style gate** — An OpenCLIP ViT-L-14 model classifies the image style
+   (`illustrated`, `anime`, `painterly`, `cgi`, or `photorealistic`).
+   Photorealistic images are rejected outright because FANIC is an
+   illustrated-content archive.
+2. **NSFW gate** — CLIP text-image similarity scores the image as `sfw` or
+   `explicit`. Images above the configurable threshold
+   (`FANIC_EXPLICIT_THRESHOLD`, default 0.7) are blocked.
 
 Moderation runs during both CBZ ingest and fanart upload.
 
 ## Fanart Gallery
 
-Users can upload standalone illustrations alongside the comic archive. Fanart is stored content-addressed (SHA-256 digest), auto-converted to AVIF, and run through the same moderation pipeline. The gallery is browsable at `/fanart`.
+Users can upload standalone illustrations alongside the comic archive. Fanart is
+stored content-addressed (SHA-256 digest), auto-converted to AVIF, and run
+through the same moderation pipeline. The gallery is browsable at `/fanart`.
 
 ## User System
 
-- **Profiles** — display name, reading history, uploaded works, fanart, and bookmarks at `/users/{username}`.
+- **Profiles** — display name, reading history, uploaded works, fanart, and
+  bookmarks at `/users/{username}`.
 - **Bookmarks** — save a page position with an optional note.
-- **Notifications** — kudos, comments, and bookmark activity feed at `/user/notifications`.
+- **Notifications** — kudos, comments, and bookmark activity feed at
+  `/user/notifications`.
 - **Theme preferences** — per-user TOML-based theme configuration.
 
 ## Admin Dashboard
 
 Accessible at `/admin/*` for users with an admin role:
 
-- **User management** (`/admin/users`) — create, update, deactivate users and assign roles (superadmin / admin / user / guest).
-- **Reports** (`/admin/reports`) — review and resolve DMCA takedown requests and general feedback.
+- **User management** (`/admin/users`) — create, update, deactivate users and
+  assign roles (superadmin / admin / user / guest).
+- **Reports** (`/admin/reports`) — review and resolve DMCA takedown requests and
+  general feedback.
 
 ## Alpha Invite Gate
 
-When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite code before accessing any part of the site. Valid codes are set via `FANIC_ALPHA_INVITE_CODES_CSV` (comma-separated). Accepted users receive a signed cookie lasting `FANIC_ALPHA_INVITE_COOKIE_MAX_AGE` seconds (default 30 days).
+When `FANIC_ALPHA_INVITE_GATE_ENABLED=true`, visitors must enter a valid invite
+code before accessing any part of the site. Valid codes are set via
+`FANIC_ALPHA_INVITE_CODES_CSV` (comma-separated). Accepted users receive a
+signed cookie lasting `FANIC_ALPHA_INVITE_COOKIE_MAX_AGE` seconds (default 30
+days).
 
 ## API Surface
 
 ### Auth
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/auth` | Check login status (`{logged_in, username}`) |
+- `GET /api/auth`: Check login status (`{logged_in, username}`).
 
 ### Health
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/health` | Service + database health check |
+- `GET /api/health`: Service + database health check.
 
 ### Comic
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/comic` | List works (filters: `q`, `fandom`, `tag`, `rating`, `status`) |
-| `GET` | `/api/comic/{work_id}` | Work detail |
-| `GET` | `/api/comic/{work_id}/manifest` | Page manifest for the reader |
-| `GET` | `/api/comic/{work_id}/versions` | List work versions |
-| `GET` | `/api/comic/{work_id}/versions/{version_id}` | Version detail |
-| `GET` | `/api/comic/{work_id}/download` | Download original CBZ |
-| `GET` | `/api/comic/{work_id}/pages/{page_index}/image` | Full-size page image |
-| `GET` | `/api/comic/{work_id}/pages/{page_index}/thumb` | Page thumbnail |
-| `GET` | `/api/comic/{work_id}/progress?user_id=` | Reading progress |
-| `POST` | `/api/comic/{work_id}/progress` | Save reading progress |
-| `POST` | `/api/comic/{work_id}/bookmark` | Create/update bookmark |
+- `GET /api/comic`: List works (filters: `q`, `fandom`, `tag`, `rating`,
+  `status`).
+- `GET /api/comic/{work_id}`: Work detail.
+- `GET /api/comic/{work_id}/manifest`: Page manifest for the reader.
+- `GET /api/comic/{work_id}/versions`: List work versions.
+- `GET /api/comic/{work_id}/versions/{version_id}`: Version detail.
+- `GET /api/comic/{work_id}/download`: Download original CBZ.
+- `GET /api/comic/{work_id}/pages/{page_index}/image`: Full-size page image.
+- `GET /api/comic/{work_id}/pages/{page_index}/thumb`: Page thumbnail.
+- `GET /api/comic/{work_id}/progress?user_id=`: Reading progress.
+- `POST /api/comic/{work_id}/progress`: Save reading progress.
+- `POST /api/comic/{work_id}/bookmark`: Create or update bookmark.
 
 ### Comic Ingest
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/comic-ingest` | Upload CBZ + metadata (returns moderation result) |
-| `POST` | `/api/comic-ingest/metadata` | Extract metadata from CBZ without full ingest |
-| `GET` | `/api/comic-ingest/progress?token=` | Poll ingest progress |
+- `POST /api/comic-ingest`: Upload CBZ + metadata (returns moderation result).
+- `POST /api/comic-ingest/metadata`: Extract metadata from CBZ without full
+  ingest.
+- `GET /api/comic-ingest/progress?token=`: Poll ingest progress.
 
 ## Windows Nginx Setup (Scripted)
 
-Use the included script to install nginx on Windows, serve `/static/*` and fanart media from local files, and proxy all other routes to the WSGI app.
+Use the included script to install nginx on Windows, serve `/static/*` and
+fanart media from local files, and proxy all other routes to the WSGI app.
 
 ```powershell
 just setup-nginx-windows
 ```
 
-The script prompts for nginx version, install directory, listen port, upstream WSGI host/port, and repository root. It then downloads nginx, writes `nginx.conf`, configures static/media aliases, proxies everything else to Waitress, and validates + starts nginx.
+The script prompts for nginx version, install directory, listen port, upstream
+WSGI host/port, and repository root. It then downloads nginx, writes
+`nginx.conf`, configures static/media aliases, proxies everything else to
+Waitress, and validates + starts nginx.
 
-To relocate storage and automatically update both WSGI (`FANIC_DATA_DIR`) and nginx aliases:
+To relocate storage and automatically update both WSGI (`FANIC_DATA_DIR`) and
+nginx aliases:
 
 ```powershell
 just relocate-storage "C:/path/to/new/storage"
@@ -223,61 +254,69 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 
 ### Core
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `FANIC_ENVIRONMENT` | `development` | `development` or `production` |
-| `FANIC_DATA_DIR` | `./data/` | Storage root for database, CBZ, works, and fanart |
-| `FANIC_REQUIRE_HTTPS` | `true` | Enforce HTTPS for form POSTs |
-| `FANIC_CSRF_PROTECT` | `true` | CSRF token validation |
-| `FANIC_SESSION_SECRET` | *(dev default)* | JWT session signing key — **change in production** |
-| `FANIC_SESSION_MAX_AGE` | `43200` | Session lifetime (seconds) |
-| `FANIC_SESSION_SECURE` | `false` | Secure cookie flag (auto-enabled in production) |
-| `FANIC_SESSION_COOKIE_SAMESITE` | `Lax` | SameSite cookie policy |
-| `FANIC_MEDIA_BASE_URL` | `http://127.0.0.1:8080` | Base URL for media assets (CDN/nginx) |
-| `FANIC_LOG_PATH_TEMPLATE` | `logs/%TIMESTAMP%` | Log file path (`%TIMESTAMP%` placeholder supported) |
+- `FANIC_ENVIRONMENT` (default `development`): `development` or
+  `production`.
+- `FANIC_DATA_DIR` (default `./data/`): Storage root for database, CBZ,
+  works, and fanart.
+- `FANIC_REQUIRE_HTTPS` (default `true`): Enforce HTTPS for form POSTs.
+- `FANIC_CSRF_PROTECT` (default `true`): CSRF token validation.
+- `FANIC_SESSION_SECRET` (dev default): JWT session signing key.
+  **Change in production.**
+- `FANIC_SESSION_MAX_AGE` (default `43200`): Session lifetime (seconds).
+- `FANIC_SESSION_SECURE` (default `false`): Secure cookie flag
+  (auto-enabled in production).
+- `FANIC_SESSION_COOKIE_SAMESITE` (default `Lax`): SameSite cookie policy.
+- `FANIC_MEDIA_BASE_URL` (default `http://127.0.0.1:8080`): Base URL for
+  media assets (CDN/nginx).
+- `FANIC_LOG_PATH_TEMPLATE` (default `logs/%TIMESTAMP%`): Log file path
+  (`%TIMESTAMP%` placeholder supported).
 
 ### Auth & Rate Limiting
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `FANIC_AUTH_MAX_FAILURES` | `5` | Failed attempts before lockout |
-| `FANIC_AUTH_WINDOW_SECONDS` | `300` | Lockout attempt window |
-| `FANIC_AUTH_LOCKOUT_SECONDS` | `900` | Lockout duration |
-| `FANIC_UPLOAD_RATE_WINDOW_SECONDS` | `60` | Upload rate-limit window |
-| `FANIC_UPLOAD_RATE_MAX_REQUESTS` | `20` | Max uploads per window |
-| `FANIC_UPLOAD_MAX_CONCURRENT_PER_USER` | `2` | Concurrent upload limit per user |
+- `FANIC_AUTH_MAX_FAILURES` (default `5`): Failed attempts before lockout.
+- `FANIC_AUTH_WINDOW_SECONDS` (default `300`): Lockout attempt window.
+- `FANIC_AUTH_LOCKOUT_SECONDS` (default `900`): Lockout duration.
+- `FANIC_UPLOAD_RATE_WINDOW_SECONDS` (default `60`): Upload rate-limit window.
+- `FANIC_UPLOAD_RATE_MAX_REQUESTS` (default `20`): Max uploads per window.
+- `FANIC_UPLOAD_MAX_CONCURRENT_PER_USER` (default `2`): Concurrent upload
+  limit per user.
 
 ### Upload Limits
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `FANIC_MAX_CBZ_UPLOAD_BYTES` | 256 MiB | Max CBZ file size |
-| `FANIC_MAX_PAGE_UPLOAD_BYTES` | 20 MiB | Max single page image size |
-| `FANIC_MAX_UPLOAD_IMAGE_PIXELS` | 40 M | Max image resolution |
-| `FANIC_MAX_INGEST_PAGES` | `2000` | Max pages per ingest |
-| `FANIC_MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES` | 128 MiB | Max uncompressed size per CBZ member |
-| `FANIC_MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES` | 2 GiB | Max total uncompressed CBZ size |
-| `FANIC_USER_PAGE_SOFT_CAP` | `2000` | After this many pages, AVIF quality ramps down |
-| `FANIC_USER_PAGE_QUALITY_RAMP_MULTIPLIER` | `1.5` | Quality reaches 1 at cap × multiplier |
+- `FANIC_MAX_CBZ_UPLOAD_BYTES` (default `256 MiB`): Max CBZ file size.
+- `FANIC_MAX_PAGE_UPLOAD_BYTES` (default `20 MiB`): Max single page image
+  size.
+- `FANIC_MAX_UPLOAD_IMAGE_PIXELS` (default `40 M`): Max image resolution.
+- `FANIC_MAX_INGEST_PAGES` (default `2000`): Max pages per ingest.
+- `FANIC_MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES` (default `128 MiB`): Max
+  uncompressed size per CBZ member.
+- `FANIC_MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES` (default `2 GiB`): Max total
+  uncompressed CBZ size.
+- `FANIC_USER_PAGE_SOFT_CAP` (default `2000`): After this many pages,
+  AVIF quality ramps down.
+- `FANIC_USER_PAGE_QUALITY_RAMP_MULTIPLIER` (default `1.5`): Quality reaches
+  1 at cap × multiplier.
 
 ### AI / Moderation
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `FANIC_EXPLICIT_THRESHOLD` | `0.7` | NSFW score threshold (0–1) |
-| `FANIC_STYLE_MIN_CONFIDENCE` | `0.6` | Style classifier confidence floor |
-| `FANIC_STYLE_MIN_CONFIDENCE_PHOTOREALISTIC` | `0.90` | Higher bar for photorealistic blocking |
-| `FANIC_OPENCLIP_CACHE_DIR` | `~/.cache/clip/` | Model cache directory |
-| `FANIC_PRELOAD_MODELS` | `true` | Preload CLIP models on startup |
+- `FANIC_EXPLICIT_THRESHOLD` (default `0.7`): NSFW score threshold ($0$-$1$).
+- `FANIC_STYLE_MIN_CONFIDENCE` (default `0.6`): Style classifier confidence
+  floor.
+- `FANIC_STYLE_MIN_CONFIDENCE_PHOTOREALISTIC` (default `0.90`): Higher bar
+  for photorealistic blocking.
+- `FANIC_OPENCLIP_CACHE_DIR` (default `~/.cache/clip/`): Model cache
+  directory.
+- `FANIC_PRELOAD_MODELS` (default `true`): Preload CLIP models on startup.
 
 ### Image Quality
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `FANIC_THUMBNAIL_AVIF_QUALITY` | `30` | Thumbnail AVIF quality (1–100) |
-| `FANIC_IMAGE_AVIF_QUALITY` | `60` | Full-size page AVIF quality (1–100) |
+- `FANIC_THUMBNAIL_AVIF_QUALITY` (default `30`): Thumbnail AVIF quality
+  ($1$-$100$).
+- `FANIC_IMAGE_AVIF_QUALITY` (default `60`): Full-size page AVIF quality
+  ($1$-$100$).
 
-In development mode (`FANIC_ENVIRONMENT=development`), HTTPS and CSRF enforcement are disabled for local workflow compatibility.
+In development mode (`FANIC_ENVIRONMENT=development`), HTTPS and CSRF
+enforcement are disabled for local workflow compatibility.
 
 ## Metadata
 
@@ -290,48 +329,50 @@ Example metadata:
 
 ```json
 {
-	"title": "Example Comic",
-	"slug": "example-comic",
-	"summary": "A fan comic about...",
-	"creators": ["Artist Name", "Writer Name"],
-	"fandoms": ["Zootopia"],
-	"relationships": ["Nick Wilde/Judy Hopps"],
-	"characters": ["Nick Wilde", "Judy Hopps"],
-	"freeform_tags": ["Detective AU", "Slow Burn"],
-	"rating": "Teen",
-	"warnings": ["No Archive Warnings Apply"],
-	"language": "en",
-	"series": "Metro Cases",
-	"series_index": 2,
-	"status": "complete",
-	"published_at": "2026-03-20",
-	"cover_page_index": 1,
-	"page_order": ["001.jpg", "002.jpg", "003.jpg"]
+  "title": "Example Comic",
+  "slug": "example-comic",
+  "summary": "A fan comic about...",
+  "creators": ["Artist Name", "Writer Name"],
+  "fandoms": ["Zootopia"],
+  "relationships": ["Nick Wilde/Judy Hopps"],
+  "characters": ["Nick Wilde", "Judy Hopps"],
+  "freeform_tags": ["Detective AU", "Slow Burn"],
+  "rating": "Teen",
+  "warnings": ["No Archive Warnings Apply"],
+  "language": "en",
+  "series": "Metro Cases",
+  "series_index": 2,
+  "status": "complete",
+  "published_at": "2026-03-20",
+  "cover_page_index": 1,
+  "page_order": ["001.jpg", "002.jpg", "003.jpg"]
 }
 ```
 
 ## Storage Layout
 
-By default, data is stored under `src/fanic/storage` unless `FANIC_DATA_DIR` is set.
+By default, data is stored under `src/fanic/storage` unless `FANIC_DATA_DIR` is
+set.
 
 ```text
 storage/
-	fanic.db
-	cbz/
-		<work_id>.cbz
-	works/
-		<work_id>/
-			pages/        # full-size AVIF pages
-			thumbs/       # AVIF thumbnails
-	fanart/
-		_objects/
-			<digest[:2]>/<digest>.avif   # content-addressed fanart
-	static/               # CSS, JS, images
+  fanic.db
+  cbz/
+    <work_id>.cbz
+  works/
+    <work_id>/
+      pages/        # full-size AVIF pages
+      thumbs/       # AVIF thumbnails
+  fanart/
+    _objects/
+      <digest[:2]>/<digest>.avif   # content-addressed fanart
+  static/               # CSS, JS, images
 ```
 
 ## Backup And Restore
 
-FANIC provides CLI commands to back up and restore runtime data (`fanic.db`, `cbz/`, `works/`, and `fanart/`).
+FANIC provides CLI commands to back up and restore runtime data (`fanic.db`,
+`cbz/`, `works/`, and `fanart/`).
 
 Create a backup:
 
@@ -356,10 +397,13 @@ uv run fanic restore-data C:\backups\fanic-20260322.zip
 uv run fanic restore-data C:\backups\fanic-20260322.zip --force
 
 # create a pre-restore safety snapshot, then restore
-uv run fanic restore-data C:\backups\fanic-20260322.zip --force --snapshot-before-restore
+uv run fanic restore-data C:\backups\fanic-20260322.zip --force \
+  --snapshot-before-restore
 
 # control where the pre-restore safety snapshot is written
-uv run fanic restore-data C:\backups\fanic-20260322.zip --force --snapshot-before-restore --snapshot-output C:\backups\fanic-pre-restore.zip
+uv run fanic restore-data C:\backups\fanic-20260322.zip --force \
+  --snapshot-before-restore \
+  --snapshot-output C:\backups\fanic-pre-restore.zip
 ```
 
 Suggested production procedure:
@@ -367,14 +411,17 @@ Suggested production procedure:
 1. Stop the app process.
 2. Run `uv run fanic backup-data --output <path-to-backup.zip>`.
 3. Copy the backup archive to durable storage (off-host if possible).
-4. For restore, stop the app process first, then run `uv run fanic restore-data <path-to-backup.zip> --force --snapshot-before-restore`.
+4. For restore, stop the app process first, then run
+  `uv run fanic restore-data <path-to-backup.zip> --force`
+  `--snapshot-before-restore`.
 5. Start the app and validate a sample work, page image, and metadata record.
 
 ## Database
 
 FANIC uses SQLite. The schema lives in `src/fanic/sql/schema.sql` and covers:
 
-- **works** — comic metadata (title, slug, summary, rating, series, page count, etc.)
+- **works** — comic metadata (title, slug, summary, rating, series, page count,
+  etc.)
 - **pages** — per-work page images and thumbnails with dimensions
 - **tags / tag_synonyms / work_tags** — structured tagging with canonicalization
 - **fanart_items** — uploaded illustrations with moderation metadata
@@ -387,30 +434,32 @@ FANIC uses SQLite. The schema lives in `src/fanic/sql/schema.sql` and covers:
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Language | Python ≥ 3.13 |
-| Web framework | [Cylinder](https://github.com/rbroderi/cylinder) (file-based WSGI routing) |
-| WSGI server | Waitress |
-| Database | SQLite |
-| Auth | Authlib (JWT sessions) |
-| Config | Pydantic + python-dotenv |
-| Image processing | Pillow + pillow-avif-plugin |
-| AI / moderation | OpenCLIP (open-clip-torch) + PyTorch |
-| Lazy loading | lazi (deferred ML model imports) |
-| Runtime types | beartype |
-| Logging | structlog |
-| Linting | Ruff |
-| Dev tools | autopep695, pytest, pytest-cov |
+- Language: Python >= 3.13.
+- Web framework: [Cylinder](https://github.com/rbroderi/cylinder)
+  (file-based WSGI routing).
+- WSGI server: Waitress.
+- Database: SQLite.
+- Auth: Authlib (JWT sessions).
+- Config: Pydantic + python-dotenv.
+- Image processing: Pillow + pillow-avif-plugin.
+- AI / moderation: OpenCLIP (open-clip-torch) + PyTorch.
+- Lazy loading: lazi (deferred ML model imports).
+- Runtime types: beartype.
+- Logging: structlog.
+- Linting: Ruff.
+- Dev tools: autopep695, pytest, pytest-cov.
 
 ## ComicInfo Schema Validation
 
-This repository includes the ComicInfo v2.0 XSD at `schema/comicinfo/v2.0/ComicInfo.xsd` and validates matching XML files in both local hooks and CI.
+This repository includes the ComicInfo v2.0 XSD at
+`schema/comicinfo/v2.0/ComicInfo.xsd` and validates matching XML files in both
+local hooks and CI.
 
 Validate one file manually:
 
 ```powershell
-uvx --with xmlschema python scripts/validate_comicinfo_xsd.py examples/ComicInfo.xml
+uvx --with xmlschema python scripts/validate_comicinfo_xsd.py \
+  examples/ComicInfo.xml
 ```
 
 Run the pre-commit hook manually:
@@ -419,11 +468,14 @@ Run the pre-commit hook manually:
 uvx prek run comicinfo-xsd --all-files
 ```
 
-The GitHub Actions workflow `ComicInfo XSD` also runs this check on push and pull requests when ComicInfo files or schema-validation tooling changes.
+The GitHub Actions workflow `ComicInfo XSD` also runs this check on push and
+pull requests when ComicInfo files or schema-validation tooling changes.
 
 ## Contributing
 
-See [AGENTS.md](AGENTS.md) for project-specific coding conventions (ternary coalescing style, import re-export aliases, file-based routing rules, `StrEnum` for finite choices, `match`/`case` dispatch, and more).
+See [AGENTS.md](AGENTS.md) for project-specific coding conventions (ternary
+coalescing style, import re-export aliases, file-based routing rules, `StrEnum`
+for finite choices, `match`/`case` dispatch, and more).
 
 Tests live in `tests/` and cover routes, moderation, ingest, and utilities:
 
@@ -432,17 +484,20 @@ uv run pytest
 uv run pytest --cov
 ```
 
-Example files live in `examples/`, including `examples/ComicInfo.xml` and `examples/theme_example.toml`.
+Example files live in `examples/`, including `examples/ComicInfo.xml` and
+`examples/theme_example.toml`.
 
 ## Storage Watchdog (Linux)
 
-To track file additions and deletions under `/mnt/storage`, use the inotify watchdog script:
+To track file additions and deletions under `/mnt/storage`, use the inotify
+watchdog script:
 
 ```bash
 scripts/watch-storage-inotify.sh
 ```
 
-The script logs to `/var/log/fanic/storage-watch.log` by default and watches recursively for:
+The script logs to `/var/log/fanic/storage-watch.log` by default and watches
+recursively for:
 
 - create
 - delete
@@ -477,7 +532,8 @@ For process attribution under `/mnt/storage`, install `auditd` rules:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y auditd audispd-plugins
-sudo bash scripts/setup-auditd-storage-watch.sh --watch-path /mnt/storage --key fanic_storage
+sudo bash scripts/setup-auditd-storage-watch.sh --watch-path /mnt/storage \
+  --key fanic_storage
 ```
 
 Query recent attributed events:

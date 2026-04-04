@@ -18,15 +18,15 @@ class PreprocessCfg:
     fill_color: int = ...
     def __post_init__(self) -> None:
         ...
-    
+
     @property
     def num_channels(self) -> Literal[3]:
         ...
-    
+
     @property
     def input_size(self) -> tuple[Literal[3], int, int] | tuple[Literal[3], *tuple[int, ...]]:
         ...
-    
+
 
 
 _PREPROCESS_KEYS = ...
@@ -58,13 +58,13 @@ class ResizeKeepRatio:
     """
     def __init__(self, size, longest=..., interpolation=..., random_scale_prob=..., random_scale_range=..., random_aspect_prob=..., random_aspect_range=...) -> None:
         ...
-    
+
     @staticmethod
     def get_params(img, target_size, longest, random_scale_prob=..., random_scale_range=..., random_aspect_prob=..., random_aspect_range=...) -> list[Any]:
         """Get parameters
         """
         ...
-    
+
     def __call__(self, img) -> Tensor:
         """
         Args:
@@ -74,10 +74,10 @@ class ResizeKeepRatio:
             PIL Image: Resized, padded to at least target size, possibly cropped to exactly target size
         """
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 def center_crop_or_pad(img: torch.Tensor, output_size: List[int], fill=...) -> torch.Tensor:
@@ -110,7 +110,7 @@ class CenterCropOrPad(torch.nn.Module):
     """
     def __init__(self, size, fill=...) -> None:
         ...
-    
+
     def forward(self, img) -> Tensor:
         """
         Args:
@@ -120,10 +120,10 @@ class CenterCropOrPad(torch.nn.Module):
             PIL Image or Tensor: Cropped image.
         """
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class MaybeConvertMode:
@@ -131,7 +131,7 @@ class MaybeConvertMode:
     """
     def __init__(self, mode=...) -> None:
         ...
-    
+
     def __call__(self, pic) -> ndarray[_Shape, dtype[Any]] | Tensor:
         """
         Args:
@@ -141,10 +141,10 @@ class MaybeConvertMode:
             Tensor: Converted image.
         """
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class MaybeToTensor(ToTensor):
@@ -152,7 +152,7 @@ class MaybeToTensor(ToTensor):
     """
     def __init__(self) -> None:
         ...
-    
+
     def __call__(self, pic) -> torch.Tensor:
         """
         Args:
@@ -162,10 +162,10 @@ class MaybeToTensor(ToTensor):
             Tensor: Converted image.
         """
         ...
-    
+
     def __repr__(self) -> str:
         ...
-    
+
 
 
 class color_jitter:
@@ -174,10 +174,10 @@ class color_jitter:
     """
     def __init__(self, brightness=..., contrast=..., saturation=..., hue=..., p=...) -> None:
         ...
-    
+
     def __call__(self, img) -> Any:
         ...
-    
+
 
 
 class gray_scale:
@@ -186,10 +186,10 @@ class gray_scale:
     """
     def __init__(self, p=...) -> None:
         ...
-    
+
     def __call__(self, img) -> Any:
         ...
-    
+
 
 
 def image_transform(image_size: Union[int, Tuple[int, int]], is_train: bool, mean: Optional[Tuple[float, ...]] = ..., std: Optional[Tuple[float, ...]] = ..., resize_mode: Optional[str] = ..., interpolation: Optional[str] = ..., fill_color: int = ..., aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = ...) -> TfPreprocessTransform | Compose | tuple[Compose, Compose, Compose]:
@@ -197,4 +197,3 @@ def image_transform(image_size: Union[int, Tuple[int, int]], is_train: bool, mea
 
 def image_transform_v2(cfg: PreprocessCfg, is_train: bool, aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = ...) -> TfPreprocessTransform | Compose | tuple[Compose, Compose, Compose]:
     ...
-

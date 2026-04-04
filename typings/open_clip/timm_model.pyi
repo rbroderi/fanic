@@ -15,18 +15,18 @@ class TimmModel(nn.Module):
     """
     def __init__(self, model_name: str, embed_dim: int, image_size: Union[int, Tuple[int, int]] = ..., pool: str = ..., proj: str = ..., proj_bias: bool = ..., drop: float = ..., drop_path: Optional[float] = ..., patch_drop: Optional[float] = ..., pretrained: bool = ...) -> None:
         ...
-    
+
     def lock(self, unlocked_groups: int = ..., freeze_bn_stats: bool = ...) -> None:
         """ lock modules
         Args:
             unlocked_groups (int): leave last n layer groups unlocked (default: 0)
         """
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = ...) -> None:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., output_fmt: str = ..., output_extra_tokens: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -41,7 +41,7 @@ class TimmModel(nn.Module):
         Returns:
         """
         ...
-    
+
     def set_input_size(self, image_size: Union[int, Tuple[int, int]]) -> None:
         """Set the input image size for the model after initialization.
 
@@ -52,9 +52,6 @@ class TimmModel(nn.Module):
             image_size: New image size as int (square) or tuple (h, w)
         """
         ...
-    
+
     def forward(self, x) -> Any:
         ...
-    
-
-

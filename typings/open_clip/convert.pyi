@@ -23,4 +23,3 @@ def convert_mobile_clip_state_dict(model: CustomTextCLIP, state_dict, fastvit=..
 
 def convert_state_dict(model: Union[CustomTextCLIP, CLIP], state_dict) -> dict[str | Any, Tensor | Any]:
     ...
-

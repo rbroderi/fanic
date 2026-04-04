@@ -23,4 +23,3 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos) -> NDArray[Any]:
 
 def interpolate_pos_embed(model, checkpoint_model) -> None:
     ...
-

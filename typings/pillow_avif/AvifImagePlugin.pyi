@@ -19,16 +19,16 @@ class AvifImageFile(ImageFile.ImageFile):
     __frame = ...
     def seek(self, frame) -> None:
         ...
-    
+
     def load(self) -> PixelAccess | None:
         ...
-    
+
     def load_seek(self, pos) -> None:
         ...
-    
+
     def tell(self) -> int:
         ...
-    
+
 
 
 if SUPPORTED:

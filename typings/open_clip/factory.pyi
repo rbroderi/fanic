@@ -247,4 +247,3 @@ def create_model_from_pretrained(model_name: str, pretrained: Optional[str] = ..
         partial weight loading, use `create_model` or `create_model_and_transforms` instead.
     """
     ...
-

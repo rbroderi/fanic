@@ -10,19 +10,19 @@ class Bottleneck(nn.Module):
     expansion = ...
     def __init__(self, inplanes, planes, stride=...) -> None:
         ...
-    
+
     def forward(self, x: torch.Tensor) -> Any:
         ...
-    
+
 
 
 class AttentionPool2d(nn.Module):
     def __init__(self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int = ...) -> None:
         ...
-    
+
     def forward(self, x) -> Tensor:
         ...
-    
+
 
 
 class ModifiedResNet(nn.Module):
@@ -34,20 +34,20 @@ class ModifiedResNet(nn.Module):
     """
     def __init__(self, layers: List[int], output_dim: int, heads: int, image_size: int = ..., width: int = ...) -> None:
         ...
-    
+
     def init_parameters(self) -> None:
         ...
-    
+
     def lock(self, unlocked_groups=..., freeze_bn_stats=...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
     def stem(self, x) -> Any:
         ...
-    
+
     def forward_intermediates(self, x: torch.Tensor, indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., output_fmt: str = ..., output_extra_tokens: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -63,9 +63,6 @@ class ModifiedResNet(nn.Module):
 
         """
         ...
-    
+
     def forward(self, x) -> Any:
         ...
-    
-
-

@@ -93,30 +93,30 @@ class CLIP(nn.Module):
     output_dict: torch.jit.Final[bool]
     def __init__(self, embed_dim: int, vision_cfg: CLIPVisionCfg, text_cfg: CLIPTextCfg, quick_gelu: bool = ..., init_logit_scale: float = ..., init_logit_bias: Optional[float] = ..., nonscalar_logit_scale: bool = ..., cast_dtype: Optional[torch.dtype] = ..., output_dict: bool = ...) -> None:
         ...
-    
+
     def lock_image_tower(self, unlocked_groups=..., freeze_bn_stats=...) -> None:
         ...
-    
+
     def lock_text_tower(self, unlocked_layers: int = ..., freeze_layer_norm: bool = ...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def no_weight_decay(self) -> set[str]:
         ...
-    
+
     def encode_image(self, image, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def encode_text(self, text, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def get_logits(self, image, text) -> tuple[Tensor | Any, Tensor | Any]:
         ...
-    
+
     def forward_intermediates(self, image: Optional[torch.Tensor] = ..., text: Optional[torch.Tensor] = ..., image_indices: Optional[Union[int, List[int]]] = ..., text_indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., image_output_fmt: str = ..., image_output_extra_tokens: bool = ..., text_output_fmt: str = ..., text_output_extra_tokens: bool = ..., output_logits: bool = ..., output_logit_scale_bias: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -139,40 +139,40 @@ class CLIP(nn.Module):
 
         """
         ...
-    
+
     def forward(self, image: Optional[torch.Tensor] = ..., text: Optional[torch.Tensor] = ...) -> dict[str, Tensor | Any | None] | tuple[Tensor | Any | None, Tensor | Any | None, Tensor, Parameter] | tuple[Tensor | Any | None, Tensor | Any | None, Tensor]:
         ...
-    
+
 
 
 class CustomTextCLIP(nn.Module):
     output_dict: torch.jit.Final[bool]
     def __init__(self, embed_dim: int, vision_cfg: CLIPVisionCfg, text_cfg: CLIPTextCfg, quick_gelu: bool = ..., init_logit_scale: float = ..., init_logit_bias: Optional[float] = ..., nonscalar_logit_scale: bool = ..., cast_dtype: Optional[torch.dtype] = ..., output_dict: bool = ...) -> None:
         ...
-    
+
     def lock_image_tower(self, unlocked_groups=..., freeze_bn_stats=...) -> None:
         ...
-    
+
     def lock_text_tower(self, unlocked_layers: int = ..., freeze_layer_norm: bool = ...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=...) -> None:
         ...
-    
+
     @torch.jit.ignore
     def no_weight_decay(self) -> set[Any]:
         ...
-    
+
     def encode_image(self, image, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def encode_text(self, text, normalize: bool = ...) -> Tensor | Any:
         ...
-    
+
     def get_logits(self, image, text) -> tuple[Tensor | Any, Tensor | Any]:
         ...
-    
+
     def forward_intermediates(self, image: Optional[torch.Tensor] = ..., text: Optional[torch.Tensor] = ..., image_indices: Optional[Union[int, List[int]]] = ..., text_indices: Optional[Union[int, List[int]]] = ..., stop_early: bool = ..., normalize: bool = ..., normalize_intermediates: bool = ..., intermediates_only: bool = ..., image_output_fmt: str = ..., image_output_extra_tokens: bool = ..., text_output_fmt: str = ..., text_output_extra_tokens: bool = ..., output_logits: bool = ..., output_logit_scale_bias: bool = ...) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -195,10 +195,10 @@ class CustomTextCLIP(nn.Module):
 
         """
         ...
-    
+
     def forward(self, image: Optional[torch.Tensor] = ..., text: Optional[torch.Tensor] = ...) -> dict[str, Tensor | Any | None] | tuple[Tensor | Any | None, Tensor | Any | None, Tensor, Parameter] | tuple[Tensor | Any | None, Tensor | Any | None, Tensor]:
         ...
-    
+
 
 
 def convert_weights_to_lp(model: nn.Module, dtype=...) -> None:
@@ -229,4 +229,3 @@ def set_model_preprocess_cfg(model, preprocess_cfg: Dict[str, Any]) -> None:
 
 def get_model_tokenize_cfg(model) -> dict[Any, Any]:
     ...
-

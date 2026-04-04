@@ -23,75 +23,75 @@ class ReloaderLoop:
     name = ...
     def __init__(self, extra_files: t.Iterable[str] | None = ..., exclude_patterns: t.Iterable[str] | None = ..., interval: int | float = ...) -> None:
         ...
-    
+
     def __enter__(self) -> ReloaderLoop:
         """Do any setup, then run one step of the watch to populate the
         initial filesystem state.
         """
         ...
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Clean up any resources associated with the reloader."""
         ...
-    
+
     def run(self) -> None:
         """Continually run the watch step, sleeping for the configured
         interval after each step.
         """
         ...
-    
+
     def run_step(self) -> None:
         """Run one step for watching the filesystem. Called once to set
         up initial state, then repeatedly to update it.
         """
         ...
-    
+
     def restart_with_reloader(self) -> int:
         """Spawn a new Python interpreter with the same arguments as the
         current one, but running the reloader thread.
         """
         ...
-    
+
     def trigger_reload(self, filename: str) -> None:
         ...
-    
+
     def log_reload(self, filename: str | bytes) -> None:
         ...
-    
+
 
 
 class StatReloaderLoop(ReloaderLoop):
     name = ...
     def __enter__(self) -> ReloaderLoop:
         ...
-    
+
     def run_step(self) -> None:
         ...
-    
+
 
 
 class WatchdogReloaderLoop(ReloaderLoop):
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         class EventHandler(PatternMatchingEventHandler):
             ...
-        
-        
-    
+
+
+
     def trigger_reload(self, filename: str | bytes) -> None:
         ...
-    
+
     def __enter__(self) -> ReloaderLoop:
         ...
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         ...
-    
+
     def run(self) -> None:
         ...
-    
+
     def run_step(self) -> None:
         ...
-    
+
 
 
 reloader_loops: dict[str, type[ReloaderLoop]] = ...
@@ -103,4 +103,3 @@ def ensure_echo_on() -> None:
 def run_with_reloader(main_func: t.Callable[[], None], extra_files: t.Iterable[str] | None = ..., exclude_patterns: t.Iterable[str] | None = ..., interval: int | float = ..., reloader_type: str = ...) -> None:
     """Run the given function in an independent Python interpreter."""
     ...
-

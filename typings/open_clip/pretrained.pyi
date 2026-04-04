@@ -70,4 +70,3 @@ def download_pretrained_from_hf(model_id: str, filename: Optional[str] = ..., re
 
 def download_pretrained(cfg: Dict, prefer_hf_hub: bool = ..., cache_dir: Optional[str] = ...) -> str:
     ...
-

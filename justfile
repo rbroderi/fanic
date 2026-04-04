@@ -68,7 +68,7 @@ basedpyright:
 
 # Run prek hooks against all files.
 prek:
-    bash static/sync-from-storage.sh; uvx prek run --all-files
+    bash static/sync-from-storage.sh; uvx prek run --all-files; uvx prek run --all-files
 
 # Run pytest with coverage for the src package.
 [windows]

@@ -94,28 +94,25 @@ class SharedDataMiddleware:
     """
     def __init__(self, app: WSGIApplication, exports: (cabc.Mapping[str, str | tuple[str, str]] | t.Iterable[tuple[str, str | tuple[str, str]]]), disallow: None = ..., cache: bool = ..., cache_timeout: int = ..., fallback_mimetype: str = ...) -> None:
         ...
-    
+
     def is_allowed(self, filename: str) -> bool:
         """Subclasses can override this method to disallow the access to
         certain files.  However by providing `disallow` in the constructor
         this method is overwritten.
         """
         ...
-    
+
     def get_file_loader(self, filename: str) -> _TLoader:
         ...
-    
+
     def get_package_loader(self, package: str, package_path: str) -> _TLoader:
         ...
-    
+
     def get_directory_loader(self, directory: str) -> _TLoader:
         ...
-    
+
     def generate_etag(self, mtime: datetime, file_size: int, real_filename: str) -> str:
         ...
-    
+
     def __call__(self, environ: WSGIEnvironment, start_response: StartResponse) -> t.Iterable[bytes]:
         ...
-    
-
-
