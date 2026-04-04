@@ -119,9 +119,10 @@ def _normalize_chapter_members(value: object) -> dict[str, list[str]]:
 def main(
     request: RequestLike,
     response: ResponseLike,
-    deps: ComicPostDependencies | None = None,
+    **kwargs: object,
 ) -> ResponseLike:
-    deps = deps if deps is not None else _runtime_deps()
+    deps_obj = kwargs.get("deps")
+    deps = deps_obj if isinstance(deps_obj, ComicPostDependencies) else _runtime_deps()
 
     tail = deps.route_tail(request, ["comic"])
     if tail is None or len(tail) != 2:

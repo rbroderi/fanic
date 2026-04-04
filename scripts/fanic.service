@@ -16,6 +16,11 @@ Environment=FANIC_DATA_DIR=/mnt/storage
 Environment=FANIC_DB_PATH=/opt/fanic/runtime/fanic.db
 Environment=FANIC_LOG_PATH_TEMPLATE=/var/log/fanic/%%TIMESTAMP%%.log
 Environment=PYTHONDONTWRITEBYTECODE=1
+# Gunicorn tuning overrides (optional):
+# Environment=FANIC_GUNICORN_WORKERS=9
+# Environment=FANIC_GUNICORN_TIMEOUT=120
+# Environment=FANIC_BIND_ADDR=unix:/run/fanic/fanic.sock
+# Environment=FANIC_GUNICORN_UMASK=0007
 # Optional secure secret file pointers (recommended for production):
 # Environment=FANIC_SESSION_SECRET_FILE=/etc/fanic/credentials/session_secret
 # Environment=FANIC_AUTH0_CLIENT_SECRET_FILE=/etc/fanic/credentials/auth0_client_secret
@@ -40,11 +45,12 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 TasksMax=512
 MemoryMax=8G
 ReadWritePaths=/mnt/storage /opt/fanic/runtime /var/log/fanic /opt/fanic/static
+ExecStartPre=/usr/bin/install -d -o fanic -g www-data -m 2775 /run/fanic
 ExecStartPre=/usr/bin/install -d -o fanic -g fanic -m 2775 /opt/fanic/static
 ExecStartPre=/usr/bin/chown -R fanic:fanic /opt/fanic/static
 ExecStartPre=/usr/bin/find /opt/fanic/static -type d -exec /bin/chmod 2775 {} +
 ExecStartPre=/usr/bin/find /opt/fanic/static -type f -exec /bin/chmod 664 {} +
-ExecStart=/opt/fanic/.venv/bin/python -m fanic.main serve --host 127.0.0.1 --port 8000
+ExecStart=/usr/bin/env bash /opt/fanic/scripts/start-gunicorn.sh
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

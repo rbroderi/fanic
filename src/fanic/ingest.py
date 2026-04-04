@@ -19,8 +19,6 @@ from tqdm import tqdm
 
 from fanic.db import get_connection
 from fanic.filesystem import delete_file
-from fanic.image_settings import image_processing_constants
-from fanic.image_settings import resolve_thumbnail_dimensions
 from fanic.ingest_editor_service import editor_delete_page_use_case
 from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image
@@ -53,8 +51,10 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     extension.lower() for extension, format_name in Image.registered_extensions().items() if format_name in Image.OPEN
 }
 _SETTINGS = get_settings()
-THUMBNAIL_MAX_DIMENSIONS = resolve_thumbnail_dimensions(_SETTINGS)
-IMAGE_AVIF_QUALITY, THUMBNAIL_AVIF_QUALITY, MAX_UPLOAD_IMAGE_PIXELS = image_processing_constants(_SETTINGS)
+THUMBNAIL_MAX_DIMENSIONS = _SETTINGS.thumbnail_max_dimensions
+IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
+THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
+MAX_UPLOAD_IMAGE_PIXELS = _SETTINGS.max_upload_image_pixels
 MAX_INGEST_PAGES = _SETTINGS.max_ingest_pages
 MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_member_uncompressed_bytes
 MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_total_uncompressed_bytes

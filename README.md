@@ -80,7 +80,7 @@ Open <http://127.0.0.1:8000>.
 
 - `fanic init-db`: Initialize the SQLite schema and storage directories.
 - `fanic ingest <cbz>`: Ingest a CBZ archive (optional `--metadata` JSON).
-- `fanic serve`: Run the local WSGI server (`--host`, `--port`).
+- `fanic serve`: Run the local WSGI dev server (`--host`, `--port`).
 - `fanic convert-thumbs-avif`: Batch-convert page thumbnails to AVIF
   (`--dry-run` supported).
 - `fanic backup-data`: Create a ZIP backup of the database and media.
@@ -238,8 +238,8 @@ just setup-nginx-windows
 
 The script prompts for nginx version, install directory, listen port, upstream
 WSGI host/port, and repository root. It then downloads nginx, writes
-`nginx.conf`, configures static/media aliases, proxies everything else to
-Waitress, and validates + starts nginx.
+`nginx.conf`, configures static/media aliases, proxies everything else to the
+Python WSGI app, and validates + starts nginx.
 
 To relocate storage and automatically update both WSGI (`FANIC_DATA_DIR`) and
 nginx aliases:
@@ -437,7 +437,8 @@ FANIC uses SQLite. The schema lives in `src/fanic/sql/schema.sql` and covers:
 - Language: Python >= 3.13.
 - Web framework: [Cylinder](https://github.com/rbroderi/cylinder)
   (file-based WSGI routing).
-- WSGI server: Waitress.
+- WSGI server (production): Gunicorn.
+- WSGI server (local dev command): Waitress.
 - Database: SQLite.
 - Auth: Authlib (JWT sessions).
 - Config: Pydantic + python-dotenv.
@@ -517,6 +518,16 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now fanic-storage-watchdog.service
 sudo systemctl status fanic-storage-watchdog.service
 sudo tail -f /var/log/fanic/storage-watch.log
+```
+
+For the web service unit (`scripts/fanic.service`), startup now runs through
+`scripts/start-gunicorn.sh`, which computes worker count as
+`2 * CPU_CORES + 1` by default. Override with environment variables in
+`/etc/fanic/fanic.env`, for example:
+
+```bash
+FANIC_GUNICORN_WORKERS=9
+FANIC_BIND_ADDR=unix:/run/fanic/fanic.sock
 ```
 
 Install dependency if missing:

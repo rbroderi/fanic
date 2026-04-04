@@ -715,17 +715,36 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
 
     tag = filters.get("tag")
     if tag:
+        normalized_tag = tag.strip().lower()
+        tag_like = f"%{normalized_tag}%"
         where.append(
-            "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id WHERE wt.work_id = w.id AND t.slug = ?)"
+            "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id "
+            "WHERE wt.work_id = w.id AND (t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?))"
         )
         params.append(slugify(tag))
+        params.append(tag_like)
+        params.append(tag_like)
 
     fandom = filters.get("fandom")
     if fandom:
+        normalized_fandom = fandom.strip().lower()
+        fandom_like = f"%{normalized_fandom}%"
         where.append(
-            "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id WHERE wt.work_id = w.id AND t.type = 'fandom' AND t.slug = ?)"
+            "EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id "
+            "WHERE wt.work_id = w.id AND t.type = 'fandom' "
+            "AND (t.slug = ? OR lower(t.name) LIKE ? OR lower(t.slug) LIKE ?))"
         )
         params.append(slugify(fandom))
+        params.append(fandom_like)
+        params.append(fandom_like)
+
+    user_filter = filters.get("user", "").strip()
+    if user_filter:
+        normalized_user = user_filter.lower()
+        user_like = f"%{normalized_user}%"
+        where.append("(lower(w.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)")
+        params.append(user_like)
+        params.append(user_like)
 
     sort = filters.get("sort", "newest")
     order_by = "w.updated_at DESC"
@@ -744,6 +763,8 @@ def list_works(filters: dict[str, str]) -> list[WorkListItem]:
         FROM works w
         LEFT JOIN pages p
             ON p.work_id = w.id AND p.page_index = w.cover_page_index
+        LEFT JOIN users u
+            ON lower(u.username) = lower(w.uploader_username)
     """
 
     if where:

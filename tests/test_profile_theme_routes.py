@@ -340,7 +340,7 @@ def test_users_public_profile_uses_public_template(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_public_profile_test",
     )
-    handler_module = route_module.ex_get_handler
+    handler_module = route_module
 
     def fake_current_user(request: Any) -> str:
         _ = request
@@ -439,7 +439,7 @@ def test_users_public_profile_resolves_by_display_name(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_display_name_route_test",
     )
-    handler_module = route_module.ex_get_handler
+    handler_module = route_module
 
     monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
     monkeypatch.setattr(handler_module, "list_works_by_uploader", _empty_work_list)
@@ -625,7 +625,7 @@ def test_users_public_profile_fanart_links_use_reader_with_gallery_context(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_fanart_reader_links_test",
     )
-    handler_module = route_module.ex_get_handler
+    handler_module = route_module
 
     monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
     monkeypatch.setattr(handler_module, "list_works_by_uploader", _empty_work_list)
@@ -740,7 +740,7 @@ def test_users_gallery_all_redirects_to_fanart_gallery(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_gallery_all_redirect_test",
     )
-    handler_module = route_module.ex_get_handler
+    handler_module = route_module
 
     monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
 
@@ -780,7 +780,7 @@ def test_users_gallery_slug_redirects_to_filtered_fanart_gallery(
         "src/fanic/cylinder_sites/fanicsite/users.ex.get.py",
         "fanicsite_users_ex_get_gallery_slug_redirect_test",
     )
-    handler_module = route_module.ex_get_handler
+    handler_module = route_module
 
     monkeypatch.setattr(handler_module, "current_user", _current_user_admin)
 

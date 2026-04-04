@@ -459,6 +459,15 @@ def test_work_crud_tags_pages_comments_kudos_and_versions(
     assert len(works) == 1
     assert works[0]["id"] == "work-1"
 
+    partial_fandom_matches = repository.list_works({"fandom": "fandom", "include_mature": "1", "include_explicit": "1"})
+    assert any(work["id"] == "work-1" for work in partial_fandom_matches)
+
+    partial_tag_matches = repository.list_works({"tag": "adven", "include_mature": "1", "include_explicit": "1"})
+    assert any(work["id"] == "work-1" for work in partial_tag_matches)
+
+    user_matches = repository.list_works({"user": "ALI", "include_mature": "1", "include_explicit": "1"})
+    assert any(work["id"] == "work-1" for work in user_matches)
+
     works_by_uploader = repository.list_works_by_uploader("alice")
     assert len(works_by_uploader) == 1
 
@@ -752,6 +761,10 @@ def test_fanart_crud_and_lookup_helpers(
     assert len(filtered_users) == 1
     assert filtered_users[0]["uploader_username"] == "bob"
 
+    user_filtered_users = repository.list_fanart_users({"user": "ALI"}, limit=20)
+    assert len(user_filtered_users) == 1
+    assert user_filtered_users[0]["uploader_username"] == "alice"
+
     fandom_users = repository.list_fanart_users({"fandom": "skyverse"}, limit=20)
     assert len(fandom_users) == 1
     assert fandom_users[0]["uploader_username"] == "alice"
@@ -779,9 +792,17 @@ def test_fanart_crud_and_lookup_helpers(
     assert len(user_items) == 1
     assert user_items[0]["id"] == "fanart-1"
 
+    user_items_case = repository.list_fanart_items({"user": "ALI"}, limit=20)
+    assert len(user_items_case) == 1
+    assert user_items_case[0]["id"] == "fanart-1"
+
     fandom_items = repository.list_fanart_items({"fandom": "skyverse"}, limit=20)
     assert len(fandom_items) == 1
     assert fandom_items[0]["id"] == "fanart-1"
+
+    partial_tag_items = repository.list_fanart_items({"tag": "sky"}, limit=20)
+    assert len(partial_tag_items) == 1
+    assert partial_tag_items[0]["id"] == "fanart-1"
 
     complete_items = repository.list_fanart_items({"status": "complete"}, limit=20)
     assert len(complete_items) == 1

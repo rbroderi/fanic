@@ -3,8 +3,9 @@ set -euo pipefail
 
 NGINX_PKG="nginx"
 LISTEN_PORT="8080"
-WSGI_HOST="127.0.0.1"
-WSGI_PORT="8000"
+WSGI_UPSTREAM="unix:/run/fanic/fanic.sock:"
+WSGI_HOST=""
+WSGI_PORT=""
 SERVER_NAME="localhost"
 REPO_ROOT=""
 STORAGE_ROOT=""
@@ -20,8 +21,10 @@ Usage: scripts/setup-nginx-ubuntu.sh [options]
 
 Options:
   --listen-port <port>      Local nginx listen port (default: 8080)
-  --wsgi-host <host>        Upstream WSGI host (default: 127.0.0.1)
-  --wsgi-port <port>        Upstream WSGI port (default: 8000)
+	--wsgi-upstream <target>  Upstream target (default: unix:/run/fanic/fanic.sock:)
+														Example TCP: 127.0.0.1:8000
+	--wsgi-host <host>        Upstream WSGI host (legacy helper with --wsgi-port)
+	--wsgi-port <port>        Upstream WSGI port (legacy helper with --wsgi-host)
   --server-name <name>      nginx server_name (default: localhost)
   --repo-root <path>        Repository root (default: parent of scripts dir)
   --storage-root <path>     FANIC storage root (default: <repo-root>/src/storage)
@@ -63,6 +66,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--wsgi-port)
 		WSGI_PORT="$2"
+		shift 2
+		;;
+	--wsgi-upstream)
+		WSGI_UPSTREAM="$2"
 		shift 2
 		;;
 	--server-name)
@@ -116,8 +123,7 @@ if [[ "${NO_PROMPT}" != "true" ]]; then
 	echo
 
 	LISTEN_PORT="$(prompt_default "Local listen port" "${LISTEN_PORT}")"
-	WSGI_HOST="$(prompt_default "WSGI host" "${WSGI_HOST}")"
-	WSGI_PORT="$(prompt_default "WSGI port" "${WSGI_PORT}")"
+	WSGI_UPSTREAM="$(prompt_default "WSGI upstream (unix:/path.sock: or host:port)" "${WSGI_UPSTREAM}")"
 	SERVER_NAME="$(prompt_default "nginx server_name" "${SERVER_NAME}")"
 	REPO_ROOT="$(prompt_default "Repo root" "${REPO_ROOT}")"
 	STORAGE_ROOT="$(prompt_default "Storage root" "${STORAGE_ROOT}")"
@@ -129,6 +135,17 @@ fi
 
 REPO_ROOT="$(realpath "${REPO_ROOT}")"
 STORAGE_ROOT="$(realpath "${STORAGE_ROOT}")"
+
+if [[ -n "${WSGI_HOST}" || -n "${WSGI_PORT}" ]]; then
+	resolved_host="${WSGI_HOST:-127.0.0.1}"
+	resolved_port="${WSGI_PORT:-8000}"
+	WSGI_UPSTREAM="${resolved_host}:${resolved_port}"
+fi
+
+if [[ "${WSGI_UPSTREAM}" == unix:* && "${WSGI_UPSTREAM}" != *: ]]; then
+	WSGI_UPSTREAM="${WSGI_UPSTREAM}:"
+fi
+
 CBZ_DIR="${STORAGE_ROOT}/cbz"
 STATIC_DIR="${STORAGE_ROOT}/static"
 FANART_DIR="${STORAGE_ROOT}/fanart"
@@ -224,7 +241,7 @@ server {
     }
 
     location / {
-        proxy_pass http://${WSGI_HOST}:${WSGI_PORT};
+				proxy_pass http://${WSGI_UPSTREAM};
         proxy_http_version 1.1;
       proxy_intercept_errors on;
         proxy_set_header Host \$host;
@@ -265,7 +282,7 @@ echo "serving /static from: ${STATIC_DIR}"
 echo "serving /static/fanart/images from: ${FANART_DIR}/images"
 echo "serving /static/fanart/thumbs from: ${FANART_DIR}/thumbs"
 echo "serving /static/{work_id}/(pages|thumbs) from: ${WORKS_DIR}/{work_id}/..."
-echo "proxying dynamic routes to: http://${WSGI_HOST}:${WSGI_PORT}"
+echo "proxying dynamic routes to: http://${WSGI_UPSTREAM}"
 echo "open: http://127.0.0.1:${LISTEN_PORT}"
 echo
 echo "Common commands:"

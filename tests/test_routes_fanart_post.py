@@ -177,6 +177,45 @@ def test_fanart_delete_admin_redirects_to_safe_next_target(
     assert result.headers["Location"] == "/?view=fanart"
 
 
+def test_fanart_delete_failure_redirects_with_message(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart.ex.post.py",
+        "fanicsite_fanart_ex_post_delete_failure_test",
+    )
+
+    deps = _fanart_post_deps(
+        module,
+        current_user_func=_current_user_admin,
+        role_for_user_func=_role_admin,
+    )
+    monkeypatch.setattr(
+        module,
+        "get_fanart_item",
+        lambda *_: {"id": "fanart-1", "uploader_username": "alice"},
+    )
+
+    def _raise_delete_error(*_args: object, **_kwargs: object) -> bool:
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr(module, "delete_fanart_item", _raise_delete_error)
+
+    request = dummy_request(
+        path="/fanart/alice/fanart-1/delete",
+        method="POST",
+        args={"next": "/?view=fanart"},
+    )
+    response = dummy_response()
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/?view=fanart&msg=delete-failed"
+
+
 def test_fanart_upload_redirects_with_rating_elevated_message(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

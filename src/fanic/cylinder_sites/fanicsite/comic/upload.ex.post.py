@@ -379,9 +379,10 @@ def _run_async_cbz_ingest(
 def main(
     request: RequestLike,
     response: ResponseLike,
-    deps: ComicUploadPostDependencies | None = None,
+    **kwargs: object,
 ) -> ResponseLike:
-    deps = deps if deps is not None else _runtime_deps()
+    deps_obj = kwargs.get("deps")
+    deps = deps_obj if isinstance(deps_obj, ComicUploadPostDependencies) else _runtime_deps()
     _ = deps.request_id(request, response)
     if request.path not in {"/comic/upload", "/comic/upload/"}:
         return deps.text_error(response, "Not found", 404)

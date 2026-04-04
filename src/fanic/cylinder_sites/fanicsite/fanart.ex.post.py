@@ -218,23 +218,34 @@ def _handle_item_delete(
     if not work_owner_username:
         return text_error(response, "Not found", 404)
 
-    result = run_delete_item_use_case(
-        owner_username=work_owner_username,
-        current_username=identity.current_username,
-        current_role=identity.user_role,
-        item_id=work_id,
-        authorization_context_for_owner=authorization_context_for_owner,
-        can_delete_item=FanartPolicy.can_delete_item,
-        get_fanart_item=_get_fanart_item_as_dict,
-        delete_fanart_item=delete_fanart_item,
-    )
+    next_target = _safe_redirect_target(request.args.get("next", ""))
+
+    try:
+        result = run_delete_item_use_case(
+            owner_username=work_owner_username,
+            current_username=identity.current_username,
+            current_role=identity.user_role,
+            item_id=work_id,
+            authorization_context_for_owner=authorization_context_for_owner,
+            can_delete_item=FanartPolicy.can_delete_item,
+            get_fanart_item=_get_fanart_item_as_dict,
+            delete_fanart_item=delete_fanart_item,
+        )
+    except Exception:
+        profile_key = deps.owner_profile_key(work_owner_username)
+        if next_target:
+            separator = "&" if "?" in next_target else "?"
+            return _redirect(response, f"{next_target}{separator}msg=delete-failed")
+        return _redirect(
+            response,
+            f"/fanart/{quote(profile_key, safe='')}?msg=delete-failed",
+        )
 
     if result.outcome == DeleteItemOutcome.FORBIDDEN:
         return text_error(response, "Forbidden", 403)
     if result.outcome == DeleteItemOutcome.NOT_FOUND:
         return text_error(response, "Not found", 404)
 
-    next_target = _safe_redirect_target(request.args.get("next", ""))
     if next_target:
         return _redirect(response, next_target)
     profile_key = deps.owner_profile_key(work_owner_username)
@@ -368,9 +379,10 @@ def _handle_gallery_delete(
 def main(
     request: RequestLike,
     response: ResponseLike,
-    deps: FanartPostDependencies | None = None,
+    **kwargs: object,
 ) -> ResponseLike:
-    deps = deps if deps is not None else _runtime_deps()
+    deps_obj = kwargs.get("deps")
+    deps = deps_obj if isinstance(deps_obj, FanartPostDependencies) else _runtime_deps()
     tail = deps.route_tail(request, ["fanart"])
     if tail is None:
         return text_error(response, "Not found", 404)

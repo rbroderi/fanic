@@ -235,6 +235,56 @@ def test_home_route_renders_fanart_tab(
     assert seen_filters["sort"] == "title_asc"
 
 
+def test_home_route_includes_tag_datalist_replacements(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite.ex.get.py",
+        "fanicsite_ex_get_search_datalist_test",
+    )
+
+    monkeypatch.setattr(module, "current_user", _current_user_alice)
+    monkeypatch.setattr(module, "user_prefers_mature", lambda *_: True)
+    monkeypatch.setattr(module, "user_prefers_explicit", lambda *_: True)
+    monkeypatch.setattr(module, "list_works", lambda *_: [])
+    monkeypatch.setattr(module, "_USER_OPTIONS_HTML", '<option value="AliceArtist"></option>')
+    monkeypatch.setattr(
+        module,
+        "_SEARCH_TAG_DATALIST_REPLACEMENTS",
+        {
+            "__FANDOM_OPTIONS_HTML__": '<option value="Zootopia (2016)"></option>',
+            "__FREEFORM_OPTIONS_HTML__": '<option value="Detective AU"></option>',
+        },
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_render_html_template(
+        request: Any,
+        response: ResponseLike,
+        template_name: str,
+        replacements: dict[str, str],
+    ) -> ResponseLike:
+        _ = (request, template_name)
+        captured.update(replacements)
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    monkeypatch.setattr(module, "render_html_template", fake_render_html_template)
+
+    result = module.main(dummy_request(path="/", args={}), dummy_response())
+
+    assert result.status_code == 200
+    assert "AliceArtist" in captured["__USER_OPTIONS_HTML__"]
+    assert "Zootopia (2016)" in captured["__FANDOM_OPTIONS_HTML__"]
+    assert "Detective AU" in captured["__FREEFORM_OPTIONS_HTML__"]
+
+
 def test_home_route_tab_views_render_quickly(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

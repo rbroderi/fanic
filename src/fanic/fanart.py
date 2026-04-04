@@ -7,8 +7,6 @@ import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: i
 from PIL import Image
 from PIL import UnidentifiedImageError
 
-from fanic.image_settings import image_processing_constants
-from fanic.image_settings import resolve_thumbnail_dimensions
 from fanic.ingest import ModerationBlockedError
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
@@ -18,8 +16,10 @@ from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
 _SETTINGS = get_settings()
-THUMBNAIL_MAX_DIMENSIONS = resolve_thumbnail_dimensions(_SETTINGS)
-IMAGE_AVIF_QUALITY, THUMBNAIL_AVIF_QUALITY, MAX_UPLOAD_IMAGE_PIXELS = image_processing_constants(_SETTINGS)
+THUMBNAIL_MAX_DIMENSIONS = _SETTINGS.thumbnail_max_dimensions
+IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
+THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
+MAX_UPLOAD_IMAGE_PIXELS = _SETTINGS.max_upload_image_pixels
 
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:

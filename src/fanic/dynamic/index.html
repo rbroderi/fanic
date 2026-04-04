@@ -13,9 +13,9 @@
         <form id="filters" class="filter-row" method="get" action="__FILTER_ACTION__">
           __VIEW_HIDDEN_INPUT__
           <input name="q" placeholder="Search user, title, or summary" value="__FILTER_Q__" />
-          <input name="user" placeholder="Username" value="__FILTER_USER__" />
-          <input name="fandom" placeholder="Fandom" value="__FILTER_FANDOM__" />
-          <input name="tag" placeholder="Tag include" value="__FILTER_TAG__" />
+          <input name="user" placeholder="Username" value="__FILTER_USER__" list="userSuggestions" />
+          <input name="fandom" placeholder="Fandom" value="__FILTER_FANDOM__" list="fandomSuggestions" data-tag-autocomplete="1" data-tag-type="fandom" />
+          <input name="tag" placeholder="Tag include" value="__FILTER_TAG__" list="freeformSuggestions" data-tag-autocomplete="1" data-tag-type="freeform" />
           <select name="status">
             <option value="" __STATUS_ANY_SELECTED__>Any status</option>
             <option value="complete" __STATUS_COMPLETE_SELECTED__>Complete</option>
@@ -32,9 +32,13 @@
           </div>
           <button type="submit">Search</button>
         </form>
+        <datalist id="userSuggestions">__USER_OPTIONS_HTML__</datalist>
+        <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
+        <datalist id="freeformSuggestions">__FREEFORM_OPTIONS_HTML__</datalist>
       </section>
       <section class="work-grid" id="workGrid">__WORK_GRID_HTML__</section>
     </main>
     __SITE_COMMON_SCRIPTS__
+    <script src="/static/tag-autocomplete.js"></script>
   </body>
 </html>

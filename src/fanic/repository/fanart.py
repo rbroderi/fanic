@@ -557,21 +557,28 @@ def list_fanart_users(
 
         uploader = resolved_filters.get("user", "").strip()
         if uploader:
-            where.append("fi.uploader_username LIKE ?")
-            like_uploader = f"%{uploader}%"
-            params.append(like_uploader)
+            normalized_uploader = uploader.lower()
+            like_uploader = f"%{normalized_uploader}%"
+            where.append(
+                "(lower(fi.uploader_username) LIKE ? OR EXISTS ("
+                "SELECT 1 FROM users u WHERE lower(u.username) = lower(fi.uploader_username) "
+                "AND lower(u.display_name) LIKE ?))"
+            )
+            params.extend([like_uploader, like_uploader])
 
         fandom = resolved_filters.get("fandom", "").strip()
         if fandom:
-            where.append("fi.fandom LIKE ?")
-            like_fandom = f"%{fandom}%"
+            normalized_fandom = fandom.lower()
+            where.append("lower(fi.fandom) LIKE ?")
+            like_fandom = f"%{normalized_fandom}%"
             params.append(like_fandom)
 
         tag = resolved_filters.get("tag", "").strip()
         if tag:
-            where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
-            like_tag = f"%{tag}%"
-            params.extend([like_tag, like_tag])
+            normalized_tag = tag.lower()
+            where.append("(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)")
+            like_tag = f"%{normalized_tag}%"
+            params.extend([like_tag, like_tag, like_tag])
 
         status = resolved_filters.get("status", "").strip()
         if status == "complete":
@@ -675,21 +682,24 @@ def list_fanart_items(
 
         uploader = resolved_filters.get("user", "").strip()
         if uploader:
-            where.append("(fi.uploader_username LIKE ? OR u.display_name LIKE ?)")
-            like_uploader = f"%{uploader}%"
+            normalized_uploader = uploader.lower()
+            where.append("(lower(fi.uploader_username) LIKE ? OR lower(COALESCE(u.display_name, '')) LIKE ?)")
+            like_uploader = f"%{normalized_uploader}%"
             params.extend([like_uploader, like_uploader])
 
         fandom = resolved_filters.get("fandom", "").strip()
         if fandom:
-            where.append("fi.fandom LIKE ?")
-            like_fandom = f"%{fandom}%"
+            normalized_fandom = fandom.lower()
+            where.append("lower(fi.fandom) LIKE ?")
+            like_fandom = f"%{normalized_fandom}%"
             params.append(like_fandom)
 
         tag = resolved_filters.get("tag", "").strip()
         if tag:
-            where.append("(fi.title LIKE ? OR fi.summary LIKE ?)")
-            like_tag = f"%{tag}%"
-            params.extend([like_tag, like_tag])
+            normalized_tag = tag.lower()
+            where.append("(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)")
+            like_tag = f"%{normalized_tag}%"
+            params.extend([like_tag, like_tag, like_tag])
 
         status = resolved_filters.get("status", "").strip()
         if status == "complete":

@@ -7,6 +7,7 @@ from fanic.cylinder_sites.common.responses import render_html_template
 from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.fanicsite_home_helpers import aria_current as _aria_current
 from fanic.cylinder_sites.fanicsite_home_helpers import (
     fanart_items_html as _fanart_items_html,
@@ -17,11 +18,40 @@ from fanic.cylinder_sites.fanicsite_home_helpers import (
 )
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.repository.fanart import list_fanart_items
+from fanic.repository.users import list_local_users
 from fanic.repository.works import list_works
 from fanic.repository.works import user_prefers_explicit
 from fanic.repository.works import user_prefers_mature
 
 COMICS_PER_PAGE = 120
+
+
+def _render_user_datalist_options(limit: int = 400) -> str:
+    users = list_local_users(offset=0, limit=limit)
+    seen: set[str] = set()
+    parts: list[str] = []
+    for user_row in users:
+        username = str(user_row.get("username", "")).strip()
+        display_name = str(user_row.get("display_name", "")).strip()
+        values = [display_name, username]
+        for value in values:
+            normalized = value.strip()
+            if not normalized:
+                continue
+            lowered = normalized.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            parts.append(f'<option value="{escape(normalized)}"></option>')
+    return "".join(parts)
+
+
+_USER_OPTIONS_HTML = _render_user_datalist_options()
+_COMMON_TAG_DATALIST_REPLACEMENTS = render_common_tag_datalist_replacements()
+_SEARCH_TAG_DATALIST_REPLACEMENTS = {
+    "__FANDOM_OPTIONS_HTML__": _COMMON_TAG_DATALIST_REPLACEMENTS.get("__FANDOM_OPTIONS_HTML__", ""),
+    "__FREEFORM_OPTIONS_HTML__": _COMMON_TAG_DATALIST_REPLACEMENTS.get("__FREEFORM_OPTIONS_HTML__", ""),
+}
 
 
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
@@ -110,6 +140,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__VIEW_HIDDEN_INPUT__": view_hidden_input,
             "__FILTER_Q__": escape(q),
             "__FILTER_USER__": escape(user),
+            "__USER_OPTIONS_HTML__": _USER_OPTIONS_HTML,
             "__FILTER_FANDOM__": escape(fandom),
             "__FILTER_TAG__": escape(tag),
             "__FILTER_ACTION__": "/",
@@ -121,5 +152,6 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             "__SORT_TITLE_ASC_SELECTED__": _selected_attr(sort, "title_asc"),
             "__SORT_TITLE_DESC_SELECTED__": _selected_attr(sort, "title_desc"),
             "__WORK_GRID_HTML__": work_grid_html,
+            **_SEARCH_TAG_DATALIST_REPLACEMENTS,
         },
     )
