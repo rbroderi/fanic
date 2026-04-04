@@ -167,7 +167,7 @@ restart:
 
 [unix]
 restart:
-    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; npm run frontend:build; sudo systemctl daemon-reload; sudo systemctl restart fanic
+    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; npm run frontend:build; sudo bash scripts/set-source-permissions.sh /opt/fanic/src /opt/fanic/frontend; sudo systemctl daemon-reload; sudo systemctl restart fanic
 
 # Normalize source file permissions so the fanic service user can read all app code.
 [windows]
