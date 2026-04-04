@@ -417,13 +417,12 @@ def replace_fanart_gallery_items(
         valid_ids: list[str] = []
         if normalized_item_ids:
             placeholders = ",".join("?" for _ in normalized_item_ids)
+            sql = (
+                "SELECT id FROM fanart_items "
+                "WHERE uploader_username = ? AND id IN (" + placeholders + ")"
+            )
             valid_rows = connection.execute(
-                f"""
-                SELECT id
-                FROM fanart_items
-                WHERE uploader_username = ?
-                  AND id IN ({placeholders})
-                """,
+                sql,
                 [normalized_uploader, *normalized_item_ids],
             ).fetchall()
             valid_ids = [str(row["id"]) for row in valid_rows]
