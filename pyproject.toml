@@ -36,6 +36,7 @@ dependencies = [
 dev = [
   "autopep695>=1.1.4",
   "basedpyright>=1.39.0",
+  "prek>=0.3.8",
   "pytest>=9.0.2",
   "pytest-cov>=7.1.0",
 ]

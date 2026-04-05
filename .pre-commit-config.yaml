@@ -7,6 +7,7 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      - id: fix-byte-order-marker
       - id: check-merge-conflict
       - id: end-of-file-fixer
         exclude: ^static/.*\.svg$
@@ -46,6 +47,36 @@ repos:
       - id: taplo-format
       - id: taplo-lint
 
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.21.2
+    hooks:
+      - id: pyupgrade
+        args: [--py314-plus, --keep-runtime-typing]
+        files: ^(src|tests)/.*\.py$
+
+  - repo: https://github.com/hadialqattan/pycln
+    rev: v2.6.0
+    hooks:
+      - id: pycln
+        args: [src, tests]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exclude, typings]
+        files: ^(src|tests)/.*\.py$
+      - id: ruff-format
+        args: [--exclude, typings]
+        files: ^(src|tests)/.*\.py$
+      - id: ruff-check
+        name: ruff-check-post-format
+        args: [--exclude, typings]
+        files: ^(src|tests)/.*\.py$
+
   - repo: local
     hooks:
       - id: set-source-permissions
@@ -79,21 +110,6 @@ repos:
         files: ^(src|tests)/.*\.py$
         stages: [pre-commit]
 
-      - id: pyupgrade
-        name: pyupgrade-py314
-        entry: uvx pyupgrade --py314-plus --keep-runtime-typing
-        language: system
-        files: ^(src|tests)/.*\.py$
-        stages: [pre-commit]
-
-      - id: pycln
-        name: pycln
-        entry: uvx pycln src tests
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-
       - id: vulture
         name: vulture
         entry: uvx vulture src --min-confidence 80 --ignore-names dst,secure,httponly,samesite
@@ -113,14 +129,6 @@ repos:
       - id: refurb
         name: refurb
         entry: uvx ruff check --select FURB --ignore FURB110 src tests
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-
-      - id: ruff-ci
-        name: ruff-precommit
-        entry: just ruff-precommit
         language: system
         pass_filenames: false
         always_run: true
