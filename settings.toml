@@ -14,6 +14,8 @@ db_path = "/opt/fanic/runtime/fanic.db"
 enable_beartype = true
 log_path_template = "/var/log/fanic/%TIMESTAMP%.log"
 media_base_url = "https://fanic.media"
+# Optional CDN host for /static/* media URLs (covers/pages/fanart). Leave empty to disable.
+media_cdn_base_url = "https://cdn.fanic.media"
 allowed_hosts_csv = "fanic.media"
 profile_history_limit = 100
 

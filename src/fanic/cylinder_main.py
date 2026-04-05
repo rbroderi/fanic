@@ -100,6 +100,12 @@ def _warn_on_fanart_storage_mismatch() -> None:
 def startup() -> None:
     settings = get_settings()
     settings.validate_production_settings()
+    media_cdn_base_url = settings.media_cdn_base_url.strip()
+    startup_logger = logging.getLogger(__name__)
+    if media_cdn_base_url:
+        startup_logger.info("Media CDN enabled for /static/* via %s", media_cdn_base_url.rstrip("/"))
+    else:
+        startup_logger.info("Media CDN disabled; serving /static/* via media_base_url")
     ensure_storage_dirs()
     initialize_database()
     _warn_on_fanart_storage_mismatch()

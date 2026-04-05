@@ -1,4 +1,4 @@
-/* FANIC_ASSET_VERSION: 20260404 */
+/* FANIC_ASSET_VERSION: 202604043 */
 
 :root {
   --bg: #f1ede2;
@@ -424,6 +424,61 @@ a {
   pointer-events: none;
 }
 
+.donation-progress-shell {
+  display: none;
+}
+
+.home-page .donation-progress-shell {
+  position: absolute;
+  left: clamp(15.5rem, 26vw, 30.5rem);
+  right: clamp(0.8rem, 7vw, 18rem);
+  top: calc(56% + 0.36rem);
+  z-index: 3;
+  width: min(50rem, calc(100vw - clamp(17rem, 27vw, 31rem) - clamp(1rem, 8vw, 20rem)));
+  display: block;
+  pointer-events: auto;
+}
+
+.donation-progress-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--ink);
+}
+
+.donation-progress-label {
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--paper) 70%, transparent 30%);
+}
+
+.donation-progress-track {
+  position: relative;
+  display: block;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 78%, var(--paper) 22%);
+  overflow: hidden;
+}
+
+.donation-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1c845f 0%, #2cae72 100%);
+  border-radius: 999px;
+  transition: width 280ms ease;
+}
+
+.donation-progress-total {
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--paper) 70%, transparent 30%);
+}
+
 
 
 .home-page .site-header-row {
@@ -766,6 +821,14 @@ a {
 @media (min-width: 901px) {
   .home-page .home-tabs-shell {
     margin-top: 0;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1200px) {
+  .home-page .donation-progress-shell {
+    left: clamp(21rem, 43vw, 30rem);
+    right: clamp(0.8rem, 4vw, 3rem);
+    width: auto;
   }
 }
 
@@ -1659,6 +1722,25 @@ a {
   .home-page .home-tabs-shell {
     grid-area: tabs;
     margin-top: 0;
+  }
+
+  .home-page .donation-progress-shell {
+    position: absolute;
+    left: clamp(6.6rem, 40vw, 15.5rem);
+    right: 0.75rem;
+    top: calc(56% + 0.36rem);
+    width: auto;
+    margin: 0;
+    padding-inline: 0;
+  }
+
+  .donation-progress-link {
+    gap: 0.45rem;
+  }
+
+  .donation-progress-label,
+  .donation-progress-total {
+    font-size: 0.72rem;
   }
 
   .home-tabs-shell {

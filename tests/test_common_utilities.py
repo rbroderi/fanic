@@ -330,6 +330,41 @@ def test_session_and_upload_helpers(
     assert thumb_path.parts[-3:] == ("w1", "thumbs", "t1.jpg")
 
 
+def test_media_url_prefers_cdn_for_static_paths(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_media_url_cdn_test")
+
+    class _Settings:
+        media_base_url: str = "https://fanic.media"
+        media_cdn_base_url: str = "https://cdn.fanic.media"
+
+    monkeypatch.setattr(module, "_SETTINGS", _Settings(), raising=False)
+
+    assert module.media_url("/static/work-1/pages/001.avif") == "https://cdn.fanic.media/static/work-1/pages/001.avif"
+    assert (
+        module.media_url("static/fanart/thumbs/thumb.avif") == "https://cdn.fanic.media/static/fanart/thumbs/thumb.avif"
+    )
+    assert module.media_url("/fanart/alice") == "https://fanic.media/fanart/alice"
+    assert module.media_url("https://example.com/image.avif") == "https://example.com/image.avif"
+
+
+def test_media_url_uses_media_base_when_cdn_disabled(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module("src/fanic/cylinder_sites/common/responses.py", "common_media_url_base_test")
+
+    class _Settings:
+        media_base_url: str = "https://fanic.media"
+        media_cdn_base_url: str = ""
+
+    monkeypatch.setattr(module, "_SETTINGS", _Settings(), raising=False)
+
+    assert module.media_url("/static/work-1/pages/001.avif") == "https://fanic.media/static/work-1/pages/001.avif"
+
+
 def test_editor_gallery_uses_direct_thumb_src(
     load_route_module: Callable[[str, str], ModuleType],
     monkeypatch: pytest.MonkeyPatch,

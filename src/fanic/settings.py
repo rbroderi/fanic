@@ -156,6 +156,7 @@ class FanicSettings(BaseSettings):
     db_path: str | None
     log_path_template: str
     media_base_url: str
+    media_cdn_base_url: str = ""
     allowed_hosts_csv: str = ""
     openclip_cache_dir: str
 
@@ -166,6 +167,12 @@ class FanicSettings(BaseSettings):
     auth0_client_id: str = ""
     auth0_client_secret: str = ""
     auth0_domain: str = ""
+
+    # Donation/progress bar settings
+    buymeacoffee_api_key: str = ""
+    buymeacoffee_api_url: str = "https://developers.buymeacoffee.com/api/v1/supporters"
+    buymeacoffee_goal_amount: float = 500.0
+    buymeacoffee_page_url: str = "https://buymeacoffee.com/fanic.media"
 
     # Session and invite gate behavior
     alpha_invite_cookie_max_age: int
@@ -302,6 +309,11 @@ class FanicSettings(BaseSettings):
     @classmethod
     def _alpha_invite_codes_from_file(cls, value: Any) -> Any:
         return _resolve_value_from_file(value, "FANIC_ALPHA_INVITE_CODES_CSV_FILE", "alpha_invite_codes_csv")
+
+    @field_validator("buymeacoffee_api_key", mode="before")
+    @classmethod
+    def _buymeacoffee_api_key_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_BUYMEACOFFEE_API_KEY_FILE", "buymeacoffee_api_key")
 
     @field_validator(
         "max_cbz_upload_bytes",

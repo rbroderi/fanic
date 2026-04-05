@@ -73,6 +73,32 @@ def test_startup_invokes_dependencies_in_order(monkeypatch: pytest.MonkeyPatch) 
     assert calls == ["storage", "db", "fanart-health", "moderation"]
 
 
+def test_startup_logs_media_cdn_state(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class _Settings:
+        media_cdn_base_url: str = "https://cdn.fanic.media"
+
+        def validate_production_settings(self) -> None:
+            return None
+
+    monkeypatch.setattr(cylinder_main, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(cylinder_main, "ensure_storage_dirs", lambda: None)
+    monkeypatch.setattr(cylinder_main, "initialize_database", lambda: 0)
+    monkeypatch.setattr(cylinder_main, "_warn_on_fanart_storage_mismatch", lambda: None)
+    monkeypatch.setattr(
+        cylinder_main,
+        "initialize_moderation_models",
+        lambda: {"requested": False, "nsfw_ready": False, "style_ready": False},
+    )
+
+    with caplog.at_level(logging.INFO):
+        cylinder_main.startup()
+
+    assert "Media CDN enabled for /static/* via https://cdn.fanic.media" in caplog.text
+
+
 def test_create_app_calls_startup_and_cylinder_get_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

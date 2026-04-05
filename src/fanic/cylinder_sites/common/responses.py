@@ -84,6 +84,7 @@ SITE_COMMON_SCRIPTS_HTML = dedent(
     <script src="{static_asset_url("user-menu", "js")}"></script>
     <script src="{static_asset_url("confirm-actions", "js")}"></script>
     <script src="{static_asset_url("queued-images", "js")}"></script>
+    <script src="{static_asset_url("donation-progress", "js")}"></script>
     """
 ).strip()
 
@@ -409,6 +410,15 @@ def _site_header_html(template_name: str, replacements: dict[str, str]) -> str:
         </div>
         {resolved_extra_html}
         </div>
+        <div class="donation-progress-shell" data-donation-progress hidden>
+        <a class="donation-progress-link" href="/support" rel="noopener noreferrer" target="_blank">
+        <span class="donation-progress-label" id="donationProgressLabel">Keep the website running</span>
+        <span class="donation-progress-track" aria-hidden="true">
+        <span class="donation-progress-fill" id="donationProgressFill"></span>
+        </span>
+        <span class="donation-progress-total" id="donationProgressTotal">$0 / $0</span>
+        </a>
+        </div>
         </header>
         """
     ).strip()
@@ -598,6 +608,9 @@ def media_url(path: str) -> str:
         return trimmed
     if not trimmed.startswith("/"):
         trimmed = f"/{trimmed}"
+    media_cdn_base = _SETTINGS.media_cdn_base_url.strip()
+    if media_cdn_base and trimmed.startswith("/static/"):
+        return f"{media_cdn_base.rstrip('/')}{trimmed}"
     media_base = _SETTINGS.media_base_url.strip()
     if not media_base:
         return trimmed
