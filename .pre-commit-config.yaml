@@ -1,11 +1,22 @@
 repos:
+  - repo: local
+    hooks:
+      - id: prek-auto-update
+        name: prek-auto-update
+        entry: uv run prek auto-update
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        fail_fast: true
+
   - repo: https://github.com/bwhmather/ssort
     rev: 0.16.0
     hooks:
       - id: ssort
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: fix-byte-order-marker
       - id: check-merge-conflict
@@ -32,12 +43,12 @@ repos:
       - id: shfmt
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.35.4
+    rev: v1.45.0
     hooks:
       - id: typos
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.18.1
+    rev: v0.22.0
     hooks:
       - id: markdownlint-cli2
 
@@ -64,7 +75,7 @@ repos:
         stages: [pre-commit]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.15.9
     hooks:
       - id: ruff-check
         args: [--fix, --exclude, typings]
