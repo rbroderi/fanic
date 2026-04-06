@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=fanic
-Group=fanic
-SupplementaryGroups=www-data
+Group=www-data
+SupplementaryGroups=fanic
 PermissionsStartOnly=true
 WorkingDirectory=/opt/fanic
 Environment=PATH=/opt/fanic/.venv/bin:/usr/local/bin:/usr/bin:/bin
@@ -43,7 +43,7 @@ ProcSubset=pid
 SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 TasksMax=512
-MemoryMax=8G
+MemoryMax=12G
 ReadWritePaths=/mnt/storage /opt/fanic/runtime /var/log/fanic /opt/fanic/static
 ExecStartPre=/usr/bin/install -d -o fanic -g www-data -m 2775 /run/fanic
 ExecStartPre=/usr/bin/install -d -o fanic -g fanic -m 2775 /opt/fanic/static

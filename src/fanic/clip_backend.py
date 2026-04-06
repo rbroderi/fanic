@@ -1,11 +1,12 @@
 import os
 import time
+from typing import Any
 from typing import cast
 
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 import torch
-from tqdm import tqdm as tqdm
+from alive_progress import alive_bar
 
 from fanic.settings import get_settings
 from fanic.torch_helpers import call0
@@ -38,15 +39,32 @@ class _NoopProgress:
         return
 
 
+class _AliveProgress:
+    _ctx: Any
+    _bar: Any
+
+    def __init__(self, total: int, title: str, unit: str) -> None:
+        self._ctx = alive_bar(total=total, title=title, unit=unit)
+        self._bar = self._ctx.__enter__()
+
+    def update(self, step: int) -> None:
+        for _ in range(max(0, int(step))):
+            self._bar()
+
+    def set_postfix_str(self, _value: str) -> None:
+        return
+
+    def close(self) -> None:
+        self._ctx.__exit__(None, None, None)
+
+
 def _build_progress() -> object:
     if not _VERBOSE_LOAD:
         return _NoopProgress()
-    return tqdm(
+    return _AliveProgress(
         total=3,
-        desc="Loading CLIP backend",
+        title="Loading CLIP backend",
         unit="step",
-        leave=False,
-        disable=False,
     )
 
 

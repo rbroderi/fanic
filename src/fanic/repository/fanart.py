@@ -8,8 +8,8 @@ from typing import NotRequired
 from typing import TypedDict
 
 from fanic.db import get_connection
-from fanic.filesystem import delete_file
-from fanic.settings import FANART_DIR
+from fanic.media import get_media_service
+from fanic.settings import FANART_DIR as FANART_DIR
 from fanic.type_coercion import as_int
 from fanic.utils import slugify
 
@@ -855,12 +855,22 @@ def get_fanart_item_by_thumb_filename(thumb_filename: str) -> FanartItemRow | No
 
 def fanart_file_for(image_name: str) -> Path:
     normalized_image = image_name.strip().lstrip("/")
-    return FANART_DIR / "images" / normalized_image
+    media_service = get_media_service()
+    media_key = media_service.fanart_image_key(normalized_image)
+    resolved_path = media_service.local_path_for_key(media_key)
+    if resolved_path is None:
+        raise FileNotFoundError(f"No local media path available for key: {media_key}")
+    return resolved_path
 
 
 def fanart_thumb_for(thumb_name: str) -> Path:
     normalized_thumb = thumb_name.strip().lstrip("/")
-    return FANART_DIR / "thumbs" / normalized_thumb
+    media_service = get_media_service()
+    media_key = media_service.fanart_thumb_key(normalized_thumb)
+    resolved_path = media_service.local_path_for_key(media_key)
+    if resolved_path is None:
+        raise FileNotFoundError(f"No local media path available for key: {media_key}")
+    return resolved_path
 
 
 def delete_fanart_item(item_id: str) -> bool:
@@ -904,16 +914,18 @@ def delete_fanart_item(item_id: str) -> bool:
                 is not None
             )
 
+    media_service = get_media_service()
+
     if image_name and not image_in_use:
         try:
-            delete_file(fanart_file_for(image_name), missing_ok=True)
-        except OSError:
+            media_service.delete(media_service.fanart_image_key(image_name))
+        except Exception:
             pass
 
     if thumb_name and not thumb_in_use:
         try:
-            delete_file(fanart_thumb_for(thumb_name), missing_ok=True)
-        except OSError:
+            media_service.delete(media_service.fanart_thumb_key(thumb_name))
+        except Exception:
             pass
 
     return True

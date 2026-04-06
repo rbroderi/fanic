@@ -1,7 +1,7 @@
 import math
 from typing import cast
 
-import requests
+import niquests as requests
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike

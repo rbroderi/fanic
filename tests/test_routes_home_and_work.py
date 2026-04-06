@@ -3,7 +3,6 @@
 import json
 from collections.abc import Callable
 from io import BytesIO
-from pathlib import Path
 from time import perf_counter
 from types import ModuleType
 from typing import Any
@@ -227,7 +226,7 @@ def test_home_route_renders_fanart_tab(
     assert b"/static/fanart/thumbs/_objects/ab/thumb.avif" in result.data
     assert b'/fanart/file/fanart-1" target="_blank" rel="noopener noreferrer">Get link</a>' in result.data
     assert (
-        b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
+        b"/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=https%3A%2F%2Fmedia.fanic.media%2Fstatic%2Ffanart%2Fimages%2F_objects%2Fab%2Fimage.avif"
         in result.data
     )
     assert seen_filters["q"] == "ali"
@@ -378,7 +377,6 @@ def test_fanart_route_gallery_and_media(
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
@@ -458,7 +456,7 @@ def test_fanart_route_gallery_and_media(
     assert "/fanart/alice/art-1/delete" in rendered["grid"]
     assert "/fanart/alice/reader?item_id=art-1" in rendered["grid"]
     assert (
-        "/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=%2Fstatic%2Ffanart%2Fimages%2F_objects%2Faa%2Fimage.avif"
+        "/dmca?issue_type=copyright-dmca&work_title=Sky&claimed_url=https%3A%2F%2Fmedia.fanic.media%2Fstatic%2Ffanart%2Fimages%2F_objects%2Faa%2Fimage.avif"
         in rendered["grid"]
     )
 
@@ -506,10 +504,7 @@ def test_fanart_route_gallery_and_media(
     file_result = module.main(file_request, file_response)
 
     assert file_result.status_code == 302
-    assert file_result.headers["Location"] == "/static/fanart/images/_objects/aa/image.avif"
-
-    image_file = tmp_path / "image.avif"
-    image_file.write_bytes(b"image")
+    assert file_result.headers["Location"] == "https://media.fanic.media/static/fanart/images/_objects/aa/image.avif"
 
     monkeypatch.setattr(
         module,
@@ -521,25 +516,25 @@ def test_fanart_route_gallery_and_media(
             "title": "Sky",
         },
     )
-    monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
     from fanic.cylinder_sites.fanicsite import fanart_get_helpers
 
-    monkeypatch.setattr(fanart_get_helpers, "fanart_file_for", lambda *_: image_file)
+    class _DummyMediaService:
+        def fanart_image_key(self, image_name: str) -> str:
+            return f"fanart/images/{image_name.strip().lstrip('/')}"
 
-    captured: dict[str, str] = {}
+        def exists(self, key: str) -> bool:
+            return key == "fanart/images/_objects/aa/image.avif"
 
-    def fake_send_file_download(
-        response: ResponseLike,
-        file_path: Path,
-        filename: str | None = None,
-    ) -> ResponseLike:
-        captured["filename"] = filename if filename else ""
-        response.status_code = 200
-        response.content_type = "image/avif"
-        response.set_data(file_path.read_bytes())
-        return response
+        def get_bytes(self, key: str) -> bytes:
+            assert key == "fanart/images/_objects/aa/image.avif"
+            return b"image"
 
-    monkeypatch.setattr(module, "send_file", fake_send_file_download)
+    monkeypatch.setattr(module, "get_media_service", lambda: _DummyMediaService())
+    monkeypatch.setattr(
+        fanart_get_helpers,
+        "get_media_service",
+        lambda: _DummyMediaService(),
+    )
 
     download_request = dummy_request(path="/fanart/download/_objects/aa/image.avif")
     download_response = dummy_response()
@@ -547,7 +542,7 @@ def test_fanart_route_gallery_and_media(
 
     assert download_result.status_code == 200
     assert download_result.data == b"image"
-    assert captured["filename"] == "aliceartist_sky.avif"
+    assert download_result.headers["Content-Disposition"] == 'attachment; filename="aliceartist_sky.avif"'
 
     cbz_download_request = dummy_request(path="/fanart/alice/download/cbz")
     cbz_download_response = dummy_response()
@@ -699,15 +694,11 @@ def test_fanart_download_filename_uses_display_name_fallback(
     dummy_request: Callable[..., Any],
     dummy_response: Callable[[], ResponseLike],
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     module = load_route_module(
         "src/fanic/cylinder_sites/fanicsite/fanart.ex.get.py",
         "fanicsite_fanart_ex_get_download_filename_display_fallback_test",
     )
-
-    image_file = tmp_path / "image.avif"
-    image_file.write_bytes(b"image")
 
     monkeypatch.setattr(
         module,
@@ -718,30 +709,27 @@ def test_fanart_download_filename_uses_display_name_fallback(
             "title": "Sky",
         },
     )
-    monkeypatch.setattr(module, "fanart_file_for", lambda *_: image_file)
     monkeypatch.setattr(module, "_owner_profile_key", lambda *_: "AliceArtist")
 
-    captured: dict[str, str] = {}
+    class _DummyMediaService:
+        def fanart_image_key(self, image_name: str) -> str:
+            return f"fanart/images/{image_name.strip().lstrip('/')}"
 
-    def fake_send_file_download(
-        response: ResponseLike,
-        file_path: Path,
-        filename: str | None = None,
-    ) -> ResponseLike:
-        captured["filename"] = filename if filename else ""
-        response.status_code = 200
-        response.content_type = "image/avif"
-        response.set_data(file_path.read_bytes())
-        return response
+        def exists(self, key: str) -> bool:
+            return key == "fanart/images/_objects/aa/image.avif"
 
-    monkeypatch.setattr(module, "send_file", fake_send_file_download)
+        def get_bytes(self, key: str) -> bytes:
+            assert key == "fanart/images/_objects/aa/image.avif"
+            return b"image"
+
+    monkeypatch.setattr(module, "get_media_service", lambda: _DummyMediaService())
 
     download_request = dummy_request(path="/fanart/download/_objects/aa/image.avif")
     download_response = dummy_response()
     download_result = module.main(download_request, download_response)
 
     assert download_result.status_code == 200
-    assert captured["filename"] == "aliceartist_sky.avif"
+    assert download_result.headers["Content-Disposition"] == 'attachment; filename="aliceartist_sky.avif"'
 
 
 def test_fanart_reader_normalizes_legacy_image_filename_urls(

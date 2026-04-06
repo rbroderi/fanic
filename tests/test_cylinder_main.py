@@ -78,7 +78,7 @@ def test_startup_logs_media_cdn_state(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     class _Settings:
-        media_cdn_base_url: str = "https://cdn.fanic.media"
+        media_cdn_base_url: str = "https://media.fanic.media"
 
         def validate_production_settings(self) -> None:
             return None
@@ -96,7 +96,7 @@ def test_startup_logs_media_cdn_state(
     with caplog.at_level(logging.INFO):
         cylinder_main.startup()
 
-    assert "Media CDN enabled for /static/* via https://cdn.fanic.media" in caplog.text
+    assert "Media CDN enabled for image media paths via https://media.fanic.media" in caplog.text
 
 
 def test_create_app_calls_startup_and_cylinder_get_app(
@@ -288,24 +288,40 @@ def test_create_app_allows_admin_under_admin_paths(
     assert response_chunks == [b"ok"]
 
 
-def test_serve_invokes_waitress(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_serve_invokes_wsgiref_server(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_create_app() -> str:
         return "app-object"
 
-    def fake_waitress_serve(app: object, **kwargs: object) -> None:
+    class _FakeServer:
+        def __enter__(self) -> object:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def serve_forever(self) -> None:
+            captured["served"] = True
+
+    def fake_make_server(host: str, port: int, app: object) -> _FakeServer:
         captured["app"] = app
-        captured["host"] = kwargs.get("host")
-        captured["port"] = kwargs.get("port")
+        captured["host"] = host
+        captured["port"] = port
+        return _FakeServer()
 
     monkeypatch.setattr(cylinder_main, "create_app", fake_create_app)
-    monkeypatch.setattr("fanic.cylinder_main.waitress.serve", fake_waitress_serve)
+    monkeypatch.setattr(cylinder_main, "make_server", fake_make_server)
 
     result = cylinder_main.serve("127.0.0.1", 8000)
 
     assert result == 0
-    assert captured == {"app": "app-object", "host": "127.0.0.1", "port": 8000}
+    assert captured == {
+        "app": "app-object",
+        "host": "127.0.0.1",
+        "port": 8000,
+        "served": True,
+    }
 
 
 def test_serve_handles_keyboard_interrupt(
@@ -315,12 +331,21 @@ def test_serve_handles_keyboard_interrupt(
     def fake_create_app() -> str:
         return "app-object"
 
-    def fake_waitress_serve(app: object, **kwargs: object) -> None:
-        _ = (app, kwargs)
-        raise KeyboardInterrupt()
+    class _FakeServer:
+        def __enter__(self) -> object:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def serve_forever(self) -> None:
+            raise KeyboardInterrupt()
+
+    def fake_make_server(_host: str, _port: int, _app: object) -> _FakeServer:
+        return _FakeServer()
 
     monkeypatch.setattr(cylinder_main, "create_app", fake_create_app)
-    monkeypatch.setattr("fanic.cylinder_main.waitress.serve", fake_waitress_serve)
+    monkeypatch.setattr(cylinder_main, "make_server", fake_make_server)
 
     result = cylinder_main.serve("127.0.0.1", 8000)
 

@@ -7,7 +7,7 @@ from typing import cast
 
 from lazi.core import lazi
 
-from fanic.filesystem import delete_file
+from fanic.media import delete_file
 from fanic.settings import get_settings
 
 with lazi:

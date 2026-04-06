@@ -1,11 +1,8 @@
 import argparse
 import atexit
-import errno
 import functools
 import logging
-import shutil
 import signal
-import subprocess
 import traceback
 from collections.abc import Callable
 from datetime import datetime
@@ -14,7 +11,7 @@ from pathlib import Path
 
 from fanic.db import initialize_database
 from fanic.db import run_database_migrations
-from fanic.filesystem import delete_file
+from fanic.media import delete_file
 from fanic.settings import get_settings
 
 OK = 0
@@ -66,62 +63,6 @@ def _enable_beartype() -> None:
 _enable_beartype()
 
 
-def _compile_frontend_assets() -> int:
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    package_json = repo_root / "package.json"
-    if not package_json.exists():
-        _append_startup_log("frontend compile skipped: package.json not found")
-        return OK
-
-    npm_path = shutil.which("npm")
-    if not npm_path:
-        print(
-            "frontend compile skipped: npm not found. Install Node.js/npm or remove package.json if unused.",
-            flush=True,
-        )
-        _append_startup_log("frontend compile failed: npm not found")
-        return ERROR
-
-    try:
-        # npm_path is resolved via shutil.which("npm") and argv is fixed (no user-controlled interpolation).
-        completed = subprocess.run(  # nosemgrep: opt.semgrep.semgrep-official.python.lang.security.audit.dangerous-subprocess-use-audit
-            [npm_path, "run", "frontend:build"],
-            cwd=repo_root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except OSError as exc:
-        if exc.errno == errno.EACCES:
-            print(
-                (
-                    "frontend compile skipped: npm exists but execution is denied "
-                    "(check AppArmor/permissions). Using existing static assets."
-                ),
-                flush=True,
-            )
-            _append_startup_log("frontend compile skipped: npm permission denied, using existing static assets")
-            return OK
-        print(f"frontend compile failed: {exc}", flush=True)
-        _append_startup_log(f"frontend compile failed: {exc}")
-        return ERROR
-
-    if completed.returncode != 0:
-        output = completed.stdout if completed.stdout else ""
-        errors = completed.stderr if completed.stderr else ""
-        if output:
-            print(output, flush=True)
-        if errors:
-            print(errors, flush=True)
-        print("frontend compile failed", flush=True)
-        _append_startup_log(f"frontend compile failed: exit code {completed.returncode}")
-        return ERROR
-
-    print("frontend compile complete", flush=True)
-    _append_startup_log("frontend compile complete")
-    return OK
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="FANIC comic archive toolkit")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -155,21 +96,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preview conversion results without writing files or database changes",
     )
     convert_thumbs.set_defaults(command="convert-thumbs-avif")
-
-    runserver = subcommands.add_parser("serve", help="Run local web server")
-    runserver.add_argument("--host", default="127.0.0.1")
-    runserver.add_argument("--port", default=8000, type=int)
-    runserver.add_argument(
-        "--unix-socket",
-        default=None,
-        help="Bind to this Unix socket path instead of --host/--port",
-    )
-    runserver.add_argument(
-        "--unix-socket-perms",
-        default="660",
-        help="Unix socket permissions (octal string, used with --unix-socket)",
-    )
-    runserver.set_defaults(command="serve")
 
     backup_data = subcommands.add_parser(
         "backup-data",
@@ -284,26 +210,6 @@ def main() -> int:
                 f"updated_rows={result['updated_rows']}"
             )
             return OK
-        case "serve":
-            from fanic.cylinder_main import serve as serve
-
-            if args.unix_socket:
-                _append_startup_log(f"serve requested: unix_socket={args.unix_socket} perms={args.unix_socket_perms}")
-            else:
-                _append_startup_log(f"serve requested: host={args.host} port={args.port}")
-
-            compile_result = _compile_frontend_assets()
-            if compile_result != OK:
-                _append_startup_log("serve aborted: frontend compile failed")
-                return compile_result
-
-            _append_startup_log("serve starting web server")
-            return serve(
-                host=args.host,
-                port=args.port,
-                unix_socket=args.unix_socket,
-                unix_socket_perms=str(args.unix_socket_perms),
-            )
         case "backup-data":
             from fanic.db import create_runtime_backup as create_runtime_backup
 

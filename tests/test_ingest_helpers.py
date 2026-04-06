@@ -128,6 +128,33 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     utils_stub = ModuleType("fanic.utils")
     setattr(utils_stub, "slugify", slugify_value)
 
+    media_store: dict[str, bytes] = {}
+
+    class _MediaServiceStub:
+        def get_bytes(self, key: str) -> bytes:
+            if key not in media_store:
+                raise FileNotFoundError(key)
+            return media_store[key]
+
+        def put_bytes(
+            self,
+            key: str,
+            content: bytes,
+            content_type: str = "application/octet-stream",
+        ) -> None:
+            _ = content_type
+            media_store[key] = content
+
+        def exists(self, key: str) -> bool:
+            return key in media_store
+
+    media_stub = ModuleType("fanic.media")
+    setattr(media_stub, "get_media_service", lambda: _MediaServiceStub())
+    setattr(media_stub, "delete_file", noop)
+    setattr(media_stub, "delete_tree", noop)
+    setattr(media_stub, "copy_file", lambda src, dst: dst)
+    setattr(media_stub, "copy_tree", lambda src, dst: dst)
+
     monkeypatch.setitem(sys.modules, "fanic.settings", settings_stub)
     monkeypatch.setitem(sys.modules, "fanic.moderation", moderation_stub)
     monkeypatch.setitem(sys.modules, "fanic.repository", repository_stub)
@@ -135,6 +162,7 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setitem(sys.modules, "fanic.repository.shared", repository_stub)
     monkeypatch.setitem(sys.modules, "fanic.db", db_stub)
     monkeypatch.setitem(sys.modules, "fanic.utils", utils_stub)
+    monkeypatch.setitem(sys.modules, "fanic.media", media_stub)
 
     module_name = f"ingest_helpers_test_{tmp_path.name}"
     spec = importlib.util.spec_from_file_location(module_name, INGEST_PATH)
@@ -566,13 +594,8 @@ def test_convert_existing_thumbs_to_avif_counters(
     ingest = _load_ingest_with_stubs(monkeypatch, tmp_path)
 
     work_id = "w1"
-    pages_dir = tmp_path / "works" / work_id / "pages"
-    thumbs_dir = tmp_path / "works" / work_id / "thumbs"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    thumbs_dir.mkdir(parents=True, exist_ok=True)
-
     image_name = "source.png"
-    (pages_dir / image_name).write_bytes(_png_bytes((12, 12)))
+    source_bytes = _png_bytes((12, 12))
 
     rows: list[dict[str, object]] = [
         {
@@ -613,17 +636,37 @@ def test_convert_existing_thumbs_to_avif_counters(
         _ = (image, fmt, quality)
         return b"thumb-bytes"
 
-    def store_content_addressed_stub(
-        base_dir: Path,
+    class _MediaServiceForConvert:
+        def get_bytes(self, key: str) -> bytes:
+            if key == f"{work_id}/pages/{image_name}":
+                return source_bytes
+            raise FileNotFoundError(key)
+
+        def exists(self, key: str) -> bool:
+            _ = key
+            return False
+
+        def put_bytes(
+            self,
+            key: str,
+            content: bytes,
+            content_type: str = "application/octet-stream",
+        ) -> None:
+            _ = (key, content, content_type)
+            return None
+
+    def store_content_addressed_media_stub(
+        media_prefix: str,
         data: bytes,
         extension: str,
     ) -> str:
-        _ = (base_dir, data, extension)
+        _ = (media_prefix, data, extension)
         return "new-thumb.avif"
 
     monkeypatch.setattr(ingest, "get_connection", fake_get_connection)
+    monkeypatch.setattr(ingest, "get_media_service", lambda: _MediaServiceForConvert())
     monkeypatch.setattr(ingest, "_render_image_bytes", render_thumb_bytes_stub)
-    monkeypatch.setattr(ingest, "_store_content_addressed", store_content_addressed_stub)
+    monkeypatch.setattr(ingest, "_store_content_addressed_media", store_content_addressed_media_stub)
 
     result = ingest.convert_existing_thumbs_to_avif(dry_run=False)
 
@@ -1089,8 +1132,8 @@ def test_ingest_editor_page_existing_work_inserts_and_reconciles(
         _ = (image, fmt, quality)
         return b"encoded"
 
-    def store_page_stub(base_dir: Path, data: bytes, extension: str) -> str:
-        _ = (base_dir, data, extension)
+    def store_page_stub(media_prefix: str, data: bytes, extension: str) -> str:
+        _ = (media_prefix, data, extension)
         if extension == "avif" and len(replaced_pages) == 0:
             return "new-page.avif"
         return "new-thumb.avif"
@@ -1125,7 +1168,7 @@ def test_ingest_editor_page_existing_work_inserts_and_reconciles(
     monkeypatch.setattr(ingest, "moderate_image", moderate_image_explicit)
     monkeypatch.setattr(ingest, "list_work_page_rows", list_pages_stub)
     monkeypatch.setattr(ingest, "_render_image_bytes", render_image_bytes_stub)
-    monkeypatch.setattr(ingest, "_store_content_addressed", store_page_stub)
+    monkeypatch.setattr(ingest, "_store_content_addressed_media", store_page_stub)
     monkeypatch.setattr(ingest, "upsert_work", upsert_work_stub)
     monkeypatch.setattr(ingest, "replace_work_pages", replace_work_pages_stub)
     monkeypatch.setattr(
@@ -1306,8 +1349,8 @@ def test_editor_replace_page_image_paths(
 
     call_count = {"count": 0}
 
-    def store_stub(base_dir: Path, data: bytes, extension: str) -> str:
-        _ = (base_dir, data, extension)
+    def store_stub(media_prefix: str, data: bytes, extension: str) -> str:
+        _ = (media_prefix, data, extension)
         call_count["count"] += 1
         if call_count["count"] == 1:
             return "new-page.avif"
@@ -1354,7 +1397,7 @@ def test_editor_replace_page_image_paths(
     monkeypatch.setattr(ingest, "_require_editor_owner", require_owner_stub)
     monkeypatch.setattr(ingest, "list_work_page_rows", list_pages_stub)
     monkeypatch.setattr(ingest, "_render_image_bytes", render_image_bytes_stub)
-    monkeypatch.setattr(ingest, "_store_content_addressed", store_stub)
+    monkeypatch.setattr(ingest, "_store_content_addressed_media", store_stub)
     monkeypatch.setattr(ingest, "replace_work_pages", replace_pages_stub)
     monkeypatch.setattr(ingest, "list_work_chapters", list_chapters_stub)
     monkeypatch.setattr(ingest, "list_work_chapter_members", list_members_stub)

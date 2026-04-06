@@ -12,7 +12,7 @@ import structlog
 from fanic.cylinder_sites.common.protocols import FileUploadLike
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
-from fanic.settings import FANART_DIR
+from fanic.media import get_media_service
 from fanic.settings import STATIC_ASSETS_DIR
 from fanic.settings import get_settings
 
@@ -58,9 +58,8 @@ def safe_static_path(rel_path: str) -> Path | None:
     # Fanart media is stored under FANART_DIR but exposed at /static/fanart/*.
     if normalized_rel_path.startswith("fanart/"):
         fanart_rel_path = normalized_rel_path[len("fanart/") :]
-        candidate = (FANART_DIR / fanart_rel_path).resolve()
         try:
-            _ = candidate.relative_to(FANART_DIR)
+            candidate = get_media_service().local_path_for_key(f"fanart/{fanart_rel_path}")
         except ValueError:
             return None
         return candidate

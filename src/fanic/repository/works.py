@@ -15,8 +15,9 @@ from urllib.parse import quote
 import tomli_w
 
 from fanic.db import get_connection
-from fanic.filesystem import delete_file
-from fanic.filesystem import delete_tree
+from fanic.media import delete_file
+from fanic.media import delete_tree
+from fanic.media import media_public_path_from_key
 from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
 from fanic.type_coercion import as_int
@@ -932,11 +933,13 @@ def get_manifest(work_id: str) -> dict[str, object] | None:
         thumb_value = page["thumb_filename"]
         thumb_filename = str(thumb_value) if thumb_value is not None else image_filename
         work_id_quoted = quote(work_id, safe="")
+        image_key = f"{work_id_quoted}/pages/{quote(image_filename, safe='/')}"
+        thumb_key = f"{work_id_quoted}/thumbs/{quote(thumb_filename, safe='/')}"
         manifest_pages.append(
             {
                 "index": int(page["page_index"]),
-                "image_url": f"/static/{work_id_quoted}/pages/{quote(image_filename, safe='/')}",
-                "thumb_url": f"/static/{work_id_quoted}/thumbs/{quote(thumb_filename, safe='/')}",
+                "image_url": media_public_path_from_key(image_key),
+                "thumb_url": media_public_path_from_key(thumb_key),
                 "width": page["width"],
                 "height": page["height"],
             }

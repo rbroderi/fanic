@@ -28,7 +28,6 @@ from fanic.cylinder_sites.common.security import validate_page_upload_policy
 from fanic.cylinder_sites.common.security import validate_saved_upload_size
 from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.fanicsite.comic.upload_page import render_upload_page
-from fanic.filesystem import delete_tree
 from fanic.ingest import ModerationBlockedError
 from fanic.ingest import editor_add_chapter
 from fanic.ingest import editor_delete_chapter
@@ -40,6 +39,7 @@ from fanic.ingest import editor_update_chapter
 from fanic.ingest import ingest_cbz
 from fanic.ingest import ingest_editor_page
 from fanic.ingest_progress import set_progress
+from fanic.media import delete_tree
 from fanic.moderation import get_explicit_threshold
 from fanic.repository.works import get_work
 from fanic.repository.works import list_work_chapters

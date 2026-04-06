@@ -6,17 +6,19 @@ import pytest
 import fanic.clip_backend as clip_backend
 
 
-class _DummyProgress:
+class _DummyAliveProgressContext:
+    def __call__(self) -> None:
+        return None
+
+
+class _DummyAliveBar:
     def __init__(self, *args: object, **kwargs: object) -> None:
         _ = (args, kwargs)
 
-    def update(self, value: int) -> None:
-        _ = value
+    def __enter__(self) -> _DummyAliveProgressContext:
+        return _DummyAliveProgressContext()
 
-    def set_postfix_str(self, value: str) -> None:
-        _ = value
-
-    def close(self) -> None:
+    def __exit__(self, *_args: object) -> None:
         return None
 
 
@@ -42,7 +44,7 @@ def _reset_backend_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(clip_backend, "_last_load_failed_at", 0.0)
     monkeypatch.setattr(clip_backend, "_LOAD_RETRY_SECONDS", 5.0)
     monkeypatch.setattr(clip_backend, "_CACHE_DIR", ".")
-    monkeypatch.setattr(clip_backend, "tqdm", _DummyProgress)
+    monkeypatch.setattr(clip_backend, "alive_bar", _DummyAliveBar)
 
 
 def test_ensure_backend_loaded_success_and_cached(

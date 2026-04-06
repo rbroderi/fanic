@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from typing import cast
+from urllib.parse import quote
 from zipfile import ZIP_DEFLATED
 from zipfile import ZipFile
 
@@ -16,11 +17,14 @@ from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import json_response
 from fanic.cylinder_sites.common.responses import page_file_for
+from fanic.cylinder_sites.common.responses import redirect_see_other
 from fanic.cylinder_sites.common.responses import send_file
 from fanic.cylinder_sites.common.responses import stable_api_error
 from fanic.cylinder_sites.common.responses import thumb_file_for
 from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.session import current_user
+from fanic.media import MediaService
+from fanic.media import build_media_service
 from fanic.repository.works import can_view_work
 from fanic.repository.works import get_manifest
 from fanic.repository.works import get_page_files
@@ -34,9 +38,11 @@ from fanic.repository.works import list_works
 from fanic.repository.works import load_progress
 from fanic.repository.works import set_work_cbz_path
 from fanic.settings import CBZ_DIR
+from fanic.settings import get_settings
 from fanic.utils import slugify
 
 ET_ANY = cast(Any, ET)
+_MEDIA_SERVICE: MediaService = build_media_service(get_settings())
 
 
 def _can_view_work(request: RequestLike, work: Mapping[str, object]) -> bool:
@@ -273,6 +279,11 @@ def _current_export_key(work_id: str, work: Mapping[str, object]) -> str:
     return f"legacy:{updated_at}:{page_count}"
 
 
+def _export_key_filename_token(export_key: str) -> str:
+    token = "".join(character.lower() if character.isalnum() else "-" for character in export_key.strip()).strip("-")
+    return token if token else "v0"
+
+
 def _cache_meta_path(archive_path: Path) -> Path:
     return archive_path.with_suffix(f"{archive_path.suffix}.meta.json")
 
@@ -296,11 +307,61 @@ def _write_cache_meta(cache_path: Path, payload: dict[str, object]) -> None:
     )
 
 
-def _resolve_archive_path(work_id: str, work: Mapping[str, object]) -> Path:
+def _resolve_archive_path(
+    work_id: str,
+    work: Mapping[str, object],
+    export_key: str,
+) -> Path:
+    token = _export_key_filename_token(export_key)
     cbz_path = str(work.get("cbz_path", "") if work.get("cbz_path", "") else "").strip()
-    if cbz_path:
-        return Path(cbz_path)
-    return CBZ_DIR / f"{work_id}.cbz"
+    if cbz_path and "://" not in cbz_path:
+        candidate = Path(cbz_path)
+        if candidate.suffix.lower() == ".cbz" and token in candidate.stem.lower():
+            return candidate
+    return CBZ_DIR / f"{work_id}.{token}.cbz"
+
+
+def _download_archive_filename(
+    work_id: str,
+    work: Mapping[str, object],
+    export_key: str,
+) -> str:
+    slug = work.get("slug")
+    base_name = str(slug).strip() if isinstance(slug, str) and slug.strip() else work_id
+    token = _export_key_filename_token(export_key)
+    requested_name = f"{base_name}.{token}.cbz"
+    return _safe_filename(requested_name, f"{work_id}.{token}.cbz")
+
+
+def _archive_media_key(work_id: str, filename: str) -> str:
+    safe_work_id = quote(work_id.strip(), safe="")
+    safe_filename = quote(filename.strip(), safe="")
+    return f"{safe_work_id}/downloads/{safe_filename}"
+
+
+def _archive_cdn_url(media_key: str) -> str:
+    public_path = _MEDIA_SERVICE.public_path_for_key(media_key)
+    media_cdn_base = _MEDIA_SERVICE.settings.media_cdn_base_url.strip()
+    if media_cdn_base:
+        return f"{media_cdn_base.rstrip('/')}{public_path}"
+    return _MEDIA_SERVICE.media_url(public_path)
+
+
+def _publish_download_archive(
+    work_id: str,
+    work: Mapping[str, object],
+    archive_path: Path,
+    export_key: str,
+) -> tuple[str, str]:
+    filename = _download_archive_filename(work_id, work, export_key)
+    media_key = _archive_media_key(work_id, filename)
+    if not _MEDIA_SERVICE.exists(media_key):
+        _MEDIA_SERVICE.put_bytes(
+            media_key,
+            archive_path.read_bytes(),
+            content_type="application/vnd.comicbook+zip",
+        )
+    return media_key, _archive_cdn_url(media_key)
 
 
 def _build_cbz_export(
@@ -361,9 +422,9 @@ def _build_cbz_export(
             archive.write(source_path, arcname=arcname)
 
 
-def _ensure_download_archive(work_id: str, work: Mapping[str, object]) -> Path:
-    archive_path = _resolve_archive_path(work_id, work)
+def _ensure_download_archive(work_id: str, work: Mapping[str, object]) -> tuple[Path, str]:
     current_key = _current_export_key(work_id, work)
+    archive_path = _resolve_archive_path(work_id, work, current_key)
     cache_path = _cache_meta_path(archive_path)
     cache_meta = _read_cache_meta(cache_path)
 
@@ -371,7 +432,7 @@ def _ensure_download_archive(work_id: str, work: Mapping[str, object]) -> Path:
         archive_path.exists() and cache_meta is not None and str(cache_meta.get("export_key", "")) == current_key
     )
     if cache_hit:
-        return archive_path
+        return archive_path, current_key
 
     _build_cbz_export(work_id, work, archive_path)
     set_work_cbz_path(work_id, str(archive_path))
@@ -383,7 +444,7 @@ def _ensure_download_archive(work_id: str, work: Mapping[str, object]) -> Path:
             "archive_path": str(archive_path),
         },
     )
-    return archive_path
+    return archive_path, current_key
 
 
 def _version_page_files(
@@ -475,7 +536,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return json_response(response, {"detail": "Work not found"}, 404)
 
         try:
-            archive_path = _ensure_download_archive(work_id, work)
+            archive_path, export_key = _ensure_download_archive(work_id, work)
         except Exception as exc:
             log_exception(
                 request,
@@ -493,10 +554,31 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                 exc=exc,
             )
 
-        slug = work.get("slug")
-        requested_name = f"{slug}.cbz" if isinstance(slug, str) else f"{work_id}.cbz"
-        filename = _safe_filename(requested_name, f"{work_id}.cbz")
-        return send_file(response, archive_path, filename)
+        try:
+            _, archive_url = _publish_download_archive(
+                work_id,
+                work,
+                archive_path,
+                export_key,
+            )
+        except Exception as exc:
+            log_exception(
+                request,
+                code="download_archive_publish_failed",
+                exc=exc,
+                message="Failed to publish download archive",
+                extra={"work_id": work_id},
+            )
+            return stable_api_error(
+                request,
+                response,
+                error="download_archive_publish_failed",
+                public_detail="Unable to publish CBZ download archive",
+                status_code=500,
+                exc=exc,
+            )
+
+        return redirect_see_other(response, archive_url)
 
     if len(tail) == 4 and tail[1] == "pages":
         work = get_work(work_id)

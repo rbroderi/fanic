@@ -15,8 +15,20 @@ enable_beartype = true
 log_path_template = "/var/log/fanic/%TIMESTAMP%.log"
 media_base_url = "https://fanic.media"
 # Optional CDN host for /static/* media URLs (covers/pages/fanart). Leave empty to disable.
-media_cdn_base_url = "https://cdn.fanic.media"
-allowed_hosts_csv = "fanic.media"
+media_cdn_base_url = "https://media.fanic.media"
+# Media backend: local (filesystem) or bunny (Bunny Storage API).
+media_backend = "bunny"
+# Bunny Storage settings (used when media_backend = "bunny").
+media_bunny_storage_zone = "fanicmedia"
+media_bunny_pull_zone = "fanicmedia"
+media_bunny_storage_api_base_url = "https://ny.storage.bunnycdn.com"
+# Prefer using RO key for reads and RW key for writes/deletes.
+media_bunny_api_key_ro = ""
+media_bunny_api_key_rw = ""
+media_bunny_upload_workers = 8
+media_bunny_skip_exists_check = true
+media_bunny_timeout_seconds = 30.0
+allowed_hosts_csv = "fanic.media,media.fanic.media"
 profile_history_limit = 100
 
 # Session cookie behavior.

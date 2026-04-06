@@ -157,6 +157,15 @@ class FanicSettings(BaseSettings):
     log_path_template: str
     media_base_url: str
     media_cdn_base_url: str = ""
+    media_backend: str = "local"
+    media_bunny_storage_zone: str = ""
+    media_bunny_pull_zone: str = ""
+    media_bunny_storage_api_base_url: str = "https://storage.bunnycdn.com"
+    media_bunny_api_key_ro: str = ""
+    media_bunny_api_key_rw: str = ""
+    media_bunny_upload_workers: int = 8
+    media_bunny_skip_exists_check: bool = True
+    media_bunny_timeout_seconds: float = 30.0
     allowed_hosts_csv: str = ""
     openclip_cache_dir: str
 
@@ -263,6 +272,29 @@ class FanicSettings(BaseSettings):
     def _expand_openclip_cache_dir(cls, value: str) -> str:
         return str(Path(value).expanduser())
 
+    @field_validator("media_backend", mode="before")
+    @classmethod
+    def _validate_media_backend(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError("media_backend must be a string")
+        normalized = value.strip().lower()
+        if normalized not in {"local", "bunny"}:
+            raise ValueError("media_backend must be either 'local' or 'bunny'")
+        return normalized
+
+    @field_validator("media_bunny_upload_workers", mode="before")
+    @classmethod
+    def _validate_media_bunny_upload_workers(cls, value: Any) -> int:
+        if isinstance(value, int):
+            workers = value
+        elif isinstance(value, str) and value.strip():
+            workers = int(value.strip())
+        else:
+            raise ValueError("media_bunny_upload_workers must be an integer >= 1")
+        if workers < 1:
+            raise ValueError("media_bunny_upload_workers must be >= 1")
+        return workers
+
     @field_validator("thumbnail_max_size", mode="before")
     @classmethod
     def _validate_thumbnail_max_size(cls, value: Any) -> str:
@@ -314,6 +346,16 @@ class FanicSettings(BaseSettings):
     @classmethod
     def _buymeacoffee_api_key_from_file(cls, value: Any) -> Any:
         return _resolve_value_from_file(value, "FANIC_BUYMEACOFFEE_API_KEY_FILE", "buymeacoffee_api_key")
+
+    @field_validator("media_bunny_api_key_ro", mode="before")
+    @classmethod
+    def _media_bunny_api_key_ro_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_MEDIA_BUNNY_API_KEY_RO_FILE", "bunnystorage_ro")
+
+    @field_validator("media_bunny_api_key_rw", mode="before")
+    @classmethod
+    def _media_bunny_api_key_rw_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_MEDIA_BUNNY_API_KEY_RW_FILE", "bunnystorage_rw")
 
     @field_validator(
         "max_cbz_upload_bytes",
@@ -499,8 +541,8 @@ _SETTINGS = get_settings()
 DATA_ROOT = _SETTINGS.data_root
 DB_PATH = _SETTINGS.database_path
 PACKAGE_ROOT = _SETTINGS.package_root
-CBZ_DIR = DATA_ROOT / "cbz"
-WORKS_DIR = DATA_ROOT / "works"
+CBZ_DIR: Path = DATA_ROOT / "cbz"
+WORKS_DIR: Path = DATA_ROOT / "works"
 STATIC_ASSETS_DIR = DATA_ROOT / "static"
 FANART_DIR = DATA_ROOT / "fanart"
 DYNAMIC_TEMPLATE_DIR = (PACKAGE_ROOT / "dynamic").resolve()

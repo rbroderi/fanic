@@ -1,5 +1,8 @@
 import hashlib
 import uuid
+from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait
 from io import BytesIO
 from pathlib import Path
 
@@ -8,10 +11,10 @@ from PIL import Image
 from PIL import UnidentifiedImageError
 
 from fanic.ingest import ModerationBlockedError
+from fanic.media import get_media_service
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
 from fanic.repository.fanart import create_fanart_item
-from fanic.settings import FANART_DIR
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
@@ -20,6 +23,12 @@ THUMBNAIL_MAX_DIMENSIONS = _SETTINGS.thumbnail_max_dimensions
 IMAGE_AVIF_QUALITY = _SETTINGS.image_avif_quality
 THUMBNAIL_AVIF_QUALITY = _SETTINGS.thumbnail_avif_quality
 MAX_UPLOAD_IMAGE_PIXELS = _SETTINGS.max_upload_image_pixels
+_BUNNY_SKIP_EXISTS_CHECK = (
+    True if (_SETTINGS.media_backend.strip().lower() == "bunny" and _SETTINGS.media_bunny_skip_exists_check) else False
+)
+_BUNNY_UPLOAD_WORKERS = (
+    _SETTINGS.media_bunny_upload_workers if _SETTINGS.media_backend.strip().lower() == "bunny" else 1
+)
 
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
@@ -92,24 +101,38 @@ def _content_addressed_rel_path(data: bytes, extension: str) -> str:
     return f"_objects/{digest[:2]}/{digest}.{resolved_ext}"
 
 
-def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
-    rel_path = _content_addressed_rel_path(data, extension)
-    target = (base_dir / rel_path).resolve()
-    resolved_base = base_dir.resolve()
-    try:
-        _ = target.relative_to(resolved_base)
-    except ValueError as exc:
-        raise ValueError(f"Upload target escapes fanart storage: {target}") from exc
+def _upload_media_key(media_key: str, data: bytes) -> None:
+    media_service = get_media_service()
+    if _BUNNY_SKIP_EXISTS_CHECK:
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+        return
+    if not media_service.exists(media_key):
+        media_service.put_bytes(media_key, data, content_type="image/avif")
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
+
+def _store_content_addressed(
+    data: bytes,
+    extension: str,
+    media_prefix: str,
+    *,
+    upload_executor: ThreadPoolExecutor | None = None,
+    pending_uploads: set[Future[None]] | None = None,
+) -> str:
+    rel_path = _content_addressed_rel_path(data, extension)
+    media_service = get_media_service()
+    media_key = f"{media_prefix.strip().strip('/')}/{rel_path}"
+
+    if upload_executor is not None and pending_uploads is not None:
+        future = upload_executor.submit(_upload_media_key, media_key, data)
+        pending_uploads.add(future)
         return rel_path
 
-    try:
-        with target.open("xb") as handle:
-            handle.write(data)
-    except FileExistsError:
-        pass
+    if _BUNNY_SKIP_EXISTS_CHECK:
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+        return rel_path
+
+    if not media_service.exists(media_key):
+        media_service.put_bytes(media_key, data, content_type="image/avif")
     return rel_path
 
 
@@ -142,14 +165,17 @@ def ingest_fanart_image(
         suggested_rating_for_nsfw(float(moderation["nsfw_score"])),
     )
 
-    images_dir = FANART_DIR / "images"
-    thumbs_dir = FANART_DIR / "thumbs"
-    images_dir.mkdir(parents=True, exist_ok=True)
-    thumbs_dir.mkdir(parents=True, exist_ok=True)
-
     width: int | None = None
     height: int | None = None
+    upload_executor: ThreadPoolExecutor | None = None
     try:
+        pending_uploads: set[Future[None]] = set()
+        if _BUNNY_UPLOAD_WORKERS > 1:
+            upload_executor = ThreadPoolExecutor(
+                max_workers=min(_BUNNY_UPLOAD_WORKERS, 2),
+                thread_name_prefix="fanic-fanart-upload",
+            )
+
         with Image.open(image_path) as image:
             _assert_image_pixels_within_limit(image, "Uploaded fanart image")
             width, height = image.size
@@ -160,7 +186,13 @@ def ingest_fanart_image(
                 fmt="AVIF",
                 quality=int(IMAGE_AVIF_QUALITY),
             )
-            image_name = _store_content_addressed(images_dir, page_bytes, "avif")
+            image_name = _store_content_addressed(
+                page_bytes,
+                "avif",
+                "fanart/images",
+                upload_executor=upload_executor,
+                pending_uploads=pending_uploads,
+            )
 
             thumb_image = _prepare_image_for_avif(image)
             thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
@@ -169,9 +201,23 @@ def ingest_fanart_image(
                 fmt="AVIF",
                 quality=int(THUMBNAIL_AVIF_QUALITY),
             )
-            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
+            thumb_name = _store_content_addressed(
+                thumb_bytes,
+                "avif",
+                "fanart/thumbs",
+                upload_executor=upload_executor,
+                pending_uploads=pending_uploads,
+            )
+
+        if pending_uploads:
+            done, _ = wait(pending_uploads)
+            for finished in done:
+                finished.result()
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert fanart image") from exc
+    finally:
+        if upload_executor is not None:
+            upload_executor.shutdown(wait=True)
 
     item_id = uuid.uuid4().hex[:12]
     _ = create_fanart_item(

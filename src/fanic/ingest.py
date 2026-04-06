@@ -5,21 +5,27 @@ import uuid
 from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from concurrent.futures import FIRST_COMPLETED
+from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait
 from io import BytesIO
 from pathlib import Path
 from pathlib import PurePosixPath
+from typing import Any
 from typing import cast
 from zipfile import ZipFile
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
+from alive_progress import alive_bar
 from defusedxml import ElementTree as ET
 from PIL import Image
 from PIL import UnidentifiedImageError
-from tqdm import tqdm
 
 from fanic.db import get_connection
-from fanic.filesystem import delete_file
 from fanic.ingest_editor_service import editor_delete_page_use_case
+from fanic.media import delete_file
+from fanic.media import get_media_service
 from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
@@ -60,9 +66,46 @@ MAX_CBZ_MEMBER_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_member_uncompressed_bytes
 MAX_CBZ_TOTAL_UNCOMPRESSED_BYTES = _SETTINGS.max_cbz_total_uncompressed_bytes
 USER_PAGE_SOFT_CAP = _SETTINGS.user_page_soft_cap
 USER_PAGE_QUALITY_RAMP_MULTIPLIER = _SETTINGS.user_page_quality_ramp_multiplier
+_BUNNY_UPLOAD_WORKERS = (
+    _SETTINGS.media_bunny_upload_workers if _SETTINGS.media_backend.strip().lower() == "bunny" else 1
+)
+_BUNNY_SKIP_EXISTS_CHECK = (
+    True if (_SETTINGS.media_backend.strip().lower() == "bunny" and _SETTINGS.media_bunny_skip_exists_check) else False
+)
 
 type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
+
+
+class _NoopProgress:
+    def update(self, _step: int = 1) -> None:
+        return
+
+    def set_postfix_str(self, _value: str) -> None:
+        return
+
+    def close(self) -> None:
+        return
+
+
+class _AliveProgress:
+    _ctx: Any
+    _bar: Any
+
+    def __init__(self, total: int, title: str, unit: str) -> None:
+        self._ctx = alive_bar(total=total, title=title, unit=unit)
+        self._bar = self._ctx.__enter__()
+
+    def update(self, step: int = 1) -> None:
+        for _ in range(max(0, step)):
+            self._bar()
+
+    def set_postfix_str(self, _value: str) -> None:
+        # alive-progress supports richer messaging, but ingest only needs phase hooks.
+        return
+
+    def close(self) -> None:
+        self._ctx.__exit__(None, None, None)
 
 
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
@@ -567,7 +610,7 @@ def _assert_safe_storage_dir(base_dir: Path) -> None:
     _assert_path_not_symlink(resolved_base)
 
 
-def _safe_work_dirs(work_id: str) -> tuple[Path, Path, Path]:
+def _safe_work_dirs(work_id: str) -> tuple[Path, Path, Path]:  # pyright: ignore[reportUnusedFunction]
     work_dir = WORKS_DIR / work_id
     pages_dir = work_dir / "pages"
     thumbs_dir = work_dir / "thumbs"
@@ -636,7 +679,7 @@ def _assert_safe_storage_target(base_dir: Path, target: Path) -> None:
         raise ValueError(f"Upload target escapes storage root: {target}") from exc
 
 
-def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:
+def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str:  # pyright: ignore[reportUnusedFunction]
     _assert_safe_storage_dir(base_dir)
     rel_path = _content_addressed_rel_path(data, extension)
     target = base_dir / rel_path
@@ -660,6 +703,82 @@ def _store_content_addressed(base_dir: Path, data: bytes, extension: str) -> str
         # Another request wrote the same hash concurrently.
         pass
     return rel_path
+
+
+def _upload_media_key(
+    media_key: str,
+    data: bytes,
+    skip_exists_check: bool,
+) -> None:
+    media_service = get_media_service()
+    if skip_exists_check:
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+        return
+    if not media_service.exists(media_key):
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+
+
+def _drain_pending_uploads(pending_uploads: set[Future[None]]) -> None:
+    if not pending_uploads:
+        return
+    max_pending = max(8, _BUNNY_UPLOAD_WORKERS * 4)
+    if len(pending_uploads) < max_pending:
+        return
+
+    done, still_pending = wait(
+        pending_uploads,
+        return_when=FIRST_COMPLETED,
+    )
+    pending_uploads.clear()
+    pending_uploads.update(still_pending)
+    for finished in done:
+        finished.result()
+
+
+def _store_content_addressed_media(
+    media_prefix: str,
+    data: bytes,
+    extension: str,
+    *,
+    upload_executor: ThreadPoolExecutor | None = None,
+    pending_uploads: set[Future[None]] | None = None,
+) -> str:
+    normalized_prefix = media_prefix.strip().strip("/")
+    if not normalized_prefix:
+        raise ValueError("media_prefix cannot be empty")
+
+    rel_path = _content_addressed_rel_path(data, extension)
+    media_key = f"{normalized_prefix}/{rel_path}"
+    media_service = get_media_service()
+
+    if upload_executor is not None and pending_uploads is not None:
+        future = upload_executor.submit(
+            _upload_media_key,
+            media_key,
+            data,
+            _BUNNY_SKIP_EXISTS_CHECK,
+        )
+        pending_uploads.add(future)
+        _drain_pending_uploads(pending_uploads)
+        return rel_path
+
+    if _BUNNY_SKIP_EXISTS_CHECK:
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+        return rel_path
+
+    if not media_service.exists(media_key):
+        media_service.put_bytes(media_key, data, content_type="image/avif")
+    return rel_path
+
+
+def _wait_for_pending_uploads(pending_uploads: set[Future[None]]) -> None:
+    if not pending_uploads:
+        return
+
+    done, _ = wait(pending_uploads)
+    for finished in done:
+        finished.result()
+    pending_uploads.clear()
 
 
 def _elevate_rating(current: object, suggested: str | None) -> str:
@@ -701,8 +820,6 @@ def ingest_cbz(
         title = str(metadata.get("title") if metadata.get("title") else cbz_path.stem)
         work_id = str(metadata.get("id") if metadata.get("id") else uuid.uuid4().hex[:12])
         slug = str(metadata.get("slug") if metadata.get("slug") else slugify(title))
-
-        _, pages_dir, thumbs_dir = _safe_work_dirs(work_id)
 
         candidate_members = [member for member in zip_file.namelist() if member and not member.endswith("/")]
 
@@ -757,19 +874,24 @@ def ingest_cbz(
         pages: list[WorkPageRow] = []
         uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
         max_nsfw_score = 0.0
-        member_iter: object = image_members
-        progress = None
+        progress: _NoopProgress | _AliveProgress = _NoopProgress()
+        upload_executor: ThreadPoolExecutor | None = None
+        pending_uploads: set[Future[None]] = set()
         if show_progress:
-            progress = tqdm(
-                image_members,
-                desc=progress_desc,
+            progress = _AliveProgress(
+                total=len(image_members),
+                title=progress_desc,
                 unit="page",
-                leave=True,
             )
-            member_iter = progress
 
         try:
-            for index, member in enumerate(member_iter, start=1):
+            if _BUNNY_UPLOAD_WORKERS > 1:
+                upload_executor = ThreadPoolExecutor(
+                    max_workers=_BUNNY_UPLOAD_WORKERS,
+                    thread_name_prefix="fanic-bunny-upload",
+                )
+
+            for index, member in enumerate(image_members, start=1):
                 if progress_hook is not None:
                     progress_hook(
                         "moderate",
@@ -777,8 +899,7 @@ def ingest_cbz(
                         index,
                         len(image_members),
                     )
-                if progress is not None:
-                    progress.set_postfix_str("moderate")
+                progress.set_postfix_str("moderate")
                 extracted = zip_file.read(member)
                 moderation = moderate_image_bytes(extracted, suffix=Path(member).suffix)
                 if not moderation["allow"]:
@@ -790,8 +911,7 @@ def ingest_cbz(
                 width = None
                 height = None
                 try:
-                    if progress is not None:
-                        progress.set_postfix_str("decode")
+                    progress.set_postfix_str("decode")
                     if progress_hook is not None:
                         progress_hook(
                             "decode",
@@ -803,8 +923,7 @@ def ingest_cbz(
                         _assert_image_pixels_within_limit(image, "Uploaded CBZ page")
                         width, height = image.size
 
-                        if progress is not None:
-                            progress.set_postfix_str("encode-page")
+                        progress.set_postfix_str("encode-page")
                         if progress_hook is not None:
                             progress_hook(
                                 "encode-page",
@@ -821,8 +940,7 @@ def ingest_cbz(
                             quality=effective_quality,
                         )
 
-                        if progress is not None:
-                            progress.set_postfix_str("store-page")
+                        progress.set_postfix_str("store-page")
                         if progress_hook is not None:
                             progress_hook(
                                 "store-page",
@@ -830,14 +948,15 @@ def ingest_cbz(
                                 index,
                                 len(image_members),
                             )
-                        image_name = _store_content_addressed(
-                            pages_dir,
+                        image_name = _store_content_addressed_media(
+                            f"{work_id}/pages",
                             page_bytes,
                             "avif",
+                            upload_executor=upload_executor,
+                            pending_uploads=pending_uploads,
                         )
 
-                        if progress is not None:
-                            progress.set_postfix_str("encode-thumb")
+                        progress.set_postfix_str("encode-thumb")
                         if progress_hook is not None:
                             progress_hook(
                                 "encode-thumb",
@@ -853,8 +972,7 @@ def ingest_cbz(
                             quality=THUMBNAIL_AVIF_QUALITY,
                         )
 
-                        if progress is not None:
-                            progress.set_postfix_str("store-thumb")
+                        progress.set_postfix_str("store-thumb")
                         if progress_hook is not None:
                             progress_hook(
                                 "store-thumb",
@@ -862,10 +980,12 @@ def ingest_cbz(
                                 index,
                                 len(image_members),
                             )
-                        thumb_name = _store_content_addressed(
-                            thumbs_dir,
+                        thumb_name = _store_content_addressed_media(
+                            f"{work_id}/thumbs",
                             thumb_bytes,
                             "avif",
+                            upload_executor=upload_executor,
+                            pending_uploads=pending_uploads,
                         )
                 except (UnidentifiedImageError, OSError, ValueError) as exc:
                     raise ValueError(f"Failed to convert page to AVIF: {member}") from exc
@@ -879,10 +999,14 @@ def ingest_cbz(
                         "height": height,
                     }
                 )
+                progress.update(1)
+
+            _wait_for_pending_uploads(pending_uploads)
         finally:
-            if progress is not None:
-                progress.set_postfix_str("done")
-                progress.close()
+            if upload_executor is not None:
+                upload_executor.shutdown(wait=True)
+            progress.set_postfix_str("done")
+            progress.close()
 
         rating_before = _normalize_rating(str(metadata.get("rating", "Not Rated")))
         rating_after = _elevate_rating(
@@ -976,23 +1100,28 @@ def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, objec
         image_filename = str(row["image_filename"] if row["image_filename"] else "")
         thumb_filename = str(row["thumb_filename"] if row["thumb_filename"] else "")
 
-        thumbs_dir = WORKS_DIR / work_id / "thumbs"
-        pages_dir = WORKS_DIR / work_id / "pages"
-        thumb_path = thumbs_dir / thumb_filename if thumb_filename else None
-        image_path = pages_dir / image_filename
+        media_service = get_media_service()
+        source_bytes: bytes | None = None
+        if image_filename:
+            image_key = f"{work_id}/pages/{image_filename.strip().lstrip('/')}"
+            try:
+                source_bytes = media_service.get_bytes(image_key)
+            except Exception:
+                source_bytes = None
 
-        source_path: Path | None = None
-        if image_path.exists():
-            source_path = image_path
-        elif thumb_path is not None and thumb_path.exists():
-            source_path = thumb_path
+        if source_bytes is None and thumb_filename:
+            thumb_key = f"{work_id}/thumbs/{thumb_filename.strip().lstrip('/')}"
+            try:
+                source_bytes = media_service.get_bytes(thumb_key)
+            except Exception:
+                source_bytes = None
 
-        if source_path is None:
+        if source_bytes is None:
             missing_source += 1
             continue
 
         try:
-            with Image.open(source_path) as image:
+            with Image.open(BytesIO(source_bytes)) as image:
                 thumb_image = _prepare_image_for_avif(image)
                 thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
                 thumb_bytes = _render_image_bytes(
@@ -1007,7 +1136,7 @@ def convert_existing_thumbs_to_avif(*, dry_run: bool = False) -> dict[str, objec
         if dry_run:
             new_thumb_name = _content_addressed_rel_path(thumb_bytes, "avif")
         else:
-            new_thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
+            new_thumb_name = _store_content_addressed_media(f"{work_id}/thumbs", thumb_bytes, "avif")
 
         if new_thumb_name == thumb_filename:
             already_avif += 1
@@ -1117,8 +1246,6 @@ def ingest_editor_page(
             raise PermissionError("Only the original uploader can append editor pages")
 
     resolved_work_id = work_id if work_id else uuid.uuid4().hex[:12]
-    _, pages_dir, thumbs_dir = _safe_work_dirs(resolved_work_id)
-
     existing_pages = list_work_page_rows(resolved_work_id)
 
     width: int | None = None
@@ -1137,7 +1264,11 @@ def ingest_editor_page(
                 fmt="AVIF",
                 quality=effective_quality,
             )
-            image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
+            image_name = _store_content_addressed_media(
+                f"{resolved_work_id}/pages",
+                page_bytes,
+                "avif",
+            )
 
             thumb_image = _prepare_image_for_avif(image)
             thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
@@ -1146,7 +1277,11 @@ def ingest_editor_page(
                 fmt="AVIF",
                 quality=THUMBNAIL_AVIF_QUALITY,
             )
-            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
+            thumb_name = _store_content_addressed_media(
+                f"{resolved_work_id}/thumbs",
+                thumb_bytes,
+                "avif",
+            )
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert page image") from exc
 
@@ -1353,10 +1488,6 @@ def editor_replace_page_image(
     if not current_page:
         raise FileNotFoundError(f"Page index not found: {page_index}")
 
-    pages_dir = WORKS_DIR / work_id / "pages"
-    thumbs_dir = WORKS_DIR / work_id / "thumbs"
-    _assert_safe_storage_dir(pages_dir)
-    _assert_safe_storage_dir(thumbs_dir)
     old_image_name = _as_str(current_page["image_filename"], "")
 
     width: int | None = None
@@ -1373,7 +1504,11 @@ def editor_replace_page_image(
                 fmt="AVIF",
                 quality=effective_quality,
             )
-            image_name = _store_content_addressed(pages_dir, page_bytes, "avif")
+            image_name = _store_content_addressed_media(
+                f"{work_id}/pages",
+                page_bytes,
+                "avif",
+            )
 
             thumb_image = _prepare_image_for_avif(image)
             thumb_image.thumbnail(THUMBNAIL_MAX_DIMENSIONS)
@@ -1382,7 +1517,11 @@ def editor_replace_page_image(
                 fmt="AVIF",
                 quality=THUMBNAIL_AVIF_QUALITY,
             )
-            thumb_name = _store_content_addressed(thumbs_dir, thumb_bytes, "avif")
+            thumb_name = _store_content_addressed_media(
+                f"{work_id}/thumbs",
+                thumb_bytes,
+                "avif",
+            )
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("Failed to convert replacement page image") from exc
 

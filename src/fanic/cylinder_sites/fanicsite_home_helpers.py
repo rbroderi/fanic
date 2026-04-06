@@ -117,8 +117,8 @@ def fanart_items_html(
         created_at = escape(str(row.get("created_at", "")))
         image_name = str(row.get("image_filename", "")).strip().lstrip("/")
         thumb_name = str(row.get("thumb_filename", "")).strip().lstrip("/")
-        direct_image_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else ""
-        direct_thumb_url = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else ""
+        direct_image_url = media_url(f"/static/fanart/images/{quote(image_name, safe='/')}") if image_name else ""
+        direct_thumb_url = media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}") if thumb_name else ""
         claimed_url = direct_image_url if direct_image_url else direct_thumb_url if direct_thumb_url else viewer_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
@@ -127,9 +127,9 @@ def fanart_items_html(
         )
         hotlink_href = f"/fanart/file/{safe_item_id}"
         if thumb_name:
-            thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}"
+            thumb_src = media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}")
         else:
-            thumb_src = "/static/logo.png"
+            thumb_src = media_url("/static/logo.png")
 
         delete_html = ""
         if can_delete:

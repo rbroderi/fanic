@@ -5,6 +5,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from fanic.cylinder_sites.common.responses import STATIC_ROOT
+from fanic.cylinder_sites.common.responses import media_url
 from fanic.repository.fanart import list_fanart_galleries_by_uploader
 from fanic.repository.fanart import list_fanart_gallery_item_ids
 
@@ -125,7 +126,7 @@ def render_fanart_html(
         image_name = quote(str(row.get("image_filename", "")).strip(), safe="/")
         _add_grouped_item(
             "Ungrouped",
-            f'<li><a href="/static/fanart/images/{image_name}">{title}</a></li>',
+            f'<li><a href="{media_url(f"/static/fanart/images/{image_name}")}">{title}</a></li>',
         )
 
     sections: list[str] = []

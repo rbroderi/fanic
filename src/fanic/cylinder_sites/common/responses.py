@@ -25,12 +25,12 @@ from fanic.cylinder_sites.common.security import validate_saved_upload_size
 from fanic.cylinder_sites.site_layout import site_header_parts_for_template
 from fanic.cylinder_sites.user_roles import is_privileged_role
 from fanic.ingest import ingest_cbz
+from fanic.media import get_media_service
 from fanic.repository.users import UserRole
 from fanic.repository.users import get_local_user
 from fanic.repository.users import get_user_role
 from fanic.repository.users import get_user_theme_preference
 from fanic.settings import DYNAMIC_TEMPLATE_DIR
-from fanic.settings import WORKS_DIR
 from fanic.settings import get_settings
 from fanic.settings import static_asset_url
 
@@ -593,25 +593,23 @@ def save_uploaded_ingest(
 
 
 def page_file_for(work_id: str, image_name: str) -> Path:
-    return WORKS_DIR / work_id / "pages" / image_name
+    media_service = get_media_service()
+    media_key = media_service.comic_page_key(work_id, image_name)
+    resolved_path = media_service.local_path_for_key(media_key)
+    if resolved_path is None:
+        raise FileNotFoundError(f"No local media path available for key: {media_key}")
+    return resolved_path
 
 
 def thumb_file_for(work_id: str, thumb_name: str) -> Path:
-    return WORKS_DIR / work_id / "thumbs" / thumb_name
+    media_service = get_media_service()
+    media_key = media_service.comic_thumb_key(work_id, thumb_name)
+    resolved_path = media_service.local_path_for_key(media_key)
+    if resolved_path is None:
+        raise FileNotFoundError(f"No local media path available for key: {media_key}")
+    return resolved_path
 
 
 def media_url(path: str) -> str:
-    trimmed = path.strip()
-    if not trimmed:
-        return ""
-    if trimmed.startswith("http://") or trimmed.startswith("https://"):
-        return trimmed
-    if not trimmed.startswith("/"):
-        trimmed = f"/{trimmed}"
-    media_cdn_base = _SETTINGS.media_cdn_base_url.strip()
-    if media_cdn_base and trimmed.startswith("/static/"):
-        return f"{media_cdn_base.rstrip('/')}{trimmed}"
-    media_base = _SETTINGS.media_base_url.strip()
-    if not media_base:
-        return trimmed
-    return f"{media_base.rstrip('/')}{trimmed}"
+    media_service = get_media_service()
+    return media_service.media_url(path)

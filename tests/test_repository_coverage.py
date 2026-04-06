@@ -13,6 +13,9 @@ from uuid import UUID
 
 import pytest
 
+from fanic.media import LocalMediaBackend
+from fanic.media import MediaService
+
 
 class _ManagedTestConnection(sqlite3.Connection):
     @override
@@ -110,6 +113,20 @@ def _init_repository_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setattr(repository_works, "WORKS_DIR", works_dir)
     monkeypatch.setattr(repository_works, "CBZ_DIR", cbz_dir)
     monkeypatch.setattr(repository_fanart, "FANART_DIR", fanart_dir)
+
+    class _LocalSettings:
+        media_base_url: str = "https://fanic.media"
+        media_cdn_base_url: str = "https://media.fanic.media"
+
+    fanart_media_service = MediaService(
+        settings=_LocalSettings(),
+        backend=LocalMediaBackend(works_root=works_dir, fanart_root=fanart_dir),
+    )
+    monkeypatch.setattr(
+        repository_fanart,
+        "get_media_service",
+        lambda: fanart_media_service,
+    )
 
     setattr(repository, "get_connection", get_test_connection)
     setattr(repository, "WORKS_DIR", works_dir)
@@ -872,18 +889,10 @@ def test_fanart_crud_and_lookup_helpers(
     assert repository.get_fanart_item("fanart-1") is None
     assert repository.delete_fanart_item("fanart-1") is False
 
-    assert repository.fanart_file_for("_objects/ab/image.avif") == (
-        repository.FANART_DIR / "images" / "_objects/ab/image.avif"
-    )
-    assert repository.fanart_file_for("/_objects/ab/image.avif") == (
-        repository.FANART_DIR / "images" / "_objects/ab/image.avif"
-    )
-    assert repository.fanart_thumb_for("_objects/ab/thumb.avif") == (
-        repository.FANART_DIR / "thumbs" / "_objects/ab/thumb.avif"
-    )
-    assert repository.fanart_thumb_for("/_objects/ab/thumb.avif") == (
-        repository.FANART_DIR / "thumbs" / "_objects/ab/thumb.avif"
-    )
+    assert str(repository.fanart_file_for("_objects/ab/image.avif")).endswith("/fanart/images/_objects/ab/image.avif")
+    assert str(repository.fanart_file_for("/_objects/ab/image.avif")).endswith("/fanart/images/_objects/ab/image.avif")
+    assert str(repository.fanart_thumb_for("_objects/ab/thumb.avif")).endswith("/fanart/thumbs/_objects/ab/thumb.avif")
+    assert str(repository.fanart_thumb_for("/_objects/ab/thumb.avif")).endswith("/fanart/thumbs/_objects/ab/thumb.avif")
 
 
 def test_user_role_management_operations(

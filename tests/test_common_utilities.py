@@ -8,6 +8,9 @@ from typing import Protocol
 
 import pytest
 
+from fanic.media import LocalMediaBackend
+from fanic.media import MediaService
+
 
 class ResponseLike(Protocol):
     status_code: int
@@ -84,9 +87,29 @@ def test_send_file_and_safe_static_path(
     assert safe_path is not None
     assert safe_path.name == "styles.css"
 
+    class _LocalSettings:
+        media_base_url: str = "https://fanic.media"
+        media_cdn_base_url: str = "https://media.fanic.media"
+
+    security_media_service = MediaService(
+        settings=_LocalSettings(),
+        backend=LocalMediaBackend(
+            works_root=tmp_path / "sec-works",
+            fanart_root=tmp_path / "sec-fanart",
+        ),
+    )
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        security_module,
+        "get_media_service",
+        lambda: security_media_service,
+    )
+
     fanart_safe_path = security_module.safe_static_path("fanart/images/example.avif")
     assert fanart_safe_path is not None
-    assert fanart_safe_path == (security_module.FANART_DIR / "images" / "example.avif").resolve()
+    assert fanart_safe_path.parts[-2:] == ("images", "example.avif")
+
+    monkeypatch.undo()
 
     assert security_module.safe_static_path("../../escape.txt") is None
     assert security_module.safe_static_path("fanart/../../escape.txt") is None
@@ -225,6 +248,23 @@ def test_session_and_upload_helpers(
         "common_session_upload_responses_test",
     )
 
+    class _LocalSettings:
+        media_base_url: str = "https://fanic.media"
+        media_cdn_base_url: str = "https://media.fanic.media"
+
+    local_media_service = MediaService(
+        settings=_LocalSettings(),
+        backend=LocalMediaBackend(
+            works_root=Path("/tmp/fanic-test-works"),
+            fanart_root=Path("/tmp/fanic-test-fanart"),
+        ),
+    )
+    monkeypatch.setattr(
+        responses_module,
+        "get_media_service",
+        lambda: local_media_service,
+    )
+
     def fake_jwt_encode(header: object, payload: object, secret: object) -> bytes:
         _ = (header, payload, secret)
         return b"tok"
@@ -338,14 +378,23 @@ def test_media_url_prefers_cdn_for_static_paths(
 
     class _Settings:
         media_base_url: str = "https://fanic.media"
-        media_cdn_base_url: str = "https://cdn.fanic.media"
+        media_cdn_base_url: str = "https://media.fanic.media"
 
-    monkeypatch.setattr(module, "_SETTINGS", _Settings(), raising=False)
-
-    assert module.media_url("/static/work-1/pages/001.avif") == "https://cdn.fanic.media/static/work-1/pages/001.avif"
-    assert (
-        module.media_url("static/fanart/thumbs/thumb.avif") == "https://cdn.fanic.media/static/fanart/thumbs/thumb.avif"
+    media_service = MediaService(
+        settings=_Settings(),
+        backend=LocalMediaBackend(
+            works_root=Path("/tmp/fanic-test-works"),
+            fanart_root=Path("/tmp/fanic-test-fanart"),
+        ),
     )
+    monkeypatch.setattr(module, "get_media_service", lambda: media_service)
+
+    assert module.media_url("/static/work-1/pages/001.avif") == "https://media.fanic.media/static/work-1/pages/001.avif"
+    assert (
+        module.media_url("static/fanart/thumbs/thumb.avif")
+        == "https://media.fanic.media/static/fanart/thumbs/thumb.avif"
+    )
+    assert module.media_url("/static/logo.png") == "https://fanic.media/static/logo.png"
     assert module.media_url("/fanart/alice") == "https://fanic.media/fanart/alice"
     assert module.media_url("https://example.com/image.avif") == "https://example.com/image.avif"
 
@@ -360,7 +409,14 @@ def test_media_url_uses_media_base_when_cdn_disabled(
         media_base_url: str = "https://fanic.media"
         media_cdn_base_url: str = ""
 
-    monkeypatch.setattr(module, "_SETTINGS", _Settings(), raising=False)
+    media_service = MediaService(
+        settings=_Settings(),
+        backend=LocalMediaBackend(
+            works_root=Path("/tmp/fanic-test-works"),
+            fanart_root=Path("/tmp/fanic-test-fanart"),
+        ),
+    )
+    monkeypatch.setattr(module, "get_media_service", lambda: media_service)
 
     assert module.media_url("/static/work-1/pages/001.avif") == "https://fanic.media/static/work-1/pages/001.avif"
 

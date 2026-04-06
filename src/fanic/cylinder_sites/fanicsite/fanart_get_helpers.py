@@ -12,10 +12,10 @@ from zipfile import ZipFile
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import media_url
 from fanic.cylinder_sites.common.responses import rating_badge_html
+from fanic.media import get_media_service
 from fanic.repository.fanart import FanartCommentRow
 from fanic.repository.fanart import FanartGalleryRow
 from fanic.repository.fanart import FanartItemRow
-from fanic.repository.fanart import fanart_file_for
 from fanic.repository.users import get_local_user
 from fanic.repository.users import get_local_user_by_display_name
 from fanic.utils import slugify
@@ -85,8 +85,8 @@ def work_grid_html(
         download_href = (
             f"/fanart/download/{quote(image_name, safe='/')}?item_id={safe_work_id}" if image_name else reader_href
         )
-        direct_image_url = f"/static/fanart/images/{quote(image_name, safe='/')}" if image_name else ""
-        direct_thumb_url = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else ""
+        direct_image_url = media_url(f"/static/fanart/images/{quote(image_name, safe='/')}") if image_name else ""
+        direct_thumb_url = media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}") if thumb_name else ""
         claimed_url = direct_image_url if direct_image_url else direct_thumb_url if direct_thumb_url else reader_href
         report_href = (
             "/dmca?issue_type=copyright-dmca"
@@ -95,7 +95,11 @@ def work_grid_html(
         )
         hotlink_href = f"/fanart/file/{safe_work_id}"
 
-        thumb_src = f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}" if thumb_name else "/static/logo.png"
+        thumb_src = (
+            media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}")
+            if thumb_name
+            else media_url("/static/logo.png")
+        )
 
         delete_html = ""
         if can_delete:
@@ -227,6 +231,7 @@ def build_gallery_cbz_bytes(
     used_names: dict[str, int] = {}
     added_files = 0
     payload = BytesIO()
+    media_service = get_media_service()
 
     with ZipFile(payload, "w", compression=ZIP_DEFLATED) as archive:
         for work in works:
@@ -234,8 +239,8 @@ def build_gallery_cbz_bytes(
             if not image_name:
                 continue
 
-            image_path = fanart_file_for(image_name)
-            if not image_path.exists() or not image_path.is_file():
+            media_key = media_service.fanart_image_key(image_name)
+            if not media_service.exists(media_key):
                 continue
 
             base_name = standardized_download_filename(
@@ -252,7 +257,7 @@ def build_gallery_cbz_bytes(
                 archive_name = f"{stem}_{seen + 1}{suffix}"
             used_names[base_name] = seen + 1
 
-            archive.write(image_path, arcname=archive_name)
+            archive.writestr(archive_name, media_service.get_bytes(media_key))
             added_files += 1
 
     return payload.getvalue(), added_files

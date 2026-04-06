@@ -1,4 +1,5 @@
 import json
+import mimetypes
 from base64 import b64encode
 from html import escape
 from typing import cast
@@ -6,9 +7,9 @@ from urllib.parse import quote
 
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
+from fanic.cylinder_sites.common.responses import media_url
 from fanic.cylinder_sites.common.responses import redirect_see_other as _redirect
 from fanic.cylinder_sites.common.responses import render_html_template
-from fanic.cylinder_sites.common.responses import send_file
 from fanic.cylinder_sites.common.responses import site_logo_html
 from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.common.security import route_tail
@@ -58,8 +59,8 @@ from fanic.cylinder_sites.fanicsite.fanart_get_helpers import (
 )
 from fanic.cylinder_sites.report_issues import report_issue_options_html
 from fanic.cylinder_sites.user_roles import is_privileged_role
+from fanic.media import get_media_service
 from fanic.repository.fanart import FanartItemRow
-from fanic.repository.fanart import fanart_file_for
 from fanic.repository.fanart import get_fanart_gallery_by_slug
 from fanic.repository.fanart import get_fanart_item
 from fanic.repository.fanart import get_fanart_item_by_image_filename
@@ -87,8 +88,9 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if work is None:
             return text_error(response, "Not found", 404)
 
-        path = fanart_file_for(file_name)
-        if not path.exists():
+        media_service = get_media_service()
+        media_key = media_service.fanart_image_key(file_name)
+        if not media_service.exists(media_key):
             return text_error(response, "Not found", 404)
 
         uploader_username = str(work.get("uploader_username", "")).strip()
@@ -101,7 +103,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             str(work.get("title", "untitled")),
             file_name,
         )
-        download_response = send_file(response, path, filename=download_filename)
+        content_type, _ = mimetypes.guess_type(download_filename)
+        response.status_code = 200
+        response.content_type = content_type if content_type else "application/octet-stream"
+        response.set_data(media_service.get_bytes(media_key))
+        response.headers["Content-Disposition"] = f'attachment; filename="{download_filename}"'
+        download_response = response
         download_response.headers["Cache-Control"] = "no-store"
         return download_response
 
@@ -118,14 +125,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         if image_name:
             return _redirect_found(
                 response,
-                f"/static/fanart/images/{quote(image_name, safe='/')}",
+                media_url(f"/static/fanart/images/{quote(image_name, safe='/')}"),
             )
 
         thumb_name = str(item.get("thumb_filename", "")).strip().lstrip("/")
         if thumb_name:
             return _redirect_found(
                 response,
-                f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}",
+                media_url(f"/static/fanart/thumbs/{quote(thumb_name, safe='/')}"),
             )
 
         return text_error(response, "Not found", 404)

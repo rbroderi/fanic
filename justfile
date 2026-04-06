@@ -1,42 +1,21 @@
 set shell := ["bash", "-lc"]
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 _default:
     @just --list
 
 # Initialize the SQLite database schema.
-[windows]
-init-db:
-    uv run src\fanic\main.py init-db
-
-[unix]
 init-db:
     uv run src/fanic/main.py init-db
 
 # Run runtime database migrations without resetting data.
-[windows]
-migrate-db:
-    uv run src\fanic\main.py migrate-db
-
-[unix]
 migrate-db:
     uv run src/fanic/main.py migrate-db
 
 # Launch the local development server.
-[windows]
 serve:
-    trap [System.Management.Automation.PipelineStoppedException] { Write-Host "Shutting down gracefully..."; exit 0 }; $port = 8000; $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if ($listeners) { $listeners | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop } catch {} } }; uv run src\fanic\main.py serve --host 127.0.0.1 --port 8000; $code = $LASTEXITCODE; if (($code -ne 0) -and ($code -ne 130) -and ($code -ne -1073741510) -and ($code -ne 3221225786)) { Write-Host "serve exited with code $code (suppressed for dev serve workflow)" }; exit 0
-
-[unix]
-serve:
-    uv run src/fanic/main.py serve --host 127.0.0.1 --port 8000; code=$?; if [ $code -ne 0 ] && [ $code -ne 130 ]; then echo "serve exited with code $code (suppressed for dev serve workflow)"; fi; exit 0
+    npm run frontend:build; FANIC_GUNICORN_WORKERS=1 bash scripts/start-gunicorn.sh
 
 # Run autopep695 in check or format mode.
-[windows]
-autopep695 mode="check":
-    if (("{{ mode }}" -ne "check") -and ("{{ mode }}" -ne "format")) { throw "mode must be 'check' or 'format'" }; uv run autopep695 {{ mode }} src
-
-[unix]
 autopep695 mode="check":
     mode="{{ mode }}"; if [ "$mode" != "check" ] && [ "$mode" != "format" ]; then echo "mode must be 'check' or 'format'"; exit 1; fi; uv run autopep695 "$mode" src
 
@@ -49,20 +28,10 @@ ruff-precommit:
     uvx ruff check --fix --exclude typings src tests; uvx ruff format --exclude typings src tests; uvx ruff check --exclude typings src tests
 
 # Run Python type checking with basedpyright.
-[windows]
-py-typecheck:
-    uvx basedpyright
-
-[unix]
 py-typecheck:
     uvx basedpyright
 
 # Run Python type checking directly.
-[windows]
-basedpyright:
-    uv run basedpyright
-
-[unix]
 basedpyright:
     uv run basedpyright
 
@@ -71,110 +40,46 @@ prek:
     bash scripts/sync-from-storage.sh; uv run prek run --all-files; uv run prek run --all-files
 
 # Run pytest with coverage for the src package.
-[windows]
-test *args:
-    $env:FANIC_ENABLE_BEARTYPE = "1"; uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}
-
-[unix]
 test *args:
     if sudo systemctl cat fanic >/dev/null 2>&1 && sudo systemctl is-active --quiet fanic; then sudo systemctl stop fanic; fi; args='{{ args }}'; if [ -n "$args" ]; then FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-report=term-missing {{ args }}; else FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-report= --ignore=tests/test_moderation_media.py && FANIC_ENABLE_BEARTYPE=1 uv run pytest --cov=src/fanic --cov-append --cov-report=term-missing tests/test_moderation_media.py; fi
 
-# Install and configure nginx on Windows for FANIC.
-[windows]
-setup-nginx-windows:
-    powershell -NoLogo -ExecutionPolicy Bypass -File scripts\setup-nginx-windows.ps1
-
-[unix]
-setup-nginx-windows:
-    echo "setup-nginx-windows is only supported on Windows"; exit 1
-
-# Install and configure nginx on Ubuntu for FANIC.
-[windows]
-setup-nginx-linux:
-    echo "setup-nginx-linux is only supported on Linux"; exit 1
-
-[unix]
-setup-nginx-linux:
+# Install and configure nginx for FANIC.
+setup-nginx:
     bash scripts/setup-nginx-ubuntu.sh
 
 # Relocate storage root, update .env FANIC_DATA_DIR, and refresh nginx aliases.
-[windows]
-relocate-storage target:
-    powershell -NoLogo -ExecutionPolicy Bypass -File scripts\relocate-storage-windows.ps1 -TargetStorageRoot "{{ target }}"
-
-[unix]
 relocate-storage target:
     bash scripts/relocate-storage-ubuntu.sh --target-storage-root "{{ target }}"
 
 # Summarize storage deletion/rename audit events with actor/process metadata.
-[windows]
-audit-deletions since="recent" path="/mnt/storage/fanart":
-    echo "audit-deletions is only supported on Linux"; exit 1
-
-[unix]
 audit-deletions since="recent" path="/mnt/storage/fanart":
     bash scripts/query-auditd-deletions-summary.sh --since "{{ since }}" --path "{{ path }}"
 
 # Start nginx (or reload if already running) and then run the WSGI server.
-[windows]
 start:
-    $nginxExe = "C:\nginx\nginx.exe"; if (-not (Test-Path $nginxExe)) { throw "nginx.exe not found at C:\nginx\nginx.exe. Run 'just setup-nginx-windows' first." }; $nginxPrefix = "C:/nginx/"; & $nginxExe -t -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx config validation failed. Run 'just setup-nginx-windows' to regenerate config." }; $running = Get-Process nginx -ErrorAction SilentlyContinue; if ($running) { & $nginxExe -s reload -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx reload failed" } } else { $null = Start-Process -FilePath $nginxExe -ArgumentList @("-p", $nginxPrefix, "-c", "conf/nginx.conf") -WindowStyle Hidden -PassThru; Start-Sleep -Milliseconds 800; $started = Get-Process nginx -ErrorAction SilentlyContinue; if (-not $started) { throw "nginx did not start" } }; just serve
-
-[unix]
-start:
-    if ! command -v nginx >/dev/null 2>&1; then echo "nginx not found. Run just setup-nginx-linux first."; exit 1; fi; if ! sudo nginx -t; then echo "nginx config validation failed. Run just setup-nginx-linux to regenerate config."; exit 1; fi; if sudo systemctl is-active --quiet nginx; then sudo systemctl reload nginx; else sudo systemctl enable --now nginx; fi; uv run src/fanic/main.py serve --host 127.0.0.1 --port 8000; code=$?; if [ $code -ne 0 ] && [ $code -ne 130 ]; then echo "serve exited with code $code (suppressed for dev serve workflow)"; fi; exit 0
+    if ! command -v nginx >/dev/null 2>&1; then echo "nginx not found. Run just setup-nginx first."; exit 1; fi; if ! sudo nginx -t; then echo "nginx config validation failed. Run just setup-nginx to regenerate config."; exit 1; fi; if sudo systemctl is-active --quiet nginx; then sudo systemctl reload nginx; else sudo systemctl enable --now nginx; fi; npm run frontend:build; FANIC_GUNICORN_WORKERS=1 bash scripts/start-gunicorn.sh
 
 # Start nginx only (reload if already running).
-[windows]
 start-nginx:
-    $nginxExe = "C:\nginx\nginx.exe"; if (-not (Test-Path $nginxExe)) { throw "nginx.exe not found at C:\nginx\nginx.exe. Run 'just setup-nginx-windows' first." }; $nginxPrefix = "C:/nginx/"; & $nginxExe -t -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx config validation failed. Run 'just setup-nginx-windows' to regenerate config." }; $running = Get-Process nginx -ErrorAction SilentlyContinue; if ($running) { & $nginxExe -s reload -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx reload failed" } } else { $null = Start-Process -FilePath $nginxExe -ArgumentList @("-p", $nginxPrefix, "-c", "conf/nginx.conf") -WindowStyle Hidden -PassThru; Start-Sleep -Milliseconds 800; $started = Get-Process nginx -ErrorAction SilentlyContinue; if (-not $started) { throw "nginx did not start" } }
-
-[unix]
-start-nginx:
-    if ! command -v nginx >/dev/null 2>&1; then echo "nginx not found. Run just setup-nginx-linux first."; exit 1; fi; sudo nginx -t; if sudo systemctl is-active --quiet nginx; then sudo systemctl reload nginx; else sudo systemctl enable --now nginx; fi
+    if ! command -v nginx >/dev/null 2>&1; then echo "nginx not found. Run just setup-nginx first."; exit 1; fi; sudo nginx -t; if sudo systemctl is-active --quiet nginx; then sudo systemctl reload nginx; else sudo systemctl enable --now nginx; fi
 
 # Stop nginx if running.
-[windows]
-stop-nginx:
-    $nginxExe = "C:\nginx\nginx.exe"; if (-not (Test-Path $nginxExe)) { Write-Host "nginx.exe not found at C:\nginx\nginx.exe"; exit 0 }; $nginxPrefix = "C:/nginx/"; $running = Get-Process nginx -ErrorAction SilentlyContinue; if (-not $running) { Write-Host "nginx is not running"; exit 0 }; & $nginxExe -s stop -p $nginxPrefix -c conf/nginx.conf; if ($LASTEXITCODE -ne 0) { throw "nginx stop failed" }
-
-[unix]
 stop-nginx:
     if ! command -v nginx >/dev/null 2>&1; then echo "nginx not found"; exit 0; fi; if ! sudo systemctl is-active --quiet nginx; then echo "nginx is not running"; exit 0; fi; sudo systemctl stop nginx
 
-# Show health/status of nginx and WSGI endpoints.
-[windows]
+# Show health/status of nginx and unix-socket gunicorn endpoints.
 health:
-    $nginxExe = "C:\nginx\nginx.exe"; $nginxPort = 8080; $wsgiPort = 8000; $nginxInstalled = Test-Path $nginxExe; $nginxProcess = Get-Process nginx -ErrorAction SilentlyContinue; $nginxListening = Get-NetTCPConnection -LocalPort $nginxPort -State Listen -ErrorAction SilentlyContinue; $wsgiListening = Get-NetTCPConnection -LocalPort $wsgiPort -State Listen -ErrorAction SilentlyContinue; $nginxHttp = $null; try { $nginxHttp = Invoke-WebRequest -Uri "http://127.0.0.1:$nginxPort/" -UseBasicParsing -TimeoutSec 4 -ErrorAction Stop } catch { $nginxHttp = $null }; $wsgiHttp = $null; try { $wsgiHttp = Invoke-WebRequest -Uri "http://127.0.0.1:$wsgiPort/" -UseBasicParsing -TimeoutSec 4 -ErrorAction Stop } catch { $wsgiHttp = $null }; Write-Host "nginx installed : $nginxInstalled"; Write-Host "nginx process   : $([bool]$nginxProcess)"; Write-Host "nginx listening : $([bool]$nginxListening) (127.0.0.1:$nginxPort)"; if ($nginxHttp) { Write-Host "nginx http      : ok (status $($nginxHttp.StatusCode))" } else { Write-Host "nginx http      : down" }; Write-Host "wsgi listening  : $([bool]$wsgiListening) (127.0.0.1:$wsgiPort)"; if ($wsgiHttp) { Write-Host "wsgi http       : ok (status $($wsgiHttp.StatusCode))" } else { Write-Host "wsgi http       : down" }
-
-[unix]
-health:
-    nginx_port=8080; wsgi_port=8000; fanic_socket="/run/fanic/fanic.sock"; if command -v nginx >/dev/null 2>&1; then nginx_installed=true; else nginx_installed=false; fi; if pgrep -x nginx >/dev/null 2>&1; then nginx_process=true; else nginx_process=false; fi; if ss -ltn "( sport = :${nginx_port} )" 2>/dev/null | grep -q LISTEN; then nginx_listening=true; else nginx_listening=false; fi; if ss -ltn "( sport = :${wsgi_port} )" 2>/dev/null | grep -q LISTEN; then wsgi_listening=true; else wsgi_listening=false; fi; if [ -S "${fanic_socket}" ]; then fanic_socket_present=true; else fanic_socket_present=false; fi; if curl -fsS "http://127.0.0.1:${nginx_port}/" >/dev/null 2>&1; then nginx_http=ok; else nginx_http=down; fi; if curl -fsS "http://127.0.0.1:${wsgi_port}/" >/dev/null 2>&1; then wsgi_http=ok; else wsgi_http=down; fi; if [ "${fanic_socket_present}" = true ] && curl -fsS --unix-socket "${fanic_socket}" "http://localhost/" >/dev/null 2>&1; then fanic_socket_http=ok; else fanic_socket_http=down; fi; if sudo systemctl cat fanic >/dev/null 2>&1; then fanic_service_installed=true; else fanic_service_installed=false; fi; if [ "${fanic_service_installed}" = true ] && sudo systemctl is-active --quiet fanic; then fanic_service_active=true; else fanic_service_active=false; fi; echo "nginx installed : ${nginx_installed}"; echo "nginx process   : ${nginx_process}"; echo "nginx listening : ${nginx_listening} (127.0.0.1:${nginx_port})"; echo "nginx http      : ${nginx_http}"; echo "wsgi listening  : ${wsgi_listening} (127.0.0.1:${wsgi_port})"; echo "wsgi http       : ${wsgi_http}"; echo "fanic socket    : ${fanic_socket_present} (${fanic_socket})"; echo "fanic socket http: ${fanic_socket_http}"; echo "fanic service   : installed=${fanic_service_installed} active=${fanic_service_active}"
+    nginx_port=8080; fanic_socket="/run/fanic/fanic.sock"; if command -v nginx >/dev/null 2>&1; then nginx_installed=true; else nginx_installed=false; fi; if pgrep -x nginx >/dev/null 2>&1; then nginx_process=true; else nginx_process=false; fi; if ss -ltn "( sport = :${nginx_port} )" 2>/dev/null | grep -q LISTEN; then nginx_listening=true; else nginx_listening=false; fi; if [ -S "${fanic_socket}" ]; then fanic_socket_present=true; else fanic_socket_present=false; fi; if curl -fsS "http://127.0.0.1:${nginx_port}/" >/dev/null 2>&1; then nginx_http=ok; else nginx_http=down; fi; if [ "${fanic_socket_present}" = true ] && curl -fsS --unix-socket "${fanic_socket}" "http://localhost/" >/dev/null 2>&1; then fanic_socket_http=ok; else fanic_socket_http=down; fi; if sudo systemctl cat fanic >/dev/null 2>&1; then fanic_service_installed=true; else fanic_service_installed=false; fi; if [ "${fanic_service_installed}" = true ] && sudo systemctl is-active --quiet fanic; then fanic_service_active=true; else fanic_service_active=false; fi; echo "nginx installed : ${nginx_installed}"; echo "nginx process   : ${nginx_process}"; echo "nginx listening : ${nginx_listening} (127.0.0.1:${nginx_port})"; echo "nginx http      : ${nginx_http}"; echo "fanic socket    : ${fanic_socket_present} (${fanic_socket})"; echo "fanic socket http: ${fanic_socket_http}"; echo "fanic service   : installed=${fanic_service_installed} active=${fanic_service_active}"
 
 # Stop the WSGI app (fanic systemd service) if running.
-[windows]
-stop:
-    echo "stop is only supported on Linux systemd deployments"; exit 1
-
-[unix]
 stop:
     if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; if ! sudo systemctl is-active --quiet fanic; then echo "fanic.service is not running"; exit 0; fi; sudo systemctl stop fanic
 
 # Restart the WSGI app (fanic systemd service).
-[windows]
 restart:
-    echo "restart is only supported on Linux systemd deployments"; exit 1
-
-[unix]
-restart:
-    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; npm run frontend:build; sudo bash scripts/set-source-permissions.sh /opt/fanic/src /opt/fanic/frontend; sudo systemctl daemon-reload; sudo systemctl restart fanic
+    if ! sudo systemctl cat fanic >/dev/null 2>&1; then echo "fanic.service is not installed"; exit 1; fi; npm run frontend:build; sudo bash scripts/set-source-permissions.sh /opt/fanic/src /opt/fanic/frontend; sudo install -m 0644 scripts/fanic.service /etc/systemd/system/fanic.service; sudo systemctl daemon-reload; sudo systemctl restart fanic
 
 # Normalize source file permissions so the fanic service user can read all app code.
-[windows]
-set-permissions root_dir="/opt/fanic/src":
-    echo "set-permissions is only supported on Linux"; exit 1
-
-[unix]
 set-permissions root_dir="/opt/fanic/src":
     sudo bash scripts/set-source-permissions.sh "{{ root_dir }}"
 
@@ -184,74 +89,34 @@ set-permissions root_dir="/opt/fanic/src":
 #   just rebuild-thumbnails --dry-run
 
 # just rebuild-thumbnails --scope comics
-[windows]
-rebuild-thumbnails *args:
-    uv run scripts\rebuild-thumbnails.py {{ args }}
-
-[unix]
 rebuild-thumbnails *args:
     uv run scripts/rebuild-thumbnails.py {{ args }}
 
 # Build frontend TypeScript into static JavaScript assets.
-[windows]
-_frontend-build:
-    npm run frontend:build
-
-[unix]
 _frontend-build:
     npm run frontend:build
 
 # Build frontend TypeScript with source maps for local debugging.
-[windows]
-_frontend-build-dev:
-    npm run frontend:build:dev
-
-[unix]
 _frontend-build-dev:
     npm run frontend:build:dev
 
 # Type-check frontend TypeScript without emitting files.
-[windows]
-_frontend-typecheck:
-    npm run frontend:typecheck
-
-[unix]
 _frontend-typecheck:
     npm run frontend:typecheck
 
 # Lint frontend TypeScript.
-[windows]
-_frontend-lint:
-    npm run frontend:lint
-
-[unix]
 _frontend-lint:
     npm run frontend:lint
 
 # Check frontend TypeScript formatting.
-[windows]
-_frontend-format-check:
-    npm run frontend:format:check
-
-[unix]
 _frontend-format-check:
     npm run frontend:format:check
 
 # Format frontend TypeScript files in place.
-[windows]
-_frontend-format:
-    npm run frontend:format
-
-[unix]
 _frontend-format:
     npm run frontend:format
 
 # Watch and recompile frontend TypeScript on file changes.
-[windows]
-_frontend-watch:
-    npm run frontend:watch
-
-[unix]
 _frontend-watch:
     npm run frontend:watch
 
@@ -261,11 +126,6 @@ _frontend-watch:
 #   just frontend lint
 
 # just frontend format-check
-[windows]
-frontend action="build":
-    $action = "{{ action }}"; switch ($action) { "build" { just _frontend-build; break } "build-dev" { just _frontend-build-dev; break } "typecheck" { just _frontend-typecheck; break } "lint" { just _frontend-lint; break } "format-check" { just _frontend-format-check; break } "format" { just _frontend-format; break } "watch" { just _frontend-watch; break } default { Write-Host "Unknown frontend action: $action"; Write-Host "Allowed: build, build-dev, typecheck, lint, format-check, format, watch"; exit 1 } }
-
-[unix]
 frontend action="build":
     action="{{ action }}"; if [ "$action" = "build" ]; then just _frontend-build; elif [ "$action" = "build-dev" ]; then just _frontend-build-dev; elif [ "$action" = "typecheck" ]; then just _frontend-typecheck; elif [ "$action" = "lint" ]; then just _frontend-lint; elif [ "$action" = "format-check" ]; then just _frontend-format-check; elif [ "$action" = "format" ]; then just _frontend-format; elif [ "$action" = "watch" ]; then just _frontend-watch; else echo "Unknown frontend action: $action"; echo "Allowed: build, build-dev, typecheck, lint, format-check, format, watch"; exit 1; fi
 
@@ -274,11 +134,6 @@ frontend action="build":
 #   just apply-ao3tags-sql
 
 # just apply-ao3tags-sql ./logs/ao3_tags_dump.fanic.upsert.sql
-[windows]
-apply-ao3tags-sql sql_path="./logs/ao3_tags_dump.fanic.upsert.sql":
-    uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; raw = r'{{ sql_path }}'; normalized = raw.split('=', 1)[1] if raw.startswith('sql_path=') else raw; sql_file = Path(normalized).expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
-
-[unix]
 apply-ao3tags-sql sql_path="./logs/ao3_tags_dump.fanic.upsert.sql":
     uv run python -c "from pathlib import Path; import sqlite3; from fanic.settings import DB_PATH; raw = r'{{ sql_path }}'; normalized = raw.split('=', 1)[1] if raw.startswith('sql_path=') else raw; sql_file = Path(normalized).expanduser().resolve(); conn = sqlite3.connect(DB_PATH); conn.executescript(sql_file.read_text(encoding='utf-8')); conn.commit(); conn.close(); print(f'Applied SQL from {sql_file} to {DB_PATH}')"
 
@@ -287,11 +142,6 @@ apply-ao3tags-sql sql_path="./logs/ao3_tags_dump.fanic.upsert.sql":
 #   just import-ao3tags-from-file-and-apply
 
 # just import-ao3tags-from-file-and-apply ./logs/ao3_freeform_tags.fanic.upsert.sql
-[windows]
-import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
-    just apply-ao3tags-sql "{{ sql_path }}"
-
-[unix]
 import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upsert.sql":
     just apply-ao3tags-sql "{{ sql_path }}"
 
@@ -300,11 +150,6 @@ import-ao3tags-from-file-and-apply sql_path="./logs/ao3_freeform_tags.fanic.upse
 #   just wrangle-ao3-dump
 
 # just wrangle-ao3-dump ./tmp/ao3tags-live/tags-20210226.csv 10
-[windows]
-wrangle-ao3-dump source_path="./tmp/ao3tags-live/tags-20210226.csv" min_count="1":
-    uv run scripts\export_ao3tags_for_fanic.py --source "{{ source_path }}" --min-count {{ min_count }} --out-dir logs
-
-[unix]
 wrangle-ao3-dump source_path="./tmp/ao3tags-live/tags-20210226.csv" min_count="1":
     uv run scripts/export_ao3tags_for_fanic.py --source "{{ source_path }}" --min-count {{ min_count }} --out-dir logs
 
@@ -313,19 +158,9 @@ wrangle-ao3-dump source_path="./tmp/ao3tags-live/tags-20210226.csv" min_count="1
 #   just report-tag-popularity
 
 # just report-tag-popularity 100 freeform hurt
-[windows]
-report-tag-popularity limit="50" tag_type="" query="":
-    uv run src\fanic\main.py report-tag-popularity --limit {{ limit }} --type "{{ tag_type }}" --q "{{ query }}"
-
-[unix]
 report-tag-popularity limit="50" tag_type="" query="":
     uv run src/fanic/main.py report-tag-popularity --limit {{ limit }} --type "{{ tag_type }}" --q "{{ query }}"
 
 # One-shot backfill: usage_count = current number of work_tags rows per tag.
-[windows]
-backfill-tag-popularity:
-    uv run src\fanic\main.py backfill-tag-popularity
-
-[unix]
 backfill-tag-popularity:
     uv run src/fanic/main.py backfill-tag-popularity

@@ -19,17 +19,16 @@ from typing import cast
 from typing import runtime_checkable
 from urllib.parse import parse_qs
 from urllib.parse import urlsplit
+from wsgiref.simple_server import make_server
 from wsgiref.types import WSGIApplication
 
 import cylinder
-import waitress
 
 from fanic.authorization import AdminPathPolicy
 from fanic.authorization import AuthorizationContext
 from fanic.cylinder_sites.common.session import SESSION_COOKIE_NAME
 from fanic.cylinder_sites.common.session import decode_session
 from fanic.db import initialize_database
-from fanic.filesystem import delete_file
 from fanic.moderation import initialize_moderation_models
 from fanic.path_utils import resolve_log_path
 from fanic.repository.users import get_user_role
@@ -103,9 +102,12 @@ def startup() -> None:
     media_cdn_base_url = settings.media_cdn_base_url.strip()
     startup_logger = logging.getLogger(__name__)
     if media_cdn_base_url:
-        startup_logger.info("Media CDN enabled for /static/* via %s", media_cdn_base_url.rstrip("/"))
+        startup_logger.info(
+            "Media CDN enabled for image media paths via %s",
+            media_cdn_base_url.rstrip("/"),
+        )
     else:
-        startup_logger.info("Media CDN disabled; serving /static/* via media_base_url")
+        startup_logger.info("Media CDN disabled; serving image media paths via media_base_url")
     ensure_storage_dirs()
     initialize_database()
     _warn_on_fanart_storage_mismatch()
@@ -463,11 +465,7 @@ def create_app() -> WSGIApplication:
 def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perms: str = "660") -> int:
     settings = get_settings()
     app = create_app()
-    threads = 4
-    connection_limit = 1000
-    recv_bytes = 65536
-    channel_timeout = 120
-    max_request_body_size = settings.max_cbz_upload_bytes + 1024 * 1024
+    _ = settings.max_cbz_upload_bytes
 
     def _shutdown_handler(signum: int, _frame: object) -> None:
         name = signal.Signals(signum).name
@@ -478,39 +476,14 @@ def serve(host: str, port: int, unix_socket: str | None = None, unix_socket_perm
         signal.signal(signal.SIGTERM, _shutdown_handler)
 
     if unix_socket:
-        socket_path = Path(unix_socket).expanduser().resolve()
-        socket_path.parent.mkdir(parents=True, exist_ok=True)
-        if socket_path.exists():
-            if socket_path.is_socket():
-                delete_file(socket_path)
-            else:
-                raise ValueError(f"Unix socket path exists and is not a socket: {socket_path}")
-        try:
-            waitress.serve(
-                app,
-                threads=threads,
-                connection_limit=connection_limit,
-                recv_bytes=recv_bytes,
-                channel_timeout=channel_timeout,
-                max_request_body_size=max_request_body_size,
-                unix_socket=str(socket_path),
-                unix_socket_perms=unix_socket_perms,
-            )
-        except KeyboardInterrupt:
-            print("Shutting down gracefully...", flush=True)
-        return OK
+        _ = unix_socket_perms
+        raise ValueError(
+            "--unix-socket is not supported by local serve; use scripts/start-gunicorn.sh for socket binding"
+        )
 
     try:
-        waitress.serve(
-            app,
-            threads=threads,
-            connection_limit=connection_limit,
-            recv_bytes=recv_bytes,
-            channel_timeout=channel_timeout,
-            max_request_body_size=max_request_body_size,
-            host=host,
-            port=port,
-        )
+        with make_server(host, port, app) as server:
+            server.serve_forever()
     except KeyboardInterrupt:
         print("Shutting down gracefully...", flush=True)
     return OK

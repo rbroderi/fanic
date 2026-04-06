@@ -30,17 +30,33 @@ def test_image_pixel_limit_guard(monkeypatch: pytest.MonkeyPatch) -> None:
             assert_image_pixels_within_limit(image, "Uploaded fanart image")
 
 
-def test_store_content_addressed_is_idempotent(tmp_path: Path) -> None:
-    base_dir = tmp_path / "fanart" / "images"
-    base_dir.mkdir(parents=True, exist_ok=True)
+def test_store_content_addressed_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    stored_bytes: dict[str, bytes] = {}
+
+    class _DummyMediaService:
+        def exists(self, key: str) -> bool:
+            return key in stored_bytes
+
+        def put_bytes(
+            self,
+            key: str,
+            content: bytes,
+            content_type: str = "application/octet-stream",
+        ) -> None:
+            _ = content_type
+            stored_bytes[key] = content
+
+    def fake_get_media_service() -> _DummyMediaService:
+        return _DummyMediaService()
 
     store_content_addressed = fanart._store_content_addressed  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    monkeypatch.setattr(fanart, "get_media_service", fake_get_media_service)
 
-    rel1 = store_content_addressed(base_dir, b"hello", " .AVIF ")
-    rel2 = store_content_addressed(base_dir, b"hello", " .AVIF ")
+    rel1 = store_content_addressed(b"hello", " .AVIF ", "fanart/images")
+    rel2 = store_content_addressed(b"hello", " .AVIF ", "fanart/images")
 
     assert rel1 == rel2
-    assert (base_dir / rel1).read_bytes() == b"hello"
+    assert stored_bytes[f"fanart/images/{rel1}"] == b"hello"
 
 
 def test_ingest_fanart_image_requires_uploader(tmp_path: Path) -> None:
@@ -108,15 +124,16 @@ def test_ingest_fanart_image_success(
     image_path = tmp_path / "page.png"
     _write_png(image_path, size=(20, 10))
 
-    fanart_root = tmp_path / "fanart"
-    (fanart_root / "images").mkdir(parents=True, exist_ok=True)
-    (fanart_root / "thumbs").mkdir(parents=True, exist_ok=True)
-
     saved_payloads: list[bytes] = []
 
-    def fake_store(base_dir: Path, data: bytes, extension: str) -> str:
+    def fake_store(
+        data: bytes,
+        extension: str,
+        media_prefix: str,
+        **_kwargs: object,
+    ) -> str:
         saved_payloads.append(data)
-        folder = "images" if base_dir.name == "images" else "thumbs"
+        folder = "images" if media_prefix == "fanart/images" else "thumbs"
         return f"_objects/aa/{folder}.{extension}"
 
     created_items: list[dict[str, object]] = []
@@ -138,7 +155,6 @@ def test_ingest_fanart_image_success(
         return b"avif"
 
     monkeypatch.setattr(fanart, "ensure_storage_dirs", ensure_storage_dirs)
-    monkeypatch.setattr(fanart, "FANART_DIR", fanart_root)
     monkeypatch.setattr(fanart, "moderate_image", moderate_image)
     monkeypatch.setattr(fanart, "suggested_rating_for_nsfw", suggested_rating_for_nsfw)
     monkeypatch.setattr(fanart, "_store_content_addressed", fake_store)

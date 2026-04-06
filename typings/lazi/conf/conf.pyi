@@ -14,7 +14,7 @@ from .base import *
 - Configuration values will be accessible from the conf namespace package.
 - The import order of the modules determines the resulting configuration.
 
-Use like this (recommended for package mdules):
+Use like this (recommended for package modules):
 
 >>> from lazi.conf import conf
 >>> conf.TRACE

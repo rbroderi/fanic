@@ -24,6 +24,15 @@
         120
     ],
     "python.analysis.typeCheckingMode": "off",
+    "js/ts.tsserver.maxMemory": 1024,
+    "typescript.tsserver.useSeparateSyntaxServer": false,
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/.venv/**": true,
+        "**/node_modules/**": true,
+        "**/runtime/**": true,
+        "**/logs/**": true
+    },
     "cSpell.words": [
         "autopep",
         "basedpyright",

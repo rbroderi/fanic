@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from fanic.db import get_connection
-from fanic.settings import FANART_DIR
+from fanic.media import get_media_service
 
 
 @dataclass(frozen=True)
@@ -17,10 +17,13 @@ class FanartStorageHealth:
 
 def get_fanart_storage_health(*, max_rows_to_check: int = 200) -> FanartStorageHealth:
     normalized_limit = int(max_rows_to_check) if int(max_rows_to_check) > 0 else 1
-    image_dir = FANART_DIR / "images"
-    thumb_dir = FANART_DIR / "thumbs"
-    image_dir_exists = image_dir.is_dir()
-    thumb_dir_exists = thumb_dir.is_dir()
+    media_service = get_media_service()
+
+    image_probe_path = media_service.local_path_for_key(media_service.fanart_image_key("_health/probe.avif"))
+    thumb_probe_path = media_service.local_path_for_key(media_service.fanart_thumb_key("_health/probe.avif"))
+
+    image_dir_exists = image_probe_path.parent.is_dir() if image_probe_path is not None else True
+    thumb_dir_exists = thumb_probe_path.parent.is_dir() if thumb_probe_path is not None else True
 
     with get_connection() as connection:
         count_row = connection.execute("SELECT COUNT(*) AS total FROM fanart_items").fetchone()
@@ -40,15 +43,15 @@ def get_fanart_storage_health(*, max_rows_to_check: int = 200) -> FanartStorageH
     for row in rows:
         image_name = str(row["image_filename"]).strip()
         if image_name:
-            image_file = image_dir / image_name.lstrip("/")
-            if not image_file.is_file():
+            image_key = media_service.fanart_image_key(image_name.lstrip("/"))
+            if not media_service.exists(image_key):
                 missing_image_files += 1
 
         thumb_name_obj = row["thumb_filename"]
         thumb_name = str(thumb_name_obj).strip() if thumb_name_obj is not None else ""
         if thumb_name:
-            thumb_file = thumb_dir / thumb_name.lstrip("/")
-            if not thumb_file.is_file():
+            thumb_key = media_service.fanart_thumb_key(thumb_name.lstrip("/"))
+            if not media_service.exists(thumb_key):
                 missing_thumb_files += 1
 
     if not image_dir_exists or not thumb_dir_exists:
