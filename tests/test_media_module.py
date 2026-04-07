@@ -83,6 +83,21 @@ def test_media_url_uses_media_base_when_cdn_is_disabled(tmp_path: Path) -> None:
     assert service.media_url("/static/fanart/images/demo.avif") == "https://fanic.media/static/fanart/images/demo.avif"
 
 
+def test_media_url_rewrites_absolute_media_base_image_url_to_cdn(
+    tmp_path: Path,
+) -> None:
+    backend = LocalMediaBackend(
+        works_root=tmp_path / "works",
+        fanart_root=tmp_path / "fanart",
+    )
+    service = MediaService(settings=_DummySettings(), backend=backend)
+
+    absolute_old_url = "https://fanic.media/static/work-1/thumbs/_objects/aa/thumb.avif"
+    assert (
+        service.media_url(absolute_old_url) == "https://media.fanic.media/static/work-1/thumbs/_objects/aa/thumb.avif"
+    )
+
+
 def test_bunny_backend_object_url_places_media_under_static_prefix() -> None:
     backend = BunnyStorageMediaBackend(
         read_api_key="test-ro",  # pragma: allowlist secret

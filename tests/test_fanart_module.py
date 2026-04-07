@@ -142,6 +142,22 @@ def test_ingest_fanart_image_success(
         created_items.append(dict(kwargs))
         return created_items[-1]
 
+    captured_tag_sync: dict[str, str] = {
+        "fanart_item_id": "",
+        "fandom_csv": "",
+        "freeform_csv": "",
+    }
+
+    def fake_replace_fanart_item_tags(
+        fanart_item_id: str,
+        *,
+        fandom_csv: str = "",
+        freeform_csv: str = "",
+    ) -> None:
+        captured_tag_sync["fanart_item_id"] = fanart_item_id
+        captured_tag_sync["fandom_csv"] = fandom_csv
+        captured_tag_sync["freeform_csv"] = freeform_csv
+
     def ensure_storage_dirs() -> None:
         return None
 
@@ -160,6 +176,7 @@ def test_ingest_fanart_image_success(
     monkeypatch.setattr(fanart, "_store_content_addressed", fake_store)
     monkeypatch.setattr(fanart, "_render_image_bytes", render_image_bytes)
     monkeypatch.setattr(fanart, "create_fanart_item", fake_create_fanart_item)
+    monkeypatch.setattr(fanart, "replace_fanart_item_tags", fake_replace_fanart_item_tags)
 
     result = fanart.ingest_fanart_image(
         image_path,
@@ -167,6 +184,7 @@ def test_ingest_fanart_image_success(
         title=" Sunset ",
         summary=" Warm colors ",
         fandom="Skyverse",
+        tags="clouds, horizon",
         rating="Teen",
     )
 
@@ -180,3 +198,7 @@ def test_ingest_fanart_image_success(
     assert len(created_items) == 1
     assert created_items[0]["title"] == "Sunset"
     assert created_items[0]["summary"] == "Warm colors"
+    assert result["tags"] == "clouds, horizon"
+    assert captured_tag_sync["fanart_item_id"] == result["item_id"]
+    assert captured_tag_sync["fandom_csv"] == "Skyverse"
+    assert captured_tag_sync["freeform_csv"] == "clouds, horizon"

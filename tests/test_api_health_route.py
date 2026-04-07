@@ -78,6 +78,11 @@ def test_api_health_reports_fanart_storage(
 
     monkeypatch.setattr(module, "get_connection", _fake_get_connection)
     monkeypatch.setattr(module, "get_fanart_storage_health", _health_degraded)
+    monkeypatch.setattr(
+        module,
+        "get_moderation_sidecar_health",
+        lambda: {"moderation_sidecar": "disabled"},
+    )
 
     request = dummy_request(path="/api/health")
     response = dummy_response()
@@ -91,3 +96,43 @@ def test_api_health_reports_fanart_storage(
     assert payload["fanart_storage"] == "degraded"
     assert payload["fanart_missing_images"] == 2
     assert payload["fanart_missing_thumbs"] == 2
+    assert payload["moderation_sidecar"] == "disabled"
+
+
+def test_api_health_degrades_when_moderation_sidecar_is_down(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: Any,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/api/health.ex.get.py",
+        "fanicsite_api_health_ex_get_moderation_sidecar_down_test",
+    )
+    route_module = cast(HealthRouteModule, cast(object, module))
+
+    class _Cursor:
+        def fetchone(self):
+            return (1,)
+
+    class _Connection:
+        def execute(self, _query: str):
+            return _Cursor()
+
+    @contextmanager
+    def _fake_get_connection():
+        yield _Connection()
+
+    monkeypatch.setattr(module, "get_connection", _fake_get_connection)
+    monkeypatch.setattr(module, "get_fanart_storage_health", _health_degraded)
+    monkeypatch.setattr(module, "get_moderation_sidecar_health", lambda: {"moderation_sidecar": "down"})
+
+    request = dummy_request(path="/api/health")
+    response = dummy_response()
+
+    result = route_module.main(request, response)
+    payload = json.loads(result.data.decode("utf-8"))
+
+    assert result.status_code == 503
+    assert payload["ok"] is False
+    assert payload["moderation_sidecar"] == "down"

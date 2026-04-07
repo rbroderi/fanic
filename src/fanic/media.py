@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Protocol
 from typing import runtime_checkable
 from urllib.parse import quote
+from urllib.parse import urlsplit
 
 import niquests as requests
 from niquests.adapters import HTTPAdapter
@@ -350,6 +351,28 @@ class MediaService:
         if not trimmed:
             return ""
         if trimmed.startswith("http://") or trimmed.startswith("https://"):
+            parsed = urlsplit(trimmed)
+            media_cdn_base = self.settings.media_cdn_base_url.strip()
+            if media_cdn_base and self._is_image_public_path(parsed.path):
+                media_base = self.settings.media_base_url.strip()
+                media_base_host = urlsplit(media_base).hostname if media_base else None
+                parsed_host = parsed.hostname
+                normalized_media_base_host = (
+                    media_base_host[4:]
+                    if media_base_host and media_base_host.lower().startswith("www.")
+                    else media_base_host
+                )
+                normalized_parsed_host = (
+                    parsed_host[4:] if parsed_host and parsed_host.lower().startswith("www.") else parsed_host
+                )
+                if normalized_media_base_host and normalized_parsed_host:
+                    if normalized_media_base_host.lower() == normalized_parsed_host.lower():
+                        rebuilt = f"{media_cdn_base.rstrip('/')}{parsed.path}"
+                        if parsed.query:
+                            rebuilt = f"{rebuilt}?{parsed.query}"
+                        if parsed.fragment:
+                            rebuilt = f"{rebuilt}#{parsed.fragment}"
+                        return rebuilt
             return trimmed
 
         if trimmed.startswith("/"):

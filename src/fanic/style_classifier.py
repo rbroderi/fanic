@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import time
 
@@ -65,10 +66,36 @@ _tokenizer: object | None = None
 _text_emb: object | None = None
 _torch_mod: object | None = None
 _device: str = "cpu"
-_last_load_failed_at = 0.0
-_last_load_error = ""
-_last_classify_error = ""
+_last_load_failed_at: float = 0.0
+_last_load_error: str = ""
+_last_classify_error: str = ""
 _LOGGER = logging.getLogger(__name__)
+
+
+def _reset_style_state_after_fork() -> None:
+    global _model
+    global _preprocess
+    global _tokenizer
+    global _text_emb
+    global _torch_mod
+    global _device
+    global _last_load_failed_at
+    global _last_load_error
+    global _last_classify_error
+
+    _model = None
+    _preprocess = None
+    _tokenizer = None
+    _text_emb = None
+    _torch_mod = None
+    _device = "cpu"
+    _last_load_failed_at = 0.0
+    _last_load_error = ""
+    _last_classify_error = ""
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_style_state_after_fork)
 
 
 def _as_float_or_none(value: object | None) -> float | None:
@@ -316,16 +343,27 @@ def _classify_style_internal(path: str) -> tuple[str, dict[str, float]]:
                     return _LOW_CONFIDENCE_FALLBACK_STYLE, confidences
 
             if predicted_style == "photorealistic":
-                # Keep photoreal only when it is top class and leads drawn styles by margin.
-                if top_prob is not None:
-                    drawn_probs = [
-                        confidence for style_name, confidence in confidences.items() if style_name != "photorealistic"
-                    ]
+                # Keep photoreal only when confidence clears the photoreal threshold
+                # and it leads the next-best style by margin.
+                min_confidence = float(
+                    _MIN_CONFIDENCE_BY_STYLE.get(
+                        "photorealistic",
+                        _DEFAULT_STYLE_MIN_CONFIDENCE,
+                    )
+                )
+                if top_prob is None:
+                    return _LOW_CONFIDENCE_FALLBACK_STYLE, confidences
+                if min_confidence > 0 and top_prob < min_confidence:
+                    return _LOW_CONFIDENCE_FALLBACK_STYLE, confidences
 
-                    if drawn_probs:
-                        best_drawn = max(drawn_probs)
-                        if (top_prob - best_drawn) >= _PHOTO_BLOCK_MIN_MARGIN:
-                            return predicted_style, confidences
+                drawn_probs = [
+                    confidence for style_name, confidence in confidences.items() if style_name != "photorealistic"
+                ]
+
+                if drawn_probs:
+                    best_drawn = max(drawn_probs)
+                    if (top_prob - best_drawn) >= _PHOTO_BLOCK_MIN_MARGIN:
+                        return predicted_style, confidences
 
                 return _LOW_CONFIDENCE_FALLBACK_STYLE, confidences
 

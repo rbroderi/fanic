@@ -6,6 +6,7 @@ from types import ModuleType
 from typing import Any
 from typing import Protocol
 from typing import final
+from urllib.parse import unquote
 
 import pytest
 
@@ -254,6 +255,7 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
             "title": "Skyline",
             "summary": "Study",
             "fandom": "Skyverse",
+            "tags": "night city, skyline",
             "rating": "Teen And Up Audiences",
         },
         files={"fanart_image": _UploadStub()},
@@ -263,6 +265,66 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/fanart/alice?msg=uploaded-rating-elevated"
+
+
+def test_fanart_upload_blocked_includes_moderation_stats_for_admin(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/fanart/upload.ex.post.py",
+        "fanicsite_fanart_upload_ex_post_blocked_admin_stats_test",
+    )
+
+    monkeypatch.setattr(module, "enforce_https_termination", _always_true)
+    monkeypatch.setattr(module, "validate_csrf", _always_true)
+    monkeypatch.setattr(module, "check_post_rate_limit", _rate_limit_ok)
+    monkeypatch.setattr(module, "current_user", _current_user_admin)
+    monkeypatch.setattr(module, "role_for_user", _role_admin)
+    monkeypatch.setattr(module, "validate_page_upload_policy", _always_none)
+    monkeypatch.setattr(module, "validate_saved_upload_size", _always_none)
+    monkeypatch.setattr(module, "validate_field_lengths", lambda *_args, **_kwargs: "")
+
+    def _raise_blocked(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise module.ModerationBlockedError(
+            {
+                "allow": False,
+                "style": "photorealistic",
+                "nsfw_score": 0.81,
+                "reasons": ["style:photorealistic", "explicit:0.81"],
+            }
+        )
+
+    monkeypatch.setattr(module, "ingest_fanart_image", _raise_blocked)
+
+    request = dummy_request(
+        path="/fanart/upload",
+        method="POST",
+        form={
+            "agree_terms": "on",
+            "title": "Skyline",
+            "summary": "Study",
+            "fandom": "Skyverse",
+            "tags": "night city, skyline",
+            "rating": "Teen And Up Audiences",
+        },
+        files={"fanart_image": _UploadStub()},
+    )
+    response = dummy_response()
+    result = module.main(request, response)
+
+    assert result.status_code == 303
+    location = result.headers["Location"]
+    assert location.startswith("/fanart/upload?msg=blocked&")
+    assert "moderation_detail=" in location
+
+    moderation_detail_encoded = location.split("moderation_detail=", 1)[1]
+    moderation_detail = unquote(moderation_detail_encoded)
+    assert '"allow": false' in moderation_detail
+    assert '"style": "photorealistic"' in moderation_detail
+    assert '"nsfw_score": 0.81' in moderation_detail
 
 
 def test_fanart_gallery_create_requires_owner(

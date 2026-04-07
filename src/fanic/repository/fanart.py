@@ -138,6 +138,93 @@ def _csv_terms(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def _ensure_tag(
+    name: str,
+    tag_type: str,
+    *,
+    connection: sqlite3.Connection,
+) -> int:
+    slug = slugify(name)
+    existing = connection.execute("SELECT id FROM tags WHERE slug = ?", (slug,)).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    cursor = connection.execute(
+        "INSERT INTO tags (slug, name, type) VALUES (?, ?, ?)",
+        (slug, name, tag_type),
+    )
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to insert tag")
+    return int(cursor.lastrowid)
+
+
+def _increment_tag_usage_counts(connection: sqlite3.Connection, tag_ids: set[int]) -> None:
+    for tag_id in tag_ids:
+        connection.execute(
+            """
+            INSERT INTO tag_popularity (tag_id, usage_count)
+            VALUES (?, 1)
+            ON CONFLICT(tag_id) DO UPDATE SET
+                usage_count = tag_popularity.usage_count + 1,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (tag_id,),
+        )
+
+
+def _unique_csv_terms(raw: str) -> list[str]:
+    terms = _csv_terms(raw)
+    unique_terms: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_terms.append(term)
+    return unique_terms
+
+
+def replace_fanart_item_tags(
+    fanart_item_id: str,
+    *,
+    fandom_csv: str = "",
+    freeform_csv: str = "",
+) -> None:
+    normalized_item_id = fanart_item_id.strip()
+    if not normalized_item_id:
+        raise ValueError("fanart_item_id must not be empty")
+
+    tag_pairs: list[tuple[str, str]] = []
+    tag_pairs.extend((name, "fandom") for name in _unique_csv_terms(fandom_csv))
+    tag_pairs.extend((name, "freeform") for name in _unique_csv_terms(freeform_csv))
+    unique_tag_pairs = list(dict.fromkeys(tag_pairs))
+
+    with get_connection() as connection:
+        existing_rows = connection.execute(
+            "SELECT tag_id FROM fanart_item_tags WHERE fanart_item_id = ?",
+            (normalized_item_id,),
+        ).fetchall()
+        existing_tag_ids = {int(row["tag_id"]) for row in existing_rows}
+
+        connection.execute(
+            "DELETE FROM fanart_item_tags WHERE fanart_item_id = ?",
+            (normalized_item_id,),
+        )
+
+        new_tag_ids: set[int] = set()
+        for name, tag_type in unique_tag_pairs:
+            tag_id = _ensure_tag(name, tag_type, connection=connection)
+            new_tag_ids.add(tag_id)
+            connection.execute(
+                "INSERT OR IGNORE INTO fanart_item_tags (fanart_item_id, tag_id) VALUES (?, ?)",
+                (normalized_item_id, tag_id),
+            )
+
+        added_tag_ids = new_tag_ids - existing_tag_ids
+        _increment_tag_usage_counts(connection, added_tag_ids)
+
+
 def add_fanart_comment(
     fanart_item_id: str,
     username: str,
@@ -590,9 +677,20 @@ def list_fanart_users(
                 normalized_term = term.lower()
                 like_term = f"%{normalized_term}%"
                 per_term_clauses.append(
-                    "(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)"
+                    "("
+                    "EXISTS ("
+                    "SELECT 1 "
+                    "FROM fanart_item_tags fit "
+                    "JOIN tags t ON t.id = fit.tag_id "
+                    "WHERE fit.fanart_item_id = fi.id "
+                    "AND lower(t.name) LIKE ?"
+                    ") "
+                    "OR lower(fi.title) LIKE ? "
+                    "OR lower(fi.summary) LIKE ? "
+                    "OR lower(fi.fandom) LIKE ?"
+                    ")"
                 )
-                params.extend([like_term, like_term, like_term])
+                params.extend([like_term, like_term, like_term, like_term])
             where.append("(" + " OR ".join(per_term_clauses) + ")")
 
         status = resolved_filters.get("status", "").strip()
@@ -724,9 +822,20 @@ def list_fanart_items(
                 normalized_term = term.lower()
                 like_term = f"%{normalized_term}%"
                 per_term_clauses.append(
-                    "(lower(fi.title) LIKE ? OR lower(fi.summary) LIKE ? OR lower(fi.fandom) LIKE ?)"
+                    "("
+                    "EXISTS ("
+                    "SELECT 1 "
+                    "FROM fanart_item_tags fit "
+                    "JOIN tags t ON t.id = fit.tag_id "
+                    "WHERE fit.fanart_item_id = fi.id "
+                    "AND lower(t.name) LIKE ?"
+                    ") "
+                    "OR lower(fi.title) LIKE ? "
+                    "OR lower(fi.summary) LIKE ? "
+                    "OR lower(fi.fandom) LIKE ?"
+                    ")"
                 )
-                params.extend([like_term, like_term, like_term])
+                params.extend([like_term, like_term, like_term, like_term])
             where.append("(" + " OR ".join(per_term_clauses) + ")")
 
         status = resolved_filters.get("status", "").strip()

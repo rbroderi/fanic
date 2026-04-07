@@ -221,6 +221,9 @@ class FanicSettings(BaseSettings):
     # Classification and moderation tuning
     explicit_threshold: float
     model_load_logs: bool
+    moderation_sidecar_timeout_seconds: float = 20.0
+    moderation_sidecar_token: str = ""
+    moderation_sidecar_url: str = ""
     nsfw_logit_scale: float
     photo_block_min_margin: float
     photoreal_min_confidence: float
@@ -356,6 +359,15 @@ class FanicSettings(BaseSettings):
     @classmethod
     def _media_bunny_api_key_rw_from_file(cls, value: Any) -> Any:
         return _resolve_value_from_file(value, "FANIC_MEDIA_BUNNY_API_KEY_RW_FILE", "bunnystorage_rw")
+
+    @field_validator("moderation_sidecar_token", mode="before")
+    @classmethod
+    def _moderation_sidecar_token_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(
+            value,
+            "FANIC_MODERATION_SIDECAR_TOKEN_FILE",
+            "moderation_secret",
+        )
 
     @field_validator(
         "max_cbz_upload_bytes",

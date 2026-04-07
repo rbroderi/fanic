@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 from collections.abc import Callable
 from collections.abc import Sequence
@@ -45,6 +46,8 @@ from fanic.repository.works import get_work
 from fanic.repository.works import list_work_chapters
 from fanic.repository.works import list_work_page_rows
 from fanic.type_coercion import as_float
+
+_LOGGER = logging.getLogger("fanic.ingest")
 
 
 class ThreadLike(Protocol):
@@ -254,6 +257,7 @@ def _run_async_cbz_ingest(
     cbz_path: Path,
     metadata_override_path: Path | None,
     cleanup_dir: Path,
+    include_moderation_details: bool,
     deps: ComicUploadPostDependencies,
 ) -> None:
     started_comic_ingest_session = False
@@ -356,13 +360,24 @@ def _run_async_cbz_ingest(
         moderation = exc.moderation
         source_member = str(moderation.get("source_member", "") if moderation.get("source_member", "") else "")
         source_suffix = f" ({source_member})" if source_member else ""
+        blocked_message = f"CBZ import blocked by moderation policy{source_suffix}."
+        if include_moderation_details:
+            moderation_stats = json.dumps(dict(moderation), ensure_ascii=True, sort_keys=True)
+            blocked_message = f"{blocked_message} stats={moderation_stats}"
         _set_progress(
             stage="blocked",
-            message=f"CBZ import blocked by moderation policy{source_suffix}.",
+            message=blocked_message,
             done=True,
             ok=False,
         )
     except Exception:
+        _LOGGER.exception(
+            "Async comic ingest failed",
+            extra={
+                "upload_token": upload_token,
+                "uploader_username": username,
+            },
+        )
         _set_progress(
             stage="failed",
             message="Import failed",
@@ -401,6 +416,16 @@ def main(
             upload_status_text="Login required before uploads.",
             upload_status_kind="error",
         )
+
+    admin_probe_marker = "__fanic_admin_probe__"
+    is_admin_request = (
+        deps.admin_aware_detail(
+            request,
+            public_detail=admin_probe_marker,
+            exc=RuntimeError("fanic-admin"),
+        )
+        != admin_probe_marker
+    )
 
     action = request.form.get("action", "").strip()
     terms_accepted = request.form.get("agree_terms", "").strip().lower() in {
@@ -509,6 +534,7 @@ def main(
                     "cbz_path": cbz_path,
                     "metadata_override_path": override_path,
                     "cleanup_dir": task_dir,
+                    "include_moderation_details": is_admin_request,
                     "deps": deps,
                 },
                 name="fanic-comic-ingest",

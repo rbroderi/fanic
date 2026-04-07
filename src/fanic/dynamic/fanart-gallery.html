@@ -20,9 +20,21 @@
         <p>__FANART_GALLERY_LINKS_HTML__</p>
         <div __FANART_GALLERY_CREATE_FORM_HIDDEN_ATTR__>__FANART_GALLERY_CREATE_FORM_HTML__</div>
       </section>
+      <section class="card">
+        <form class="filter-row" method="get" action="__FILTER_ACTION__">
+          __FILTER_GALLERY_HIDDEN_INPUT__
+          <input name="q" placeholder="Search title or summary" value="__FILTER_Q__" />
+          <input name="fandom" placeholder="Fandom" value="__FILTER_FANDOM__" data-tag-autocomplete="1" data-tag-type="fandom" data-tag-chips="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input name="tag" placeholder="Tag include" value="__FILTER_TAG__" data-tag-autocomplete="1" data-tag-type="freeform" data-tag-chips="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <button type="submit">Search</button>
+        </form>
+        <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
+        <datalist id="freeformSuggestions">__FREEFORM_OPTIONS_HTML__</datalist>
+      </section>
       <div __FANART_GALLERY_MANAGE_FORM_HIDDEN_ATTR__>__FANART_GALLERY_MANAGE_FORM_HTML__</div>
       <section class="work-grid">__FANART_GRID_HTML__</section>
     </main>
+    <script src="__TAG_AUTOCOMPLETE_SRC__"></script>
     __SITE_COMMON_SCRIPTS__
   </body>
 </html>

@@ -299,3 +299,45 @@ def test_nsfw_confidence_mapping_clamps_probs(monkeypatch: pytest.MonkeyPatch) -
     assert 0.0 <= score <= 1.0
     assert confidences["sfw"] == 0.0
     assert confidences["explicit"] == 1.0
+
+
+def test_style_reset_state_after_fork_clears_loaded_cache() -> None:
+    style_classifier._model = object()  # pyright: ignore[reportPrivateUsage]
+    style_classifier._preprocess = object()  # pyright: ignore[reportPrivateUsage]
+    style_classifier._tokenizer = object()  # pyright: ignore[reportPrivateUsage]
+    style_classifier._text_emb = object()  # pyright: ignore[reportPrivateUsage]
+    style_classifier._torch_mod = object()  # pyright: ignore[reportPrivateUsage]
+    style_classifier._device = "cuda"  # pyright: ignore[reportPrivateUsage]
+    style_classifier._last_load_failed_at = 12.0  # pyright: ignore[reportPrivateUsage]
+    style_classifier._last_load_error = "x"  # pyright: ignore[reportPrivateUsage]
+    style_classifier._last_classify_error = "y"  # pyright: ignore[reportPrivateUsage]
+
+    style_classifier._reset_style_state_after_fork()  # pyright: ignore[reportPrivateUsage]
+
+    assert style_classifier._model is None  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._preprocess is None  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._tokenizer is None  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._text_emb is None  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._torch_mod is None  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._device == "cpu"  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._last_load_failed_at == 0.0  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._last_load_error == ""  # pyright: ignore[reportPrivateUsage]
+    assert style_classifier._last_classify_error == ""  # pyright: ignore[reportPrivateUsage]
+
+
+def test_nsfw_reset_state_after_fork_clears_loaded_cache() -> None:
+    nsfw_detector._model = object()  # pyright: ignore[reportPrivateUsage]
+    nsfw_detector._preprocess = object()  # pyright: ignore[reportPrivateUsage]
+    nsfw_detector._text_emb = object()  # pyright: ignore[reportPrivateUsage]
+    nsfw_detector._torch_mod = object()  # pyright: ignore[reportPrivateUsage]
+    nsfw_detector._device = "cuda"  # pyright: ignore[reportPrivateUsage]
+    nsfw_detector._load_attempted = True  # pyright: ignore[reportPrivateUsage]
+
+    nsfw_detector._reset_nsfw_state_after_fork()  # pyright: ignore[reportPrivateUsage]
+
+    assert nsfw_detector._model is None  # pyright: ignore[reportPrivateUsage]
+    assert nsfw_detector._preprocess is None  # pyright: ignore[reportPrivateUsage]
+    assert nsfw_detector._text_emb is None  # pyright: ignore[reportPrivateUsage]
+    assert nsfw_detector._torch_mod is None  # pyright: ignore[reportPrivateUsage]
+    assert nsfw_detector._device == "cpu"  # pyright: ignore[reportPrivateUsage]
+    assert nsfw_detector._load_attempted is False  # pyright: ignore[reportPrivateUsage]

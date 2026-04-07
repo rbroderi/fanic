@@ -756,6 +756,16 @@ def test_fanart_crud_and_lookup_helpers(
     )
     assert item_id == "fanart-1"
 
+    repository.replace_fanart_item_tags(
+        "fanart-1",
+        fandom_csv="Skyverse",
+        freeform_csv="clouds, skyline",
+    )
+
+    tag_filtered_items = repository.list_fanart_items({"tag": "skyline"}, limit=20)
+    assert len(tag_filtered_items) == 1
+    assert tag_filtered_items[0]["id"] == "fanart-1"
+
     repository.create_fanart_item(
         item_id="fanart-2",
         uploader_username="bob",

@@ -1,3 +1,5 @@
+import os
+
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 
 from fanic.clip_backend import get_backend
@@ -52,7 +54,27 @@ _preprocess: object | None = None
 _text_emb: object | None = None
 _torch_mod: object | None = None
 _device: str = "cpu"
-_load_attempted = False
+_load_attempted: bool = False
+
+
+def _reset_nsfw_state_after_fork() -> None:
+    global _model
+    global _preprocess
+    global _text_emb
+    global _torch_mod
+    global _device
+    global _load_attempted
+
+    _model = None
+    _preprocess = None
+    _text_emb = None
+    _torch_mod = None
+    _device = "cpu"
+    _load_attempted = False
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_nsfw_state_after_fork)
 
 
 def _as_float(value: object) -> float | None:

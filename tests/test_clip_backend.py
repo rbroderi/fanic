@@ -166,3 +166,21 @@ def test_ensure_backend_loaded_handles_exception_and_resets_state(
 
     assert loaded is False
     assert clip_backend.get_backend() is None
+
+
+def test_reset_backend_state_after_fork_clears_loaded_objects() -> None:
+    clip_backend._model = object()  # pyright: ignore[reportPrivateUsage]
+    clip_backend._preprocess = object()  # pyright: ignore[reportPrivateUsage]
+    clip_backend._tokenizer = object()  # pyright: ignore[reportPrivateUsage]
+    clip_backend._torch_mod = object()  # pyright: ignore[reportPrivateUsage]
+    clip_backend._device = "cuda"  # pyright: ignore[reportPrivateUsage]
+    clip_backend._last_load_failed_at = 99.0  # pyright: ignore[reportPrivateUsage]
+
+    clip_backend._reset_backend_state_after_fork()  # pyright: ignore[reportPrivateUsage]
+
+    assert clip_backend._model is None  # pyright: ignore[reportPrivateUsage]
+    assert clip_backend._preprocess is None  # pyright: ignore[reportPrivateUsage]
+    assert clip_backend._tokenizer is None  # pyright: ignore[reportPrivateUsage]
+    assert clip_backend._torch_mod is None  # pyright: ignore[reportPrivateUsage]
+    assert clip_backend._device == "cpu"  # pyright: ignore[reportPrivateUsage]
+    assert clip_backend._last_load_failed_at == 0.0  # pyright: ignore[reportPrivateUsage]

@@ -1,6 +1,16 @@
+from pathlib import Path
+
 import pytest
 
 import fanic.ingest_progress as ingest_progress
+
+
+@pytest.fixture(autouse=True)
+def isolated_progress_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FANIC_INGEST_PROGRESS_DIR", str(tmp_path / "ingest-progress"))
 
 
 def test_set_and_get_progress_round_trip() -> None:
@@ -117,3 +127,24 @@ def test_prune_stale_entries_on_get(monkeypatch: pytest.MonkeyPatch) -> None:
     assert stale_value is None
     assert live_value is not None
     assert live_value["ok"] is True
+
+
+def test_get_progress_reads_file_when_memory_missing() -> None:
+    ingest_progress.set_progress(
+        "cross-worker-token",
+        stage="ingesting",
+        message="shared state",
+        current=3,
+        total=7,
+        done=False,
+        ok=False,
+    )
+
+    # Simulate a different worker process with no in-memory cache.
+    ingest_progress._PROGRESS.clear()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+    value = ingest_progress.get_progress("cross-worker-token")
+
+    assert value is not None
+    assert value["message"] == "shared state"
+    assert value["current"] == 3

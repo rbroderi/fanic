@@ -3,6 +3,7 @@ from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import json_response
 from fanic.cylinder_sites.common.responses import text_error
 from fanic.db import get_connection
+from fanic.moderation import get_moderation_sidecar_health
 from fanic.storage_health import get_fanart_storage_health
 
 
@@ -38,14 +39,18 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     else:
         fanart_payload = {"fanart_storage": fanart_storage}
 
-    status_code = 200 if db_ok and fanart_storage != "down" else 503
+    moderation_payload = get_moderation_sidecar_health()
+    moderation_sidecar = str(moderation_payload.get("moderation_sidecar", "disabled"))
+
+    status_code = 200 if db_ok and fanart_storage != "down" and moderation_sidecar != "down" else 503
     return json_response(
         response,
         {
-            "ok": db_ok and fanart_storage != "down",
+            "ok": db_ok and fanart_storage != "down" and moderation_sidecar != "down",
             "service": "fanic",
             "db": "up" if db_ok else "down",
             **fanart_payload,
+            **moderation_payload,
         },
         status_code,
     )

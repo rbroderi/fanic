@@ -28,6 +28,27 @@ _device: str = "cpu"
 _last_load_failed_at = 0.0
 
 
+def _reset_backend_state_after_fork() -> None:
+    global _model
+    global _preprocess
+    global _tokenizer
+    global _torch_mod
+    global _device
+    global _last_load_failed_at
+
+    # Models initialized in a preloaded master are not fork-safe for worker inference.
+    _model = None
+    _preprocess = None
+    _tokenizer = None
+    _torch_mod = None
+    _device = "cpu"
+    _last_load_failed_at = 0.0
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_backend_state_after_fork)
+
+
 class _NoopProgress:
     def update(self, _step: int) -> None:
         return
@@ -109,7 +130,10 @@ def ensure_backend_loaded() -> bool:
             _ = call0(progress, "close")
             return False
 
-        created_tuple = cast(tuple[object, ...], created)
+        created_items: list[object] = []
+        for item in created:  # pyright: ignore[reportUnknownVariableType]
+            created_items.append(cast(object, item))
+        created_tuple = tuple(created_items)
         if len(created_tuple) < 3:
             _last_load_failed_at = time.time()
             _ = call0(progress, "close")

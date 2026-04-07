@@ -357,6 +357,119 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     assert throttled_events[-1].get("ok") is False
 
 
+def test_comic_upload_post_async_worker_reports_blocked_stats_for_admin(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
+        "fanicsite_comic_upload_ex_post_async_blocked_admin_stats_test",
+    )
+
+    progress_events: list[dict[str, object]] = []
+
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
+
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
+        _ = on_queued
+        return ComicIngestSessionStartStub(True, 0, 0)
+
+    def end_upload_session_stub(_username: str) -> None:
+        return None
+
+    def end_comic_ingest_session_stub() -> None:
+        return None
+
+    def ingest_cbz_blocked(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise module.ModerationBlockedError(
+            {
+                "allow": False,
+                "source_member": "001.png",
+                "style": "photorealistic",
+                "nsfw_score": 0.93,
+                "reasons": ["style:photorealistic", "explicit:0.93"],
+            }
+        )
+
+    def set_progress_stub(token: str, **kwargs: object) -> None:
+        progress_events.append({"token": token, **kwargs})
+
+    def render_upload_page_stub(_request: Any, response: ResponseLike, **_kwargs: object) -> ResponseLike:
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    def admin_aware_detail_stub(
+        _request: Any,
+        *,
+        public_detail: str,
+        exc: BaseException,
+    ) -> str:
+        _ = public_detail
+        return str(exc)
+
+    deps = module.ComicUploadPostDependencies(
+        request_id=module.request_id,
+        text_error=module.text_error,
+        enforce_https_termination=_always_https,
+        validate_csrf=_always_valid_csrf,
+        current_user=_current_user_alice,
+        render_upload_page=render_upload_page_stub,
+        validate_cbz_upload_policy=_validate_cbz_upload_policy_ok,
+        begin_upload_session=begin_upload_session_stub,
+        end_upload_session=end_upload_session_stub,
+        validate_saved_upload_size=_validate_saved_upload_size_ok,
+        validate_page_upload_policy=_validate_page_upload_policy_ok,
+        set_progress=set_progress_stub,
+        begin_comic_ingest_session=begin_comic_ingest_session_stub,
+        end_comic_ingest_session=end_comic_ingest_session_stub,
+        ingest_cbz=ingest_cbz_blocked,
+        ingest_editor_page=_ingest_editor_page_stub,
+        editor_replace_page_image=_editor_replace_page_image_stub,
+        editor_delete_page=_editor_delete_page_stub,
+        editor_move_page=_editor_move_page_stub,
+        editor_reorder_gallery=_editor_reorder_gallery_stub,
+        editor_add_chapter=_editor_add_chapter_stub,
+        editor_delete_chapter=_editor_delete_chapter_stub,
+        editor_update_chapter=_editor_update_chapter_stub,
+        get_work=_get_work_stub,
+        list_work_page_rows=_list_work_page_rows_stub,
+        list_work_chapters=_list_work_chapters_stub,
+        get_explicit_threshold=_get_explicit_threshold_stub,
+        delete_tree=module.delete_tree,
+        thread_factory=ImmediateThread,
+        log_exception=_no_op_log_exception,
+        admin_aware_detail=admin_aware_detail_stub,
+    )
+
+    request = dummy_request(
+        path="/comic/upload",
+        method="POST",
+        form={
+            "action": "ingest",
+            "agree_terms": "on",
+            "upload_token": "tok-blocked-admin",
+        },
+        files={
+            "cbz": DummyUpload("sample.cbz", b"PK\\x03\\x04dummy"),
+        },
+    )
+    response = dummy_response()
+
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 200
+    blocked_events = [event for event in progress_events if str(event.get("stage", "")) == "blocked"]
+    assert blocked_events
+    blocked_message = str(blocked_events[-1].get("message", ""))
+    assert "CBZ import blocked by moderation policy (001.png)." in blocked_message
+    assert "stats={" in blocked_message
+    assert '"nsfw_score": 0.93' in blocked_message
+
+
 def test_comic_upload_post_editor_add_chapter_uses_injected_dependency(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

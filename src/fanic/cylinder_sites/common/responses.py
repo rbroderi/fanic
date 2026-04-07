@@ -531,6 +531,7 @@ def render_html_template(
     merged["__WORK_EDIT_SRC__"] = static_asset_url("work-edit", "js")
     merged["__WORK_PAGE_SRC__"] = static_asset_url("work-page", "js")
     merged["__COMIC_UPLOAD_PROGRESS_SRC__"] = static_asset_url("comic-upload-progress", "js")
+    merged["__FANART_UPLOAD_PROGRESS_SRC__"] = static_asset_url("fanart-upload-progress", "js")
 
     for marker, value in merged.items():
         html = html.replace(marker, value)

@@ -307,6 +307,15 @@ FANIC is configured via environment variables (or a `.env` file). Key groups:
 - `FANIC_OPENCLIP_CACHE_DIR` (default `~/.cache/clip/`): Model cache
   directory.
 - `FANIC_PRELOAD_MODELS` (default `true`): Preload CLIP models on startup.
+- `FANIC_MODERATION_SIDECAR_URL` (default empty): Optional internal
+  moderation sidecar endpoint (for example
+  `unix:/run/fanic/fanic-moderation.sock` or `http://127.0.0.1:8091`). When
+  set, web workers call the sidecar for moderation instead of loading torch
+  models in-process.
+- `FANIC_MODERATION_SIDECAR_TIMEOUT_SECONDS` (default `20.0`): HTTP timeout
+  when calling the moderation sidecar.
+- `FANIC_MODERATION_SIDECAR_TOKEN` (default empty): Optional shared token sent
+  in `X-Fanic-Moderation-Token` for sidecar authorization.
 
 ### Image Quality
 
@@ -528,6 +537,20 @@ For the web service unit (`scripts/fanic.service`), startup now runs through
 ```bash
 FANIC_GUNICORN_WORKERS=9
 FANIC_BIND_ADDR=unix:/run/fanic/fanic.sock
+# Keep web workers preloaded while offloading moderation to sidecar.
+FANIC_MODERATION_SIDECAR_URL=unix:/run/fanic/fanic-moderation.sock
+# Optional shared token if enabled in sidecar service.
+FANIC_MODERATION_SIDECAR_TOKEN=replace-with-random-secret
+```
+
+To run moderation in a dedicated sidecar process, install and enable
+`scripts/fanic-moderation.service`:
+
+```bash
+sudo cp scripts/fanic-moderation.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fanic-moderation.service
+sudo systemctl status fanic-moderation.service
 ```
 
 Install dependency if missing:

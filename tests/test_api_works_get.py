@@ -3,8 +3,13 @@ from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+
+
+def _cdn_media_url(value: str) -> str:
+    return f"CDN::{value}"
 
 
 def test_build_comicinfo_xml_includes_extended_fanic_metadata(
@@ -173,3 +178,86 @@ def test_publish_download_archive_uploads_when_missing(
     assert captured["key"] == media_key
     assert captured["content"] == b"cbz-bytes"
     assert captured["content_type"] == "application/vnd.comicbook+zip"
+
+
+def test_manifest_with_media_urls_rewrites_relative_and_absolute_media_paths(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/api/comic.ex.get.py",
+        "fanicsite_api_comic_ex_get_manifest_media_url_rewrite_test",
+    )
+
+    monkeypatch.setattr(
+        module,
+        "media_url",
+        _cdn_media_url,
+    )
+
+    manifest: dict[str, object] = {
+        "id": "work-123",
+        "pages": [
+            {
+                "index": 1,
+                "image_url": "/static/work-123/pages/p1.avif",
+                "thumb_url": "https://fanic.media/static/work-123/thumbs/t1.avif",
+            }
+        ],
+    }
+
+    result = module._manifest_with_media_urls(manifest)
+    pages = result.get("pages")
+    assert isinstance(pages, list)
+    typed_pages = cast(list[dict[str, object]], pages)
+    first = typed_pages[0]
+    assert isinstance(first, dict)
+    assert first["image_url"] == "CDN::/static/work-123/pages/p1.avif"
+    assert first["thumb_url"] == "CDN::https://fanic.media/static/work-123/thumbs/t1.avif"
+
+
+def test_version_manifest_with_media_urls_builds_page_and_thumb_urls(
+    load_route_module: Callable[[str, str], ModuleType],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/api/comic.ex.get.py",
+        "fanicsite_api_comic_ex_get_version_media_url_rewrite_test",
+    )
+
+    monkeypatch.setattr(
+        module,
+        "media_url",
+        _cdn_media_url,
+    )
+
+    version_manifest: dict[str, object] = {
+        "version_id": "v1",
+        "pages": [
+            {
+                "page_index": 1,
+                "image_filename": "_objects/aa/page.avif",
+                "thumb_filename": "_objects/bb/thumb.avif",
+            },
+            {
+                "page_index": 2,
+                "image_filename": "_objects/cc/page.avif",
+                "thumb_filename": "",
+            },
+        ],
+    }
+
+    result = module._version_manifest_with_media_urls("work-123", version_manifest)
+    pages = result.get("pages")
+    assert isinstance(pages, list)
+    typed_pages = cast(list[dict[str, object]], pages)
+
+    page_one = typed_pages[0]
+    assert isinstance(page_one, dict)
+    assert page_one["image_url"] == "CDN::/static/work-123/pages/_objects/aa/page.avif"
+    assert page_one["thumb_url"] == "CDN::/static/work-123/thumbs/_objects/bb/thumb.avif"
+
+    page_two = typed_pages[1]
+    assert isinstance(page_two, dict)
+    assert page_two["image_url"] == "CDN::/static/work-123/pages/_objects/cc/page.avif"
+    assert page_two["thumb_url"] == "CDN::/static/work-123/pages/_objects/cc/page.avif"

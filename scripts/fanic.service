@@ -1,6 +1,9 @@
 [Unit]
 Description=FANIC web service
 After=network.target
+# Optional: if enabled, keep moderation sidecar available before web workers start.
+Wants=fanic-moderation.service
+After=fanic-moderation.service
 
 [Service]
 Type=simple
@@ -16,16 +19,20 @@ Environment=FANIC_DATA_DIR=/mnt/storage
 Environment=FANIC_DB_PATH=/opt/fanic/runtime/fanic.db
 Environment=FANIC_LOG_PATH_TEMPLATE=/var/log/fanic/%%TIMESTAMP%%.log
 Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONFAULTHANDLER=1
 # Gunicorn tuning overrides (optional):
 # Environment=FANIC_GUNICORN_WORKERS=9
 # Environment=FANIC_GUNICORN_TIMEOUT=120
 # Environment=FANIC_BIND_ADDR=unix:/run/fanic/fanic.sock
 # Environment=FANIC_GUNICORN_UMASK=0007
+# Environment=FANIC_MODERATION_SIDECAR_URL=unix:/run/fanic/fanic-moderation.sock
+# Environment=FANIC_MODERATION_SIDECAR_TOKEN=replace-with-random-secret
 # Optional secure secret file pointers (recommended for production):
 # Environment=FANIC_SESSION_SECRET_FILE=/etc/fanic/credentials/session_secret
 # Environment=FANIC_AUTH0_CLIENT_SECRET_FILE=/etc/fanic/credentials/auth0_client_secret
 # Environment=FANIC_AUTH0_AUDIENCE_FILE=/etc/fanic/credentials/auth0_audience
 # Environment=FANIC_ALPHA_INVITE_CODES_CSV_FILE=/etc/fanic/credentials/alpha_invite_codes_csv
+# Environment=FANIC_MODERATION_SIDECAR_TOKEN_FILE=/etc/fanic/credentials/moderation_secret
 UMask=0027
 PrivateTmp=true
 ProtectSystem=strict
@@ -53,6 +60,7 @@ ExecStartPre=/usr/bin/find /opt/fanic/static -type f -exec /bin/chmod 664 {} +
 ExecStart=/usr/bin/env bash /opt/fanic/scripts/start-gunicorn.sh
 Restart=on-failure
 RestartSec=5
+LimitCORE=infinity
 NoNewPrivileges=true
 
 [Install]

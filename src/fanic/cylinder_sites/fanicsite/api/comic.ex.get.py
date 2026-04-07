@@ -16,6 +16,7 @@ from fanic.cylinder_sites.common.logging_utils import request_id
 from fanic.cylinder_sites.common.protocols import RequestLike
 from fanic.cylinder_sites.common.protocols import ResponseLike
 from fanic.cylinder_sites.common.responses import json_response
+from fanic.cylinder_sites.common.responses import media_url
 from fanic.cylinder_sites.common.responses import page_file_for
 from fanic.cylinder_sites.common.responses import redirect_see_other
 from fanic.cylinder_sites.common.responses import send_file
@@ -471,6 +472,70 @@ def _version_page_files(
     return None
 
 
+def _manifest_with_media_urls(manifest: dict[str, object]) -> dict[str, object]:
+    pages_obj = manifest.get("pages")
+    if not isinstance(pages_obj, list):
+        return manifest
+
+    normalized_pages: list[dict[str, object]] = []
+    for page_obj in cast(list[object], pages_obj):
+        if not isinstance(page_obj, dict):
+            normalized_pages.append({})
+            continue
+        page = dict(cast(dict[str, object], page_obj))
+        image_url_raw = str(page.get("image_url", "")).strip()
+        thumb_url_raw = str(page.get("thumb_url", "")).strip()
+        if image_url_raw:
+            page["image_url"] = media_url(image_url_raw)
+        if thumb_url_raw:
+            page["thumb_url"] = media_url(thumb_url_raw)
+        normalized_pages.append(page)
+
+    normalized_manifest = dict(manifest)
+    normalized_manifest["pages"] = normalized_pages
+    return normalized_manifest
+
+
+def _version_manifest_with_media_urls(
+    work_id: str,
+    version_manifest: dict[str, object],
+) -> dict[str, object]:
+    pages_obj = version_manifest.get("pages")
+    if not isinstance(pages_obj, list):
+        return version_manifest
+
+    normalized_pages: list[dict[str, object]] = []
+    work_id_quoted = quote(work_id, safe="")
+    for page_obj in cast(list[object], pages_obj):
+        if not isinstance(page_obj, dict):
+            normalized_pages.append({})
+            continue
+        page = dict(cast(dict[str, object], page_obj))
+
+        image_url_raw = str(page.get("image_url", "")).strip()
+        thumb_url_raw = str(page.get("thumb_url", "")).strip()
+        image_filename = str(page.get("image_filename", "")).strip()
+        thumb_filename = str(page.get("thumb_filename", "")).strip()
+
+        if image_url_raw:
+            page["image_url"] = media_url(image_url_raw)
+        elif image_filename:
+            page["image_url"] = media_url(f"/static/{work_id_quoted}/pages/{quote(image_filename, safe='/')}")
+
+        if thumb_url_raw:
+            page["thumb_url"] = media_url(thumb_url_raw)
+        elif thumb_filename:
+            page["thumb_url"] = media_url(f"/static/{work_id_quoted}/thumbs/{quote(thumb_filename, safe='/')}")
+        elif image_filename:
+            page["thumb_url"] = media_url(f"/static/{work_id_quoted}/pages/{quote(image_filename, safe='/')}")
+
+        normalized_pages.append(page)
+
+    normalized_manifest = dict(version_manifest)
+    normalized_manifest["pages"] = normalized_pages
+    return normalized_manifest
+
+
 def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     _ = request_id(request, response)
     tail = route_tail(request, ["api", "comic"])
@@ -507,7 +572,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         manifest = get_manifest(work_id)
         if not manifest:
             return json_response(response, {"detail": "Work not found"}, 404)
-        return json_response(response, {"manifest": manifest})
+        return json_response(response, {"manifest": _manifest_with_media_urls(manifest)})
 
     if len(tail) == 2 and tail[1] == "versions":
         work = get_work(work_id)
@@ -526,7 +591,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         manifest = get_work_version_manifest(work_id, tail[2])
         if manifest is None:
             return json_response(response, {"detail": "Version not found"}, 404)
-        return json_response(response, {"version": manifest})
+        return json_response(
+            response,
+            {"version": _version_manifest_with_media_urls(work_id, manifest)},
+        )
 
     if len(tail) == 2 and tail[1] == "download":
         work = get_work(work_id)

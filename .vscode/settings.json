@@ -41,10 +41,12 @@
         "fanart",
         "FANIC",
         "fanicsite",
+        "gelu",
         "lazi",
         "PHOTOREAL",
         "pyproject",
         "pyupgrade",
-        "SUPERADMIN"
+        "SUPERADMIN",
+        "unsqueezed"
     ]
 }

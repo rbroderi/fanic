@@ -2,7 +2,7 @@
  * AUTO-GENERATED OUTPUT WARNING:
  * Do not edit the generated static/*.js files directly.
  * Make changes in frontend/*.ts and rebuild.
- * FANIC_ASSET_VERSION: 20260404
+ * FANIC_ASSET_VERSION: 20260407
  */
 
 function readBootstrap() {
@@ -67,10 +67,79 @@ function readBootstrap() {
 
 const bootstrap = readBootstrap();
 
+function normalizedHost(host: string): string {
+  const trimmed = host.trim().toLowerCase();
+  return trimmed.startsWith("www.") ? trimmed.slice(4) : trimmed;
+}
+
+const mediaBaseInput = document.getElementById("readerMediaBaseUrl") as HTMLInputElement | null;
+const mediaCdnInput = document.getElementById("readerMediaCdnBaseUrl") as HTMLInputElement | null;
+const mediaBase = mediaBaseInput?.value.trim() || "";
+const mediaCdnBase = mediaCdnInput?.value.trim() || "";
+
+function normalizeReaderAssetUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed || !mediaCdnBase) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/static/")) {
+    return `${mediaCdnBase.replace(/\/$/, "")}${trimmed}`;
+  }
+
+  if (!(trimmed.startsWith("http://") || trimmed.startsWith("https://"))) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (!url.pathname.startsWith("/static/")) {
+      return trimmed;
+    }
+
+    const mediaBaseHost = mediaBase ? normalizedHost(new URL(mediaBase).hostname) : "";
+    const cdnBaseHost = normalizedHost(new URL(mediaCdnBase).hostname);
+    const urlHost = normalizedHost(url.hostname);
+    const shouldRewrite =
+      urlHost === mediaBaseHost ||
+      urlHost === cdnBaseHost ||
+      urlHost === normalizedHost(window.location.hostname);
+
+    if (!shouldRewrite) {
+      return trimmed;
+    }
+
+    return `${mediaCdnBase.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+function normalizeReaderPages(pages: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(pages)) {
+    return [];
+  }
+  return pages.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return {};
+    }
+    const page = { ...(entry as Record<string, unknown>) };
+    const imageUrl = typeof page.image_url === "string" ? page.image_url : "";
+    const thumbUrl = typeof page.thumb_url === "string" ? page.thumb_url : "";
+    if (imageUrl) {
+      page.image_url = normalizeReaderAssetUrl(imageUrl);
+    }
+    if (thumbUrl) {
+      page.thumb_url = normalizeReaderAssetUrl(thumbUrl);
+    }
+    return page;
+  });
+}
+
 const state = {
   mode: bootstrap?.mode === "fanart" ? "fanart" : "work",
   workId: bootstrap?.work_id || "",
-  pages: Array.isArray(bootstrap?.pages) ? bootstrap.pages : [],
+  pages: normalizeReaderPages(bootstrap?.pages),
   chapters: Array.isArray(bootstrap?.chapters) ? bootstrap.chapters : [],
   index: Number(bootstrap?.page_index) || 1,
   userId: typeof bootstrap?.user_id === "string" ? bootstrap.user_id : "anon",
@@ -123,9 +192,10 @@ const readerReportWorkTitle = document.getElementById(
 ) as HTMLInputElement | null;
 
 if (!state.pages.length) {
-  const initialImage = readerImage?.getAttribute("src")?.trim() || "";
-  const initialThumb =
-    thumbs?.querySelector<HTMLImageElement>(".thumb")?.getAttribute("src")?.trim() || initialImage;
+  const initialImage = normalizeReaderAssetUrl(readerImage?.getAttribute("src")?.trim() || "");
+  const initialThumb = normalizeReaderAssetUrl(
+    thumbs?.querySelector<HTMLImageElement>(".thumb")?.getAttribute("src")?.trim() || initialImage,
+  );
   if (initialImage) {
     state.pages = [
       {

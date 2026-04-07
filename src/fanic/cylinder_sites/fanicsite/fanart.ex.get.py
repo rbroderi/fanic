@@ -15,6 +15,7 @@ from fanic.cylinder_sites.common.responses import text_error
 from fanic.cylinder_sites.common.security import route_tail
 from fanic.cylinder_sites.common.session import current_user
 from fanic.cylinder_sites.common.session import role_for_user
+from fanic.cylinder_sites.editor_metadata import render_common_tag_datalist_replacements
 from fanic.cylinder_sites.fanicsite.fanart_get_helpers import (
     build_gallery_cbz_bytes as _build_gallery_cbz_bytes,
 )
@@ -67,6 +68,7 @@ from fanic.repository.fanart import get_fanart_item_by_image_filename
 from fanic.repository.fanart import list_fanart_comments
 from fanic.repository.fanart import list_fanart_galleries_by_uploader
 from fanic.repository.fanart import list_fanart_gallery_item_ids
+from fanic.repository.fanart import list_fanart_items
 from fanic.repository.fanart import list_fanart_items_by_uploader
 from fanic.settings import static_asset_url
 
@@ -173,21 +175,34 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             return text_error(response, "Not found", 404)
         work_owner_profile_key = _owner_profile_key(work_owner_username)
 
+        query = request.args.get("q", "").strip()
+        fandom = request.args.get("fandom", "").strip()
+        tag = request.args.get("tag", "").strip()
+
         username = current_user(request)
         can_manage_galleries = username == work_owner_username
         can_delete = is_privileged_role(role_for_user(username))
         all_works = list_fanart_items_by_uploader(work_owner_username, limit=500)
+        filtered_works = list_fanart_items(
+            {
+                "q": query,
+                "user": work_owner_username,
+                "fandom": fandom,
+                "tag": tag,
+            },
+            limit=500,
+        )
         galleries = list_fanart_galleries_by_uploader(work_owner_username)
         active_gallery_slug = request.args.get("gallery", "").strip()
         active_gallery = None
         active_gallery_item_ids: set[str] = set()
-        works = all_works
+        works = filtered_works
         if active_gallery_slug:
             active_gallery = get_fanart_gallery_by_slug(work_owner_username, active_gallery_slug)
             if active_gallery is not None:
                 active_gallery_item_ids = list_fanart_gallery_item_ids(str(active_gallery.get("id", "")))
-                works = [work for work in all_works if str(work.get("id", "")) in active_gallery_item_ids]
-        owner_display_name = _owner_display_name(work_owner_username, works)
+                works = [work for work in filtered_works if str(work.get("id", "")) in active_gallery_item_ids]
+        owner_display_name = _owner_display_name(work_owner_username, works if works else all_works)
         subtitle = "Fanart gallery"
         if active_gallery is not None:
             active_name = str(active_gallery.get("name", "")).strip()
@@ -199,6 +214,13 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
             gallery_download_href = (
                 f"/fanart/{quote(work_owner_profile_key, safe='')}/download/cbz?gallery={quote(active_slug, safe='')}"
             )
+        tag_datalist_replacements = render_common_tag_datalist_replacements()
+        gallery_hidden_input = (
+            f'<input type="hidden" name="gallery" value="{escape(active_gallery_slug)}" />'
+            if active_gallery_slug
+            else ""
+        )
+
         return render_html_template(
             request,
             response,
@@ -230,6 +252,14 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
                     can_delete=can_delete,
                     active_gallery_slug=active_gallery_slug,
                 ),
+                "__FILTER_ACTION__": f"/fanart/{quote(work_owner_profile_key, safe='')}",
+                "__FILTER_GALLERY_HIDDEN_INPUT__": gallery_hidden_input,
+                "__FILTER_Q__": escape(query),
+                "__FILTER_FANDOM__": escape(fandom),
+                "__FILTER_TAG__": escape(tag),
+                "__FANDOM_OPTIONS_HTML__": tag_datalist_replacements.get("__FANDOM_OPTIONS_HTML__", ""),
+                "__FREEFORM_OPTIONS_HTML__": tag_datalist_replacements.get("__FREEFORM_OPTIONS_HTML__", ""),
+                "__TAG_AUTOCOMPLETE_SRC__": static_asset_url("tag-autocomplete", "js"),
             },
         )
 

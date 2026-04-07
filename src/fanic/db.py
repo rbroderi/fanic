@@ -173,8 +173,31 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS fanart_item_tags (
+            fanart_item_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (fanart_item_id, tag_id),
+            FOREIGN KEY (fanart_item_id) REFERENCES fanart_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_fanart_comments_item
         ON fanart_comments(fanart_item_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_item_tags_item
+        ON fanart_item_tags(fanart_item_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_fanart_item_tags_tag
+        ON fanart_item_tags(tag_id)
         """
     )
     connection.execute(

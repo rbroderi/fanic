@@ -12,7 +12,13 @@
       <section class="card">
         <h2>Upload fanart</h2>
         <p class="profile-status __UPLOAD_STATUS_CLASS__" __UPLOAD_STATUS_HIDDEN_ATTR__>__UPLOAD_STATUS_TEXT__</p>
-        <form method="post" action="/fanart/upload" enctype="multipart/form-data" class="profile-preferences">
+        <details class="card info-card" __UPLOAD_MODERATION_DETAIL_HIDDEN_ATTR__>
+          <summary>Moderation stats (admin)</summary>
+          <pre class="code-block">__UPLOAD_MODERATION_DETAIL_TEXT__</pre>
+        </details>
+        <form id="fanartUploadForm" method="post" action="/fanart/upload" enctype="multipart/form-data" class="profile-preferences">
+          <input name="upload_token" type="hidden" value="__UPLOAD_TOKEN__" />
+
           <label for="fanartTitle">Title</label>
           <input id="fanartTitle" type="text" name="title" maxlength="220" value="__TITLE__" required />
 
@@ -20,8 +26,12 @@
           <textarea id="fanartSummary" name="summary" rows="5" maxlength="8000" required>__SUMMARY__</textarea>
 
           <label for="fanartFandom">Fandom</label>
-          <input id="fanartFandom" type="text" name="fandom" maxlength="220" value="__FANDOM__" list="fandomSuggestions" data-tag-autocomplete="1" data-tag-type="fandom" />
+          <input id="fanartFandom" type="text" name="fandom" maxlength="2000" value="__FANDOM__" list="fandomSuggestions" data-tag-autocomplete="1" data-tag-type="fandom" data-tag-chips="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
           <datalist id="fandomSuggestions">__FANDOM_OPTIONS_HTML__</datalist>
+
+          <label for="fanartTags">Tags</label>
+          <input id="fanartTags" type="text" name="tags" maxlength="2000" value="__TAGS__" list="freeformSuggestions" data-tag-autocomplete="1" data-tag-type="freeform" data-tag-chips="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <datalist id="freeformSuggestions">__FREEFORM_OPTIONS_HTML__</datalist>
 
           <label for="fanartRating">Rating</label>
           <select id="fanartRating" name="rating">
@@ -30,6 +40,12 @@
 
           <label for="fanartImage">Image</label>
           <input id="fanartImage" type="file" name="fanart_image" accept="image/*" required />
+
+          <div id="fanartUploadProgressWrap" class="upload-progress" hidden>
+            <label for="fanartUploadProgressBar">Upload progress</label>
+            <progress id="fanartUploadProgressBar" max="100" value="0"></progress>
+            <p id="fanartUploadProgressText" class="profile-meta">Starting upload...</p>
+          </div>
 
           <label class="toggle-row">
             <input type="checkbox" name="agree_terms" required />
@@ -40,6 +56,7 @@
       </section>
     </main>
     <script src="__TAG_AUTOCOMPLETE_SRC__"></script>
+    <script src="__FANART_UPLOAD_PROGRESS_SRC__"></script>
     __SITE_COMMON_SCRIPTS__
   </body>
 </html>

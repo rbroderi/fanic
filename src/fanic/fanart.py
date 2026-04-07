@@ -15,6 +15,7 @@ from fanic.media import get_media_service
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
 from fanic.repository.fanart import create_fanart_item
+from fanic.repository.fanart import replace_fanart_item_tags
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
@@ -143,6 +144,7 @@ def ingest_fanart_image(
     title: str,
     summary: str,
     fandom: str = "",
+    tags: str = "",
     rating: str = "Not Rated",
 ) -> dict[str, object]:
     ensure_storage_dirs()
@@ -151,6 +153,8 @@ def ingest_fanart_image(
     if not normalized_uploader:
         raise ValueError("uploader_username must not be empty")
     normalized_rating = _normalize_rating(rating)
+    normalized_summary = summary.strip()
+    normalized_tags = ", ".join(part.strip() for part in tags.split(",") if part.strip())
 
     image_path = image_path.resolve()
     if not image_path.exists():
@@ -224,13 +228,18 @@ def ingest_fanart_image(
         item_id=item_id,
         uploader_username=normalized_uploader,
         title=title.strip(),
-        summary=summary.strip(),
+        summary=normalized_summary,
         fandom=fandom.strip(),
         rating=normalized_rating,
         image_filename=image_name,
         thumb_filename=thumb_name,
         width=width,
         height=height,
+    )
+    replace_fanart_item_tags(
+        item_id,
+        fandom_csv=fandom.strip(),
+        freeform_csv=normalized_tags,
     )
 
     return {
@@ -239,6 +248,8 @@ def ingest_fanart_image(
         "image_filename": image_name,
         "thumb_filename": thumb_name,
         "fandom": fandom.strip(),
+        "tags": normalized_tags,
+        "summary": normalized_summary,
         "rating": normalized_rating,
         "rating_before": rating_before,
         "rating_after": normalized_rating,

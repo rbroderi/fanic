@@ -63,7 +63,7 @@ max_cbz_total_uncompressed_bytes = "2 GiB"
 max_cbz_upload_bytes = "256 MiB"
 max_ingest_pages = 2000
 max_page_upload_bytes = "20 MiB"
-max_upload_image_pixels = 100000000
+max_upload_image_pixels = 15000               # 20*300 + 30*300
 user_page_quality_ramp_multiplier = 1.5
 user_page_soft_cap = 2000
 
@@ -77,6 +77,12 @@ allowed_page_extensions_csv = ".avif,.bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp"
 explicit_threshold = 0.7
 image_avif_quality = 60
 model_load_logs = true
+moderation_sidecar_timeout_seconds = 20.0
+moderation_sidecar_token = ""
+# Optional internal moderation sidecar endpoint, e.g. "unix:/run/fanic/fanic-moderation.sock"
+# or "http://127.0.0.1:8091".
+# Leave empty to run moderation in-process.
+moderation_sidecar_url = ""
 nsfw_logit_scale = 100.0
 openclip_cache_dir = "~/.cache/clip"
 photo_block_min_margin = 0.01
@@ -85,7 +91,7 @@ preload_models = true
 style_load_retry_seconds = 5.0
 style_logit_scale = 100.0
 style_min_confidence = 0.6
-style_min_confidence_photorealistic = 0.9
+style_min_confidence_photorealistic = 0.7
 style_min_top_margin = 0.05
 style_min_top_prob = 0.34
 thumbnail_avif_quality = 30
