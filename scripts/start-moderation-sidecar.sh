@@ -4,18 +4,14 @@ set -euo pipefail
 VENV_BIN="${FANIC_VENV_BIN:-/opt/fanic/.venv/bin}"
 GUNICORN_BIN="${FANIC_GUNICORN_BIN:-${VENV_BIN}/gunicorn}"
 APP_MODULE="${FANIC_MODERATION_GUNICORN_APP:-fanic.moderation_sidecar:create_app()}"
+GUNICORN_CONFIG="${FANIC_MODERATION_GUNICORN_CONFIG:-/opt/fanic/scripts/moderation_gunicorn_conf.py}"
 BIND_ADDR="${FANIC_MODERATION_BIND_ADDR:-unix:/run/fanic/fanic-moderation.sock}"
-WORKERS="${FANIC_MODERATION_WORKERS:-1}"
-TIMEOUT="${FANIC_MODERATION_TIMEOUT:-120}"
+WORKERS="${FANIC_MODERATION_WORKERS:-2}"
+TIMEOUT="${FANIC_MODERATION_TIMEOUT:-300}"
 GRACEFUL_TIMEOUT="${FANIC_MODERATION_GRACEFUL_TIMEOUT:-30}"
 KEEPALIVE="${FANIC_MODERATION_KEEPALIVE:-5}"
 MAX_REQUESTS="${FANIC_MODERATION_MAX_REQUESTS:-2000}"
 MAX_REQUESTS_JITTER="${FANIC_MODERATION_MAX_REQUESTS_JITTER:-200}"
-PRELOAD_ENABLED="${FANIC_MODERATION_PRELOAD:-1}"
-PRELOAD_ARGS=()
-if [[ "${PRELOAD_ENABLED}" == "1" ]]; then
-	PRELOAD_ARGS+=("--preload")
-fi
 
 # Prevent recursion: the sidecar always runs local moderation, never sidecar-to-sidecar HTTP.
 export FANIC_MODERATION_SIDECAR_URL=""
@@ -30,7 +26,7 @@ if [[ "${BIND_ADDR}" == unix:* ]]; then
 fi
 
 exec "${GUNICORN_BIN}" \
-	"${PRELOAD_ARGS[@]}" \
+	-c "${GUNICORN_CONFIG}" \
 	--bind "${BIND_ADDR}" \
 	--workers "${WORKERS}" \
 	--worker-class sync \

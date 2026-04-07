@@ -1,10 +1,10 @@
 import json
 import logging
 import socket
+import time
 from collections.abc import Callable
 from http.client import HTTPConnection
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from typing import TypedDict
 from typing import cast
 from typing import override
@@ -13,7 +13,6 @@ from urllib.error import URLError
 from urllib.request import Request
 from urllib.request import urlopen
 
-from fanic.media import delete_file
 from fanic.settings import get_settings
 
 
@@ -193,28 +192,39 @@ def _sidecar_json_request(
             return None
 
         connection = _UnixHTTPConnection(socket_path=socket_path, timeout=_sidecar_timeout_seconds())
+        started_at = time.perf_counter()
         try:
             connection.request(method, endpoint, body=body, headers=headers)
             response = connection.getresponse()
             if response.status >= 400:
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
                 _LOGGER.warning(
-                    "Moderation sidecar request failed (%s): status=%s",
+                    "Moderation sidecar request failed (%s): status=%s elapsed_ms=%s",
                     endpoint,
                     response.status,
+                    elapsed_ms,
                 )
                 return None
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            _LOGGER.info("Moderation sidecar request completed (%s): elapsed_ms=%s", endpoint, elapsed_ms)
+            return payload
         except (TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
-            _LOGGER.warning("Moderation sidecar unix request failed (%s): %s", endpoint, exc)
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            _LOGGER.warning("Moderation sidecar unix request failed (%s): %s elapsed_ms=%s", endpoint, exc, elapsed_ms)
             return None
         finally:
             connection.close()
 
     url = f"{_sidecar_base_url()}{endpoint}"
     request = Request(url=url, data=body, method=method, headers=headers)
+    started_at = time.perf_counter()
     try:
         with urlopen(request, timeout=_sidecar_timeout_seconds()) as response:
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            _LOGGER.info("Moderation sidecar request completed (%s): elapsed_ms=%s", endpoint, elapsed_ms)
+            return payload
     except (
         HTTPError,
         URLError,
@@ -223,7 +233,8 @@ def _sidecar_json_request(
         OSError,
         json.JSONDecodeError,
     ) as exc:
-        _LOGGER.warning("Moderation sidecar request failed (%s): %s", endpoint, exc)
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        _LOGGER.warning("Moderation sidecar request failed (%s): %s elapsed_ms=%s", endpoint, exc, elapsed_ms)
         return None
 
 
@@ -236,7 +247,7 @@ def _post_sidecar(endpoint: str, *, body: bytes, headers: dict[str, str]) -> Mod
 
 def get_moderation_sidecar_health() -> dict[str, object]:
     if not _sidecar_enabled():
-        return {"moderation_sidecar": "disabled"}
+        return {"moderation_sidecar": "down", "detail": "unconfigured"}
 
     health_payload = _sidecar_json_request(
         "/health",
@@ -310,15 +321,7 @@ def _style_classifier_debug_state() -> dict[str, object]:
 
 
 def initialize_moderation_models(*, force: bool = False) -> dict[str, bool]:
-    if _sidecar_enabled() and not force:
-        return {
-            "requested": False,
-            "nsfw_ready": False,
-            "style_ready": False,
-        }
-
-    should_initialize = force if force else _SETTINGS.preload_models
-    if not should_initialize:
+    if not force:
         return {
             "requested": False,
             "nsfw_ready": False,
@@ -353,11 +356,16 @@ def _score(path: str) -> tuple[float, dict[str, float]]:
 
 
 def moderate_image(path: str) -> ModerationResult:
-    if _sidecar_enabled():
-        remote_result = _moderate_image_via_sidecar(path)
-        if remote_result is not None:
-            return remote_result
-        raise RuntimeError("Moderation sidecar unavailable")
+    if not _sidecar_enabled():
+        raise RuntimeError("Moderation sidecar URL is required")
+
+    remote_result = _moderate_image_via_sidecar(path)
+    if remote_result is not None:
+        return remote_result
+    raise RuntimeError("Moderation sidecar unavailable")
+
+
+def moderate_image_local(path: str) -> ModerationResult:
 
     style_raw, style_confidences = _classify_style_with_confidences(path)
     style = str(style_raw).strip().lower()
@@ -417,11 +425,19 @@ def moderate_image(path: str) -> ModerationResult:
 
 
 def moderate_image_bytes(image_bytes: bytes, suffix: str = ".png") -> ModerationResult:
-    if _sidecar_enabled():
-        remote_result = _moderate_image_bytes_via_sidecar(image_bytes, suffix=suffix)
-        if remote_result is not None:
-            return remote_result
-        raise RuntimeError("Moderation sidecar unavailable")
+    if not _sidecar_enabled():
+        raise RuntimeError("Moderation sidecar URL is required")
+
+    remote_result = _moderate_image_bytes_via_sidecar(image_bytes, suffix=suffix)
+    if remote_result is not None:
+        return remote_result
+    raise RuntimeError("Moderation sidecar unavailable")
+
+
+def moderate_image_bytes_local(image_bytes: bytes, suffix: str = ".png") -> ModerationResult:
+    from tempfile import NamedTemporaryFile
+
+    from fanic.media import delete_file
 
     temp_path = ""
     try:
@@ -434,7 +450,7 @@ def moderate_image_bytes(image_bytes: bytes, suffix: str = ".png") -> Moderation
             handle.flush()
             temp_path = handle.name
 
-        return moderate_image(temp_path)
+        return moderate_image_local(temp_path)
     finally:
         if temp_path:
             try:

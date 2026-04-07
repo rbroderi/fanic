@@ -250,6 +250,12 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     uploaded_msg = "uploaded-rating-elevated"
     if not bool(ingest_work_result.get("rating_auto_elevated", False)):
         uploaded_msg = "uploaded"
+    progress_done_message = "Fanart uploaded successfully."
+    rating_after = str(ingest_work_result.get("rating_after", "")).strip()
+    if bool(ingest_work_result.get("rating_auto_elevated", False)) and rating_after == "Explicit":
+        progress_done_message = (
+            "Fanart uploaded successfully. Rating was auto-promoted to Explicit based on moderation."
+        )
     local_user = get_local_user(username)
     profile_key = username
     if local_user is not None:
@@ -261,7 +267,7 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
     set_progress(
         upload_token,
         stage="done",
-        message="Fanart uploaded successfully.",
+        message=progress_done_message,
         current=4,
         total=4,
         done=True,

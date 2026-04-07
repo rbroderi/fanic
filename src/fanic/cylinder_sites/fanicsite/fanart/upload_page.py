@@ -21,7 +21,7 @@ def _status_for_work_upload_message(msg: str) -> StatusReplacements:
         {
             "uploaded": status_visible("Fanart uploaded.", "success"),
             "uploaded-rating-elevated": status_visible(
-                "Fanart uploaded. Rating auto-elevated based on moderation detection.",
+                "Fanart uploaded. Rating was auto-promoted to Explicit based on moderation.",
                 "success",
             ),
             "invalid": status_visible("Please complete all required fields.", "error"),

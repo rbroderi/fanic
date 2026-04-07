@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from fanic.moderation import ModerationResult
-from fanic.moderation import moderate_image
+from fanic.moderation import moderate_image_local
 from fanic.moderation import suggested_rating_for_nsfw
 
 MEDIA_DIR = Path(__file__).resolve().parent / "media"
@@ -45,7 +45,7 @@ def test_moderation_media_expected_outcomes(
     if not image_path.exists():
         pytest.skip(f"Missing fixture: {image_path.name}")
 
-    result = moderate_image(str(image_path))
+    result = moderate_image_local(str(image_path))
     stats_text = _moderation_stats_text(result)
 
     assert result["path"] == str(image_path), stats_text
@@ -68,9 +68,9 @@ def test_moderation_media_explicit_and_safe_rating_suggestion() -> None:
     if not explicit_path.exists() or not safe_path.exists() or not safe2_path.exists():
         pytest.skip("Missing one or more rating fixtures")
 
-    explicit_result = moderate_image(str(explicit_path))
-    safe_result = moderate_image(str(safe_path))
-    safe2_result = moderate_image(str(safe2_path))
+    explicit_result = moderate_image_local(str(explicit_path))
+    safe_result = moderate_image_local(str(safe_path))
+    safe2_result = moderate_image_local(str(safe2_path))
     explicit_stats = _moderation_stats_text(explicit_result)
     safe_stats = _moderation_stats_text(safe_result)
     safe2_stats = _moderation_stats_text(safe2_result)
@@ -104,7 +104,7 @@ def test_moderation_media_sfw_and_explicit_confidences_are_non_zero(
     if not image_path.exists():
         pytest.skip(f"Missing fixture: {image_path.name}")
 
-    result = moderate_image(str(image_path))
+    result = moderate_image_local(str(image_path))
     stats_text = _moderation_stats_text(result)
 
     assert result["allow"] is True, stats_text

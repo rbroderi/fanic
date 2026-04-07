@@ -348,9 +348,13 @@ def _run_async_cbz_ingest(
         )
 
         work_id = str(result.get("work_id", ""))
+        completion_message = "Import complete"
+        rating_after = str(result.get("rating_after", "")).strip()
+        if bool(result.get("rating_auto_elevated", False)) and rating_after == "Explicit":
+            completion_message = "Import complete. Rating was auto-promoted to Explicit based on moderation."
         _set_progress(
             stage="done",
-            message="Import complete",
+            message=completion_message,
             done=True,
             ok=True,
             work_id=work_id,
@@ -367,6 +371,29 @@ def _run_async_cbz_ingest(
         _set_progress(
             stage="blocked",
             message=blocked_message,
+            done=True,
+            ok=False,
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Moderation sidecar" in message:
+            _set_progress(
+                stage="failed",
+                message="Import failed: moderation sidecar unavailable or timed out.",
+                done=True,
+                ok=False,
+            )
+            return
+        _LOGGER.exception(
+            "Async comic ingest failed",
+            extra={
+                "upload_token": upload_token,
+                "uploader_username": username,
+            },
+        )
+        _set_progress(
+            stage="failed",
+            message="Import failed",
             done=True,
             ok=False,
         )

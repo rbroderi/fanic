@@ -221,9 +221,9 @@ class FanicSettings(BaseSettings):
     # Classification and moderation tuning
     explicit_threshold: float
     model_load_logs: bool
-    moderation_sidecar_timeout_seconds: float = 20.0
+    moderation_sidecar_timeout_seconds: float = 180.0
     moderation_sidecar_token: str = ""
-    moderation_sidecar_url: str = ""
+    moderation_sidecar_url: str = "unix:/run/fanic/fanic-moderation.sock"
     nsfw_logit_scale: float
     photo_block_min_margin: float
     photoreal_min_confidence: float

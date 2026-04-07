@@ -357,6 +357,85 @@ def test_comic_upload_post_async_worker_reports_queue_timeout(
     assert throttled_events[-1].get("ok") is False
 
 
+def test_comic_upload_post_async_worker_sets_explicit_promotion_notice(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
+        "fanicsite_comic_upload_ex_post_async_explicit_notice_test",
+    )
+
+    progress_events: list[dict[str, object]] = []
+
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
+
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
+        _ = on_queued
+        return ComicIngestSessionStartStub(True, 0, 0)
+
+    def ingest_cbz_stub(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "work_id": "w-explicit",
+            "rating_before": "Teen And Up Audiences",
+            "rating_after": "Explicit",
+            "rating_auto_elevated": True,
+        }
+
+    def set_progress_stub(token: str, **kwargs: object) -> None:
+        progress_events.append({"token": token, **kwargs})
+
+    def end_upload_session_stub(_username: str) -> None:
+        return None
+
+    def end_comic_ingest_session_stub() -> None:
+        return None
+
+    def render_upload_page_stub(_request: Any, response: ResponseLike, **_kwargs: object) -> ResponseLike:
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    deps = _comic_upload_post_deps(
+        module,
+        begin_upload_session_func=begin_upload_session_stub,
+        begin_comic_ingest_session_func=begin_comic_ingest_session_stub,
+        end_upload_session_func=end_upload_session_stub,
+        end_comic_ingest_session_func=end_comic_ingest_session_stub,
+        ingest_cbz_func=ingest_cbz_stub,
+        set_progress_func=set_progress_stub,
+        render_upload_page_func=render_upload_page_stub,
+    )
+
+    request = dummy_request(
+        path="/comic/upload",
+        method="POST",
+        form={
+            "action": "ingest",
+            "agree_terms": "on",
+            "upload_token": "tok-explicit",
+            "title": "Rated Work",
+        },
+        files={
+            "cbz": DummyUpload("sample.cbz", b"PK\x03\x04dummy"),
+        },
+    )
+    response = dummy_response()
+
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 200
+    done_events = [event for event in progress_events if str(event.get("stage", "")) == "done"]
+    assert done_events
+    assert done_events[-1].get("ok") is True
+    assert (
+        done_events[-1].get("message") == "Import complete. Rating was auto-promoted to Explicit based on moderation."
+    )
+
+
 def test_comic_upload_post_async_worker_reports_blocked_stats_for_admin(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],
@@ -468,6 +547,78 @@ def test_comic_upload_post_async_worker_reports_blocked_stats_for_admin(
     assert "CBZ import blocked by moderation policy (001.png)." in blocked_message
     assert "stats={" in blocked_message
     assert '"nsfw_score": 0.93' in blocked_message
+
+
+def test_comic_upload_post_async_worker_reports_sidecar_timeout_failure(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic/upload.ex.post.py",
+        "fanicsite_comic_upload_ex_post_async_sidecar_timeout_test",
+    )
+
+    progress_events: list[dict[str, object]] = []
+
+    def begin_upload_session_stub(_username: str) -> UploadSessionStartStub:
+        return UploadSessionStartStub(True, "", 0)
+
+    def begin_comic_ingest_session_stub(on_queued: Any) -> ComicIngestSessionStartStub:
+        _ = on_queued
+        return ComicIngestSessionStartStub(True, 0, 0)
+
+    def end_upload_session_stub(_username: str) -> None:
+        return None
+
+    def end_comic_ingest_session_stub() -> None:
+        return None
+
+    def ingest_cbz_timeout(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise RuntimeError("Moderation sidecar unavailable")
+
+    def set_progress_stub(token: str, **kwargs: object) -> None:
+        progress_events.append({"token": token, **kwargs})
+
+    def render_upload_page_stub(_request: Any, response: ResponseLike, **_kwargs: object) -> ResponseLike:
+        response.status_code = 200
+        response.content_type = "text/html; charset=utf-8"
+        response.set_data("ok")
+        return response
+
+    deps = _comic_upload_post_deps(
+        module,
+        begin_upload_session_func=begin_upload_session_stub,
+        begin_comic_ingest_session_func=begin_comic_ingest_session_stub,
+        end_upload_session_func=end_upload_session_stub,
+        end_comic_ingest_session_func=end_comic_ingest_session_stub,
+        ingest_cbz_func=ingest_cbz_timeout,
+        set_progress_func=set_progress_stub,
+        render_upload_page_func=render_upload_page_stub,
+    )
+
+    request = dummy_request(
+        path="/comic/upload",
+        method="POST",
+        form={
+            "action": "ingest",
+            "agree_terms": "on",
+            "upload_token": "tok-sidecar-timeout",
+        },
+        files={
+            "cbz": DummyUpload("sample.cbz", b"PK\\x03\\x04dummy"),
+        },
+    )
+    response = dummy_response()
+
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 200
+    failed_events = [event for event in progress_events if str(event.get("stage", "")) == "failed"]
+    assert failed_events
+    assert failed_events[-1].get("done") is True
+    assert failed_events[-1].get("ok") is False
+    assert failed_events[-1].get("message") == "Import failed: moderation sidecar unavailable or timed out."
 
 
 def test_comic_upload_post_editor_add_chapter_uses_injected_dependency(

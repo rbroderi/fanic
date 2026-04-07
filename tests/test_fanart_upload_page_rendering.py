@@ -108,3 +108,21 @@ def test_fanart_upload_page_renders_admin_moderation_stats_block(
     assert "&quot;allow&quot;: false" in html
     assert "&quot;nsfw_score&quot;: 0.83" in html
     assert "&quot;style&quot;: &quot;photorealistic&quot;" in html
+
+
+def test_fanart_upload_page_renders_explicit_promotion_notice(
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], Any],
+) -> None:
+    from fanic.cylinder_sites.fanicsite.fanart import upload_page
+
+    request = dummy_request(
+        path="/fanart/upload",
+        args={"msg": "uploaded-rating-elevated"},
+    )
+    response = dummy_response()
+    result = upload_page.render_upload_page(request, response)
+
+    assert result.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Rating was auto-promoted to Explicit based on moderation." in html

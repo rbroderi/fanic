@@ -48,5 +48,9 @@
         "pyupgrade",
         "SUPERADMIN",
         "unsqueezed"
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "journalctl": true,
+        "systemctl": true
+    }
 }

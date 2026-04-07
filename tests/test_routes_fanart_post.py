@@ -228,6 +228,8 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
         "fanicsite_fanart_upload_ex_post_upload_moderation_test",
     )
 
+    progress_events: list[dict[str, object]] = []
+
     monkeypatch.setattr(module, "enforce_https_termination", _always_true)
     monkeypatch.setattr(module, "validate_csrf", _always_true)
     monkeypatch.setattr(module, "check_post_rate_limit", _rate_limit_ok)
@@ -235,6 +237,11 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
     monkeypatch.setattr(module, "validate_page_upload_policy", _always_none)
     monkeypatch.setattr(module, "validate_saved_upload_size", _always_none)
     monkeypatch.setattr(module, "validate_field_lengths", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(
+        module,
+        "set_progress",
+        lambda token, **kwargs: progress_events.append({"token": token, **kwargs}),
+    )
     monkeypatch.setattr(
         module,
         "ingest_fanart_image",
@@ -265,6 +272,12 @@ def test_fanart_upload_redirects_with_rating_elevated_message(
 
     assert result.status_code == 303
     assert result.headers["Location"] == "/fanart/alice?msg=uploaded-rating-elevated"
+    done_events = [event for event in progress_events if str(event.get("stage", "")) == "done"]
+    assert done_events
+    assert done_events[-1].get("ok") is True
+    assert done_events[-1].get("message") == (
+        "Fanart uploaded successfully. Rating was auto-promoted to Explicit based on moderation."
+    )
 
 
 def test_fanart_upload_blocked_includes_moderation_stats_for_admin(

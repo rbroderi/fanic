@@ -48,6 +48,7 @@
   let processingStartedAt = 0;
   let pollTimer: number | null = null;
   let historyPollTimer: number | null = null;
+  let lastProgressUpdatedAt = 0;
 
   const HISTORY_STORAGE_KEY = "fanic.comic_ingest_history.v1";
   const MAX_HISTORY_ITEMS = 8;
@@ -300,12 +301,21 @@
     if (!token) {
       return;
     }
+    lastProgressUpdatedAt = 0;
 
     const poll = () => {
       fetchProgress(token)
         .then((progress) => {
           if (!progress) {
             return;
+          }
+
+          const updatedAt = Number(progress.updated_at || 0);
+          if (updatedAt > 0 && updatedAt < lastProgressUpdatedAt) {
+            return;
+          }
+          if (updatedAt > 0) {
+            lastProgressUpdatedAt = updatedAt;
           }
 
           updateHistoryFromProgress(token, progress);

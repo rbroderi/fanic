@@ -38,8 +38,8 @@ def test_initialize_moderation_models_forces_initialization(
             return True
 
     fake = FakeModule()
-    monkeypatch.setattr(moderation, "_NSFW_DETECTOR", fake)
-    monkeypatch.setattr(moderation, "_STYLE_CLASSIFIER", fake)
+    monkeypatch.setattr(moderation, "_get_nsfw_detector_module", lambda: fake)
+    monkeypatch.setattr(moderation, "_get_style_classifier_module", lambda: fake)
 
     result = moderation.initialize_moderation_models(force=True)
 
@@ -70,6 +70,23 @@ def test_initialize_moderation_models_skips_when_sidecar_configured(
         "nsfw_ready": False,
         "style_ready": False,
     }
+
+
+def test_moderate_image_bytes_raises_when_sidecar_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        moderation,
+        "_SETTINGS",
+        SimpleNamespace(
+            moderation_sidecar_url="",
+            moderation_sidecar_timeout_seconds=5.0,
+            moderation_sidecar_token="",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Moderation sidecar URL is required"):
+        _ = moderation.moderate_image_bytes(b"abc", suffix=".jpg")
 
 
 def test_moderate_image_bytes_uses_sidecar(

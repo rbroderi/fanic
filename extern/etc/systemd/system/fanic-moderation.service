@@ -12,8 +12,7 @@ Environment=PATH=/opt/fanic/.venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=/opt/fanic/src
 EnvironmentFile=-/etc/fanic/fanic.env
 Environment=FANIC_MODERATION_BIND_ADDR=unix:/run/fanic/fanic-moderation.sock
-Environment=FANIC_MODERATION_WORKERS=1
-Environment=FANIC_MODERATION_PRELOAD=1
+Environment=FANIC_MODERATION_WORKERS=2
 # Environment=FANIC_MODERATION_SIDECAR_TOKEN_FILE=/etc/fanic/credentials/moderation_secret
 ExecStartPre=/usr/bin/install -d -o fanic -g www-data -m 2775 /run/fanic
 ExecStart=/usr/bin/env bash /opt/fanic/scripts/start-moderation-sidecar.sh

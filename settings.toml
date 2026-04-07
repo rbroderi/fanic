@@ -58,12 +58,12 @@ upload_rate_max_requests = 20
 upload_rate_window_seconds = 60
 
 # Upload and ingest size/count limits.
-max_cbz_member_uncompressed_bytes = "128 MiB"
+max_cbz_member_uncompressed_bytes = "256 MiB"
 max_cbz_total_uncompressed_bytes = "2 GiB"
 max_cbz_upload_bytes = "256 MiB"
 max_ingest_pages = 2000
-max_page_upload_bytes = "20 MiB"
-max_upload_image_pixels = 15000               # 20*300 + 30*300
+max_page_upload_bytes = "50 MiB"
+max_upload_image_pixels = 54000000            # 20*300 x 30*300
 user_page_quality_ramp_multiplier = 1.5
 user_page_soft_cap = 2000
 
@@ -77,12 +77,11 @@ allowed_page_extensions_csv = ".avif,.bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp"
 explicit_threshold = 0.7
 image_avif_quality = 60
 model_load_logs = true
-moderation_sidecar_timeout_seconds = 20.0
+moderation_sidecar_timeout_seconds = 180.0
 moderation_sidecar_token = ""
 # Optional internal moderation sidecar endpoint, e.g. "unix:/run/fanic/fanic-moderation.sock"
 # or "http://127.0.0.1:8091".
-# Leave empty to run moderation in-process.
-moderation_sidecar_url = ""
+moderation_sidecar_url = "unix:/run/fanic/fanic-moderation.sock"
 nsfw_logit_scale = 100.0
 openclip_cache_dir = "~/.cache/clip"
 photo_block_min_margin = 0.01

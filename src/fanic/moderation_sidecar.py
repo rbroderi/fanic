@@ -1,5 +1,9 @@
+import faulthandler
 import json
 import logging
+import signal
+import sys
+import time
 from collections.abc import Callable
 from collections.abc import Iterable
 from typing import Final
@@ -8,14 +12,20 @@ from urllib.parse import parse_qs
 
 from fanic.moderation import get_explicit_threshold
 from fanic.moderation import initialize_moderation_models
-from fanic.moderation import moderate_image
-from fanic.moderation import moderate_image_bytes
+from fanic.moderation import moderate_image_bytes_local
+from fanic.moderation import moderate_image_local
 from fanic.settings import get_settings
 
 _LOGGER = logging.getLogger(__name__)
 _SETTINGS = get_settings()
 _TOKEN_HEADER_NAME: Final[str] = "HTTP_X_FANIC_MODERATION_TOKEN"
 StartResponse = Callable[[str, list[tuple[str, str]]], object]
+
+
+def _register_worker_diagnostics() -> None:
+    # Sidecar workers can stall in model inference; dump all thread stacks on abort/user signals.
+    faulthandler.enable(file=sys.stderr, all_threads=True)
+    faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
 
 
 def _json_response(
@@ -106,7 +116,12 @@ def app(environ: dict[str, object], start_response: StartResponse) -> Iterable[b
         if not normalized_path:
             return _json_response(start_response, {"detail": "path is required"}, 422)
 
-        result = moderate_image(normalized_path)
+        started_at = time.perf_counter()
+        result = moderate_image_local(normalized_path)
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        _LOGGER.info(
+            "Sidecar moderation completed (/moderate-image): elapsed_ms=%s path=%s", elapsed_ms, normalized_path
+        )
         payload = cast(dict[str, object], cast(object, result))
         return _json_response(start_response, payload, 200)
 
@@ -116,7 +131,15 @@ def app(environ: dict[str, object], start_response: StartResponse) -> Iterable[b
             return _json_response(start_response, {"detail": "request body is empty"}, 422)
 
         suffix = _suffix_from_request(environ)
-        result = moderate_image_bytes(image_bytes, suffix=suffix)
+        started_at = time.perf_counter()
+        result = moderate_image_bytes_local(image_bytes, suffix=suffix)
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        _LOGGER.info(
+            "Sidecar moderation completed (/moderate-image-bytes): elapsed_ms=%s input_bytes=%s suffix=%s",
+            elapsed_ms,
+            len(image_bytes),
+            suffix,
+        )
         payload = cast(dict[str, object], cast(object, result))
         return _json_response(start_response, payload, 200)
 
@@ -124,6 +147,7 @@ def app(environ: dict[str, object], start_response: StartResponse) -> Iterable[b
 
 
 def create_app() -> object:
+    _register_worker_diagnostics()
     readiness = initialize_moderation_models(force=True)
     _LOGGER.info("Moderation sidecar startup readiness: %s", readiness)
     return app

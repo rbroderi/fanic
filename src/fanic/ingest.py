@@ -1,6 +1,8 @@
 import hashlib
 import json
+import logging
 import re
+import time
 import uuid
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -72,6 +74,7 @@ _BUNNY_UPLOAD_WORKERS = (
 _BUNNY_SKIP_EXISTS_CHECK = (
     True if (_SETTINGS.media_backend.strip().lower() == "bunny" and _SETTINGS.media_bunny_skip_exists_check) else False
 )
+_LOGGER = logging.getLogger("fanic.ingest")
 
 type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
@@ -901,7 +904,34 @@ def ingest_cbz(
                     )
                 progress.set_postfix_str("moderate")
                 extracted = zip_file.read(member)
-                moderation = moderate_image_bytes(extracted, suffix=Path(member).suffix)
+                moderation_started_at = time.perf_counter()
+                try:
+                    moderation = moderate_image_bytes(extracted, suffix=Path(member).suffix)
+                except Exception:
+                    moderation_elapsed_ms = int((time.perf_counter() - moderation_started_at) * 1000)
+                    _LOGGER.exception(
+                        "CBZ page moderation failed",
+                        extra={
+                            "source_member": member,
+                            "page_index": index,
+                            "page_count": len(image_members),
+                            "input_bytes": len(extracted),
+                            "elapsed_ms": moderation_elapsed_ms,
+                        },
+                    )
+                    raise
+
+                moderation_elapsed_ms = int((time.perf_counter() - moderation_started_at) * 1000)
+                _LOGGER.info(
+                    "CBZ page moderation completed",
+                    extra={
+                        "source_member": member,
+                        "page_index": index,
+                        "page_count": len(image_members),
+                        "input_bytes": len(extracted),
+                        "elapsed_ms": moderation_elapsed_ms,
+                    },
+                )
                 if not moderation["allow"]:
                     moderation_payload = dict(moderation)
                     moderation_payload["source_member"] = member

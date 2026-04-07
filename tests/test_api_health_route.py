@@ -81,7 +81,7 @@ def test_api_health_reports_fanart_storage(
     monkeypatch.setattr(
         module,
         "get_moderation_sidecar_health",
-        lambda: {"moderation_sidecar": "disabled"},
+        lambda: {"moderation_sidecar": "down", "detail": "unconfigured"},
     )
 
     request = dummy_request(path="/api/health")
@@ -90,13 +90,13 @@ def test_api_health_reports_fanart_storage(
     result = route_module.main(request, response)
     payload = json.loads(result.data.decode("utf-8"))
 
-    assert result.status_code == 200
-    assert payload["ok"] is True
+    assert result.status_code == 503
+    assert payload["ok"] is False
     assert payload["db"] == "up"
     assert payload["fanart_storage"] == "degraded"
     assert payload["fanart_missing_images"] == 2
     assert payload["fanart_missing_thumbs"] == 2
-    assert payload["moderation_sidecar"] == "disabled"
+    assert payload["moderation_sidecar"] == "down"
 
 
 def test_api_health_degrades_when_moderation_sidecar_is_down(
