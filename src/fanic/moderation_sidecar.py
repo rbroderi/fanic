@@ -10,7 +10,9 @@ from typing import Final
 from typing import cast
 from urllib.parse import parse_qs
 
+from fanic.moderation import get_explicit_max_threshold
 from fanic.moderation import get_explicit_threshold
+from fanic.moderation import get_style_max_confidence_photorealistic
 from fanic.moderation import initialize_moderation_models
 from fanic.moderation import moderate_image_bytes_local
 from fanic.moderation import moderate_image_local
@@ -97,6 +99,9 @@ def app(environ: dict[str, object], start_response: StartResponse) -> Iterable[b
                 "ok": True,
                 "service": "fanic-moderation-sidecar",
                 "explicit_threshold": get_explicit_threshold(),
+                "explicit_min_threshold": get_explicit_threshold(),
+                "explicit_max_threshold": get_explicit_max_threshold(),
+                "style_max_confidence_photorealistic": get_style_max_confidence_photorealistic(),
             },
             200,
         )
@@ -120,7 +125,9 @@ def app(environ: dict[str, object], start_response: StartResponse) -> Iterable[b
         result = moderate_image_local(normalized_path)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         _LOGGER.info(
-            "Sidecar moderation completed (/moderate-image): elapsed_ms=%s path=%s", elapsed_ms, normalized_path
+            "Sidecar moderation completed (/moderate-image): elapsed_ms=%s path=%s",
+            elapsed_ms,
+            normalized_path,
         )
         payload = cast(dict[str, object], cast(object, result))
         return _json_response(start_response, payload, 200)

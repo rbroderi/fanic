@@ -25,10 +25,15 @@ class ModerationResult(TypedDict):
     nsfw_score: float
     nsfw_confidences: dict[str, float]
     reasons: list[str]
+    manual_review_required: bool
+    manual_review_reason: str
+    manual_review_confidence: float
 
 
 _SETTINGS = get_settings()
-_EXPLICIT_THRESHOLD = _SETTINGS.explicit_threshold
+_EXPLICIT_MIN_THRESHOLD = _SETTINGS.explicit_min_threshold
+_EXPLICIT_MAX_THRESHOLD = _SETTINGS.explicit_max_threshold
+_STYLE_MAX_CONFIDENCE_PHOTOREALISTIC = _SETTINGS.style_max_confidence_photorealistic
 _ALLOWED_STYLES = {"comic", "illustrated", "painterly", "anime", "cgi"}
 _LOGGER = logging.getLogger(__name__)
 _nsfw_detector_cache: object | None = None
@@ -166,6 +171,19 @@ def _decode_sidecar_result(payload: object, *, fallback_path: str) -> Moderation
     raw_reasons = data.get("reasons")
     reasons = [str(item) for item in cast(list[object], raw_reasons)] if isinstance(raw_reasons, list) else []
 
+    raw_review_required = data.get("manual_review_required")
+    manual_review_required = bool(raw_review_required)
+    raw_review_reason = data.get("manual_review_reason")
+    manual_review_reason = str(raw_review_reason).strip() if raw_review_reason is not None else ""
+    raw_review_confidence = data.get("manual_review_confidence")
+    if isinstance(raw_review_confidence, (str, int, float)):
+        try:
+            manual_review_confidence = float(raw_review_confidence)
+        except (TypeError, ValueError):
+            manual_review_confidence = 0.0
+    else:
+        manual_review_confidence = 0.0
+
     return {
         "path": path,
         "allow": allow,
@@ -175,6 +193,9 @@ def _decode_sidecar_result(payload: object, *, fallback_path: str) -> Moderation
         "nsfw_score": nsfw_score,
         "nsfw_confidences": nsfw_conf,
         "reasons": reasons,
+        "manual_review_required": manual_review_required,
+        "manual_review_reason": manual_review_reason,
+        "manual_review_confidence": manual_review_confidence,
     }
 
 
@@ -207,11 +228,20 @@ def _sidecar_json_request(
                 return None
             payload = json.loads(response.read().decode("utf-8"))
             elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            _LOGGER.info("Moderation sidecar request completed (%s): elapsed_ms=%s", endpoint, elapsed_ms)
+            _LOGGER.info(
+                "Moderation sidecar request completed (%s): elapsed_ms=%s",
+                endpoint,
+                elapsed_ms,
+            )
             return payload
         except (TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
             elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            _LOGGER.warning("Moderation sidecar unix request failed (%s): %s elapsed_ms=%s", endpoint, exc, elapsed_ms)
+            _LOGGER.warning(
+                "Moderation sidecar unix request failed (%s): %s elapsed_ms=%s",
+                endpoint,
+                exc,
+                elapsed_ms,
+            )
             return None
         finally:
             connection.close()
@@ -223,7 +253,11 @@ def _sidecar_json_request(
         with urlopen(request, timeout=_sidecar_timeout_seconds()) as response:
             payload = json.loads(response.read().decode("utf-8"))
             elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            _LOGGER.info("Moderation sidecar request completed (%s): elapsed_ms=%s", endpoint, elapsed_ms)
+            _LOGGER.info(
+                "Moderation sidecar request completed (%s): elapsed_ms=%s",
+                endpoint,
+                elapsed_ms,
+            )
             return payload
     except (
         HTTPError,
@@ -234,7 +268,12 @@ def _sidecar_json_request(
         json.JSONDecodeError,
     ) as exc:
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-        _LOGGER.warning("Moderation sidecar request failed (%s): %s elapsed_ms=%s", endpoint, exc, elapsed_ms)
+        _LOGGER.warning(
+            "Moderation sidecar request failed (%s): %s elapsed_ms=%s",
+            endpoint,
+            exc,
+            elapsed_ms,
+        )
         return None
 
 
@@ -344,7 +383,15 @@ def initialize_moderation_models(*, force: bool = False) -> dict[str, bool]:
 
 
 def get_explicit_threshold() -> float:
-    return _EXPLICIT_THRESHOLD
+    return _EXPLICIT_MIN_THRESHOLD
+
+
+def get_explicit_max_threshold() -> float:
+    return _EXPLICIT_MAX_THRESHOLD
+
+
+def get_style_max_confidence_photorealistic() -> float:
+    return _STYLE_MAX_CONFIDENCE_PHOTOREALISTIC
 
 
 def _score(path: str) -> tuple[float, dict[str, float]]:
@@ -374,7 +421,24 @@ def moderate_image_local(path: str) -> ModerationResult:
 
     # First gate is style. Photorealistic content is blocked immediately.
     if style == "photorealistic":
-        reasons.append("photorealistic image (only illustrated/comic content allowed)")
+        photoreal_confidence = float(style_confidences.get("photorealistic", 0.0))
+        if _SETTINGS.style_min_confidence_photorealistic <= photoreal_confidence < _STYLE_MAX_CONFIDENCE_PHOTOREALISTIC:
+            reasons.append("photorealistic image flagged for manual admin review")
+            return {
+                "path": path,
+                "allow": True,
+                "style": style,
+                "style_debug": style_debug,
+                "style_confidences": style_confidences,
+                "nsfw_score": 0.0,
+                "nsfw_confidences": {"sfw": 0.0, "explicit": 0.0},
+                "reasons": reasons,
+                "manual_review_required": True,
+                "manual_review_reason": "photorealistic",
+                "manual_review_confidence": photoreal_confidence,
+            }
+
+        reasons.append("photorealistic image blocked by confidence threshold")
         return {
             "path": path,
             "allow": False,
@@ -384,6 +448,9 @@ def moderate_image_local(path: str) -> ModerationResult:
             "nsfw_score": 0.0,
             "nsfw_confidences": {"sfw": 0.0, "explicit": 0.0},
             "reasons": reasons,
+            "manual_review_required": False,
+            "manual_review_reason": "",
+            "manual_review_confidence": 0.0,
         }
 
     if style == "unknown":
@@ -407,10 +474,16 @@ def moderate_image_local(path: str) -> ModerationResult:
             "nsfw_score": 0.0,
             "nsfw_confidences": {"sfw": 0.0, "explicit": 0.0},
             "reasons": reasons,
+            "manual_review_required": False,
+            "manual_review_reason": "",
+            "manual_review_confidence": 0.0,
         }
 
     # Only score NSFW after the image has passed style gating.
     nsfw, nsfw_confidences = _score(path)
+    manual_review_required = _EXPLICIT_MIN_THRESHOLD <= nsfw < _EXPLICIT_MAX_THRESHOLD
+    manual_review_reason = "explicit" if manual_review_required else ""
+    manual_review_confidence = nsfw if manual_review_required else 0.0
 
     return {
         "path": path,
@@ -421,6 +494,9 @@ def moderate_image_local(path: str) -> ModerationResult:
         "nsfw_score": nsfw,
         "nsfw_confidences": nsfw_confidences,
         "reasons": reasons,
+        "manual_review_required": manual_review_required,
+        "manual_review_reason": manual_review_reason,
+        "manual_review_confidence": manual_review_confidence,
     }
 
 
@@ -460,7 +536,7 @@ def moderate_image_bytes_local(image_bytes: bytes, suffix: str = ".png") -> Mode
 
 
 def suggested_rating_for_nsfw(nsfw_score: float) -> str | None:
-    if nsfw_score >= _EXPLICIT_THRESHOLD:
+    if nsfw_score >= _EXPLICIT_MAX_THRESHOLD:
         return "Explicit"
     return None
 

@@ -11,6 +11,7 @@ from typing import override
 from urllib.parse import urlsplit
 
 from pydantic import field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import PydanticBaseSettingsSource
 from pydantic_settings import SettingsConfigDict
@@ -219,7 +220,9 @@ class FanicSettings(BaseSettings):
     user_page_soft_cap: int
 
     # Classification and moderation tuning
-    explicit_threshold: float
+    explicit_min_threshold: float = 0.8
+    explicit_max_threshold: float = 0.9
+    explicit_threshold: float | None = None
     model_load_logs: bool
     moderation_sidecar_timeout_seconds: float = 180.0
     moderation_sidecar_token: str = ""
@@ -231,6 +234,7 @@ class FanicSettings(BaseSettings):
     style_logit_scale: float
     style_min_confidence: float
     style_min_confidence_photorealistic: float
+    style_max_confidence_photorealistic: float = 0.9
     style_min_top_margin: float
     style_min_top_prob: float
 
@@ -381,6 +385,16 @@ class FanicSettings(BaseSettings):
         if isinstance(value, str | int):
             return parse_byte_size(value)
         raise ValueError("Byte-size setting must be a string like '256 MiB' or an integer")
+
+    @model_validator(mode="after")
+    def _normalize_explicit_thresholds(self) -> Self:
+        if self.explicit_threshold is not None and "explicit_min_threshold" not in self.model_fields_set:
+            self.explicit_min_threshold = float(self.explicit_threshold)
+        if float(self.explicit_max_threshold) < float(self.explicit_min_threshold):
+            raise ValueError("explicit_max_threshold must be >= explicit_min_threshold")
+        if float(self.style_max_confidence_photorealistic) < float(self.style_min_confidence_photorealistic):
+            raise ValueError("style_max_confidence_photorealistic must be >= style_min_confidence_photorealistic")
+        return self
 
     # Derived filesystem paths
     @property

@@ -74,13 +74,10 @@ allowed_page_content_types_csv = "application/octet-stream,image/avif,image/bmp,
 allowed_page_extensions_csv = ".avif,.bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp"
 
 # Moderation and model scoring thresholds.
-explicit_threshold = 0.7
 image_avif_quality = 60
 model_load_logs = true
-moderation_sidecar_timeout_seconds = 180.0
+moderation_sidecar_timeout_seconds = 60
 moderation_sidecar_token = ""
-# Optional internal moderation sidecar endpoint, e.g. "unix:/run/fanic/fanic-moderation.sock"
-# or "http://127.0.0.1:8091".
 moderation_sidecar_url = "unix:/run/fanic/fanic-moderation.sock"
 nsfw_logit_scale = 100.0
 openclip_cache_dir = "~/.cache/clip"
@@ -91,6 +88,9 @@ style_load_retry_seconds = 5.0
 style_logit_scale = 100.0
 style_min_confidence = 0.6
 style_min_confidence_photorealistic = 0.7
+style_max_confidence_photorealistic = 0.9
+explicit_min_threshold = 0.8
+explicit_max_threshold = 0.9
 style_min_top_margin = 0.05
 style_min_top_prob = 0.34
 thumbnail_avif_quality = 30

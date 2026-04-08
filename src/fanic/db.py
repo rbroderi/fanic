@@ -223,6 +223,39 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
         ON works(title COLLATE NOCASE)
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS moderation_review_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT NOT NULL CHECK (content_type IN ('work', 'fanart')),
+            content_id TEXT NOT NULL,
+            uploader_username TEXT NOT NULL,
+            source_member TEXT NOT NULL DEFAULT '',
+            reason_type TEXT NOT NULL CHECK (reason_type IN ('explicit', 'photorealistic')),
+            confidence REAL NOT NULL,
+            min_threshold REAL NOT NULL,
+            max_threshold REAL NOT NULL,
+            moderation_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'dismissed')),
+            reviewed_by TEXT,
+            reviewed_at TEXT,
+            review_note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_moderation_review_queue_status_created_at
+        ON moderation_review_queue(status, created_at DESC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_moderation_review_queue_pending_unique
+        ON moderation_review_queue(content_type, content_id, source_member, reason_type, status)
+        """
+    )
 
     # Build a fanart FTS index for scalable prefix search across uploader/title/summary/fandom.
     connection.execute(

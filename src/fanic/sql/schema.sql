@@ -249,6 +249,24 @@ CREATE TABLE IF NOT EXISTS dmca_reports (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS moderation_review_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_type TEXT NOT NULL CHECK (content_type IN ('work', 'fanart')),
+    content_id TEXT NOT NULL,
+    uploader_username TEXT NOT NULL,
+    source_member TEXT NOT NULL DEFAULT '',
+    reason_type TEXT NOT NULL CHECK (reason_type IN ('explicit', 'photorealistic')),
+    confidence REAL NOT NULL,
+    min_threshold REAL NOT NULL,
+    max_threshold REAL NOT NULL,
+    moderation_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'dismissed')),
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    review_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_works_slug ON works(slug);
 CREATE INDEX IF NOT EXISTS idx_works_title_nocase ON works(title COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_works_rating_updated_at ON works(rating, updated_at DESC);
@@ -271,6 +289,9 @@ CREATE INDEX IF NOT EXISTS idx_work_chapters_work ON work_chapters(work_id);
 CREATE INDEX IF NOT EXISTS idx_work_chapter_pages_chapter ON work_chapter_pages(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_dmca_reports_created_at ON dmca_reports(created_at);
 CREATE INDEX IF NOT EXISTS idx_dmca_reports_work_id ON dmca_reports(work_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_review_queue_status_created_at ON moderation_review_queue(status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_moderation_review_queue_pending_unique
+ON moderation_review_queue(content_type, content_id, source_member, reason_type, status);
 CREATE INDEX IF NOT EXISTS idx_user_bookmarks_username_updated_at ON user_bookmarks(username, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_username_created_at ON notifications(username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_username_is_read ON notifications(username, is_read);

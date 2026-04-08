@@ -1,7 +1,6 @@
 import os
 import time
 from typing import Any
-from typing import cast
 
 import open_clip
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
@@ -132,7 +131,7 @@ def ensure_backend_loaded() -> bool:
 
         created_items: list[object] = []
         for item in created:  # pyright: ignore[reportUnknownVariableType]
-            created_items.append(cast(object, item))
+            created_items.append(item)  # pyright: ignore[reportUnknownArgumentType]
         created_tuple = tuple(created_items)
         if len(created_tuple) < 3:
             _last_load_failed_at = time.time()

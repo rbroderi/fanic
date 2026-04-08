@@ -28,10 +28,13 @@ from fanic.db import get_connection
 from fanic.ingest_editor_service import editor_delete_page_use_case
 from fanic.media import delete_file
 from fanic.media import get_media_service
+from fanic.moderation import get_explicit_max_threshold
 from fanic.moderation import get_explicit_threshold
+from fanic.moderation import get_style_max_confidence_photorealistic
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
 from fanic.moderation import suggested_rating_for_nsfw
+from fanic.repository.moderation_queue import enqueue_moderation_review
 from fanic.repository.works import WorkChapterRow
 from fanic.repository.works import WorkPageRow
 from fanic.repository.works import add_work_chapter
@@ -221,6 +224,24 @@ def _as_int(value: object, default: int = 0) -> int:
             return default
         try:
             return int(stripped)
+        except ValueError:
+            return default
+    return default
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, float):
+        return value
+    if isinstance(value, int):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return float(stripped)
         except ValueError:
             return default
     return default
@@ -877,6 +898,7 @@ def ingest_cbz(
         pages: list[WorkPageRow] = []
         uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
         max_nsfw_score = 0.0
+        review_queue_items: list[dict[str, object]] = []
         progress: _NoopProgress | _AliveProgress = _NoopProgress()
         upload_executor: ThreadPoolExecutor | None = None
         pending_uploads: set[Future[None]] = set()
@@ -936,6 +958,17 @@ def ingest_cbz(
                     moderation_payload = dict(moderation)
                     moderation_payload["source_member"] = member
                     raise ModerationBlockedError(moderation_payload)
+                if bool(moderation.get("manual_review_required", False)):
+                    review_reason = str(moderation.get("manual_review_reason", "")).strip()
+                    if review_reason:
+                        review_queue_items.append(
+                            {
+                                "source_member": member,
+                                "reason_type": review_reason,
+                                "confidence": float(moderation.get("manual_review_confidence", 0.0)),
+                                "moderation_payload": dict(moderation),
+                            }
+                        )
                 max_nsfw_score = max(max_nsfw_score, moderation["nsfw_score"])
 
                 width = None
@@ -1077,6 +1110,29 @@ def ingest_cbz(
         pages,
     )
     replace_work_tags(work_id, metadata)
+    for review_item in review_queue_items:
+        enqueue_moderation_review(
+            content_type="work",
+            content_id=work_id,
+            uploader_username=uploader_username if uploader_username else "",
+            source_member=str(review_item.get("source_member", "")),
+            reason_type=str(review_item.get("reason_type", "explicit")),
+            confidence=_as_float(review_item.get("confidence", 0.0), 0.0),
+            min_threshold=(
+                _SETTINGS.style_min_confidence_photorealistic
+                if str(review_item.get("reason_type", "")) == "photorealistic"
+                else get_explicit_threshold()
+            ),
+            max_threshold=(
+                get_style_max_confidence_photorealistic()
+                if str(review_item.get("reason_type", "")) == "photorealistic"
+                else get_explicit_max_threshold()
+            ),
+            moderation_payload={
+                str(key): value
+                for key, value in cast(dict[object, object], review_item.get("moderation_payload", {})).items()
+            },
+        )
     _ = create_work_version_snapshot(
         work_id,
         action="ingest-cbz-editor-import",
@@ -1097,9 +1153,12 @@ def ingest_cbz(
         "chapter_count": imported_chapter_count,
         "detected_explicit_confidence": max_nsfw_score,
         "explicit_threshold": get_explicit_threshold(),
+        "explicit_min_threshold": get_explicit_threshold(),
+        "explicit_max_threshold": get_explicit_max_threshold(),
         "rating_before": rating_before,
         "rating_after": rating_after,
         "rating_auto_elevated": rating_after != rating_before,
+        "manual_review_queued_count": len(review_queue_items),
     }
 
 
@@ -1444,6 +1503,28 @@ def ingest_editor_page(
         actor=uploader_username,
         details={"inserted_at": inserted_at_index, "page_count": len(all_pages)},
     )
+    if bool(moderation.get("manual_review_required", False)):
+        reason_type = str(moderation.get("manual_review_reason", "")).strip()
+        if reason_type:
+            enqueue_moderation_review(
+                content_type="work",
+                content_id=resolved_work_id,
+                uploader_username=uploader_username,
+                source_member=f"editor-page-{inserted_at_index}",
+                reason_type=reason_type,
+                confidence=_as_float(moderation.get("manual_review_confidence", 0.0), 0.0),
+                min_threshold=(
+                    _SETTINGS.style_min_confidence_photorealistic
+                    if reason_type == "photorealistic"
+                    else get_explicit_threshold()
+                ),
+                max_threshold=(
+                    get_style_max_confidence_photorealistic()
+                    if reason_type == "photorealistic"
+                    else get_explicit_max_threshold()
+                ),
+                moderation_payload={str(key): value for key, value in moderation.items()},
+            )
 
     return {
         "work_id": resolved_work_id,
@@ -1455,9 +1536,12 @@ def ingest_editor_page(
         "nsfw_score": float(moderation["nsfw_score"]),
         "nsfw_confidences": moderation["nsfw_confidences"],
         "explicit_threshold": get_explicit_threshold(),
+        "explicit_min_threshold": get_explicit_threshold(),
+        "explicit_max_threshold": get_explicit_max_threshold(),
         "rating_before": rating_before,
         "rating_after": chosen_rating,
         "rating_auto_elevated": chosen_rating != rating_before,
+        "manual_review_queued_count": 1 if bool(moderation.get("manual_review_required", False)) else 0,
     }
 
 

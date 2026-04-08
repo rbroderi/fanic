@@ -256,6 +256,10 @@ def main(request: RequestLike, response: ResponseLike) -> ResponseLike:
         progress_done_message = (
             "Fanart uploaded successfully. Rating was auto-promoted to Explicit based on moderation."
         )
+        if bool(ingest_work_result.get("manual_review_queued", False)):
+            progress_done_message = (
+                f"{progress_done_message} This upload was also added to the admin moderation review queue."
+            )
     local_user = get_local_user(username)
     profile_key = username
     if local_user is not None:

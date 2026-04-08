@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moderation Review Queue</title>
+    __SITE_HEAD_ASSETS__
+  </head>
+  <body>
+    __SITE_HEADER_HTML__
+
+    <main class="layout">
+      <section class="card info-card">
+        <h2>Moderation Review Queue</h2>
+        <p class="profile-meta">Pending borderline photorealistic and explicit moderation items for admin review.</p>
+        <p class="status-text __MODERATION_QUEUE_STATUS_CLASS__" __MODERATION_QUEUE_STATUS_HIDDEN_ATTR__>__MODERATION_QUEUE_STATUS_TEXT__</p>
+      </section>
+
+      <section class="card info-card">
+        <div class="table-wrap">
+          <table class="profile-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Reason</th>
+                <th>Type</th>
+                <th>Content</th>
+                <th>Uploader</th>
+                <th>Source</th>
+                <th>Confidence</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              __MODERATION_QUEUE_ROWS_HTML__
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    __SITE_COMMON_SCRIPTS__
+  </body>
+</html>

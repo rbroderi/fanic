@@ -327,10 +327,12 @@ def user_menu_replacements(request: RequestLike) -> dict[str, str]:
     reports_current_attr = ' aria-current="page"' if request.path == "/admin/reports" else ""
     users_current_attr = ' aria-current="page"' if request.path == "/admin/users" else ""
     tags_current_attr = ' aria-current="page"' if request.path == "/admin/tag-popularity" else ""
+    moderation_queue_current_attr = ' aria-current="page"' if request.path == "/admin/moderation-queue" else ""
     admin_reports_link = (
         dedent(
             f"""
             <a href="/admin/reports"{reports_current_attr}>Reports</a>
+            <a href="/admin/moderation-queue"{moderation_queue_current_attr}>Moderation Queue</a>
             <a href="/admin/users"{users_current_attr}>Users</a>
             <a href="/admin/tag-popularity"{tags_current_attr}>Tag Popularity</a>
             """

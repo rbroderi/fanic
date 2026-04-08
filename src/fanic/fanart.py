@@ -12,10 +12,14 @@ from PIL import UnidentifiedImageError
 
 from fanic.ingest import ModerationBlockedError
 from fanic.media import get_media_service
+from fanic.moderation import get_explicit_max_threshold
+from fanic.moderation import get_explicit_threshold
+from fanic.moderation import get_style_max_confidence_photorealistic
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
 from fanic.repository.fanart import create_fanart_item
 from fanic.repository.fanart import replace_fanart_item_tags
+from fanic.repository.moderation_queue import enqueue_moderation_review
 from fanic.settings import ensure_storage_dirs
 from fanic.settings import get_settings
 
@@ -241,6 +245,28 @@ def ingest_fanart_image(
         fandom_csv=fandom.strip(),
         freeform_csv=normalized_tags,
     )
+    if bool(moderation.get("manual_review_required", False)):
+        reason_type = str(moderation.get("manual_review_reason", "")).strip()
+        if reason_type:
+            enqueue_moderation_review(
+                content_type="fanart",
+                content_id=item_id,
+                uploader_username=normalized_uploader,
+                reason_type=reason_type,
+                confidence=float(moderation.get("manual_review_confidence", 0.0)),
+                min_threshold=(
+                    _SETTINGS.style_min_confidence_photorealistic
+                    if reason_type == "photorealistic"
+                    else get_explicit_threshold()
+                ),
+                max_threshold=(
+                    get_style_max_confidence_photorealistic()
+                    if reason_type == "photorealistic"
+                    else get_explicit_max_threshold()
+                ),
+                moderation_payload={str(key): value for key, value in moderation.items()},
+            )
+    manual_review_reason = str(moderation.get("manual_review_reason", "")).strip()
 
     return {
         "item_id": item_id,
@@ -254,6 +280,10 @@ def ingest_fanart_image(
         "rating_before": rating_before,
         "rating_after": normalized_rating,
         "rating_auto_elevated": normalized_rating != rating_before,
+        "manual_review_queued": bool(moderation.get("manual_review_required", False)),
+        "manual_review_reason": manual_review_reason,
+        "explicit_min_threshold": get_explicit_threshold(),
+        "explicit_max_threshold": get_explicit_max_threshold(),
         "width": width,
         "height": height,
     }

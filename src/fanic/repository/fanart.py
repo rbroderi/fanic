@@ -58,6 +58,26 @@ class FanartCommentRow(TypedDict):
     created_at: str
 
 
+def set_fanart_item_rating(item_id: str, rating: str) -> bool:
+    normalized_item_id = item_id.strip()
+    normalized_rating = rating.strip()
+    if not normalized_item_id:
+        return False
+    if not normalized_rating:
+        return False
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE fanart_items
+            SET rating = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (normalized_rating, normalized_item_id),
+        )
+    return cursor.rowcount > 0
+
+
 def _fanart_item_from_row(
     row: sqlite3.Row,
     *,

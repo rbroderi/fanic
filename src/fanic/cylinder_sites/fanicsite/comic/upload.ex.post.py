@@ -352,6 +352,11 @@ def _run_async_cbz_ingest(
         rating_after = str(result.get("rating_after", "")).strip()
         if bool(result.get("rating_auto_elevated", False)) and rating_after == "Explicit":
             completion_message = "Import complete. Rating was auto-promoted to Explicit based on moderation."
+        review_queue_count = int(_as_float(result.get("manual_review_queued_count", 0), 0.0))
+        if review_queue_count > 0:
+            completion_message = (
+                f"{completion_message} {review_queue_count} item(s) were added to the admin moderation review queue."
+            )
         _set_progress(
             stage="done",
             message=completion_message,
