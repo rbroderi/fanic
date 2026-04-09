@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(repoRoot, "frontend");
 const stylesSourcePath = path.join(frontendDir, "styles.css");
-const staticOutputDir = "/mnt/storage/static";
+const staticOutputDir = process.env.FANIC_STATIC_OUTPUT_DIR || "/mnt/storage/static";
 const versionPattern = /FANIC_ASSET_VERSION:\s*([A-Za-z0-9._-]+)/;
 
 function parseArgs(argv) {

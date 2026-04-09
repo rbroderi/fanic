@@ -38,4 +38,6 @@ jobs:
         run: npm run frontend:typecheck
 
       - name: Run frontend build
+        env:
+          FANIC_STATIC_OUTPUT_DIR: ${{ github.workspace }}/static
         run: npm run frontend:build
