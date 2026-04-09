@@ -130,16 +130,43 @@ def test_ingest_fanart_image_success(
         data: bytes,
         extension: str,
         media_prefix: str,
-        **_kwargs: object,
+        *,
+        upload_executor: object | None = None,
+        pending_uploads: object | None = None,
     ) -> str:
+        _ = (upload_executor, pending_uploads)
         saved_payloads.append(data)
         folder = "images" if media_prefix == "fanart/images" else "thumbs"
         return f"_objects/aa/{folder}.{extension}"
 
     created_items: list[dict[str, object]] = []
 
-    def fake_create_fanart_item(**kwargs: object) -> dict[str, object]:
-        created_items.append(dict(kwargs))
+    def fake_create_fanart_item(
+        *,
+        item_id: str,
+        uploader_username: str,
+        title: str,
+        summary: str,
+        fandom: str = "",
+        rating: str = "Not Rated",
+        image_filename: str,
+        thumb_filename: str | None,
+        width: int | None,
+        height: int | None,
+    ) -> dict[str, object]:
+        item: dict[str, object] = {
+            "item_id": item_id,
+            "uploader_username": uploader_username,
+            "title": title,
+            "summary": summary,
+            "fandom": fandom,
+            "rating": rating,
+            "image_filename": image_filename,
+            "thumb_filename": thumb_filename,
+            "width": width,
+            "height": height,
+        }
+        created_items.append(item)
         return created_items[-1]
 
     captured_tag_sync: dict[str, str] = {
@@ -167,7 +194,8 @@ def test_ingest_fanart_image_success(
     def suggested_rating_for_nsfw(_score: float) -> str:
         return "Explicit"
 
-    def render_image_bytes(*_args: object, **_kwargs: object) -> bytes:
+    def render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
+        _ = (image, fmt, quality)
         return b"avif"
 
     monkeypatch.setattr(fanart, "ensure_storage_dirs", ensure_storage_dirs)

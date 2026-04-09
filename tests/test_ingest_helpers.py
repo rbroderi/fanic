@@ -24,8 +24,23 @@ INGEST_PATH = ROOT / "src" / "fanic" / "ingest.py"
 
 
 def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
-    def noop(*args: object, **kwargs: object) -> None:
-        _ = (args, kwargs)
+    def ensure_storage_dirs_stub() -> None:
+        return None
+
+    def replace_work_chapter_members_stub(chapter_id: int, page_image_filenames: list[str]) -> None:
+        _ = (chapter_id, page_image_filenames)
+        return None
+
+    def replace_work_pages_stub(work_id: str, pages: list[dict[str, object]]) -> None:
+        _ = (work_id, pages)
+        return None
+
+    def replace_work_tags_stub(work_id: str, metadata: dict[str, object]) -> None:
+        _ = (work_id, metadata)
+        return None
+
+    def upsert_work_stub(work: dict[str, object]) -> None:
+        _ = work
         return None
 
     def get_settings_obj() -> RealFanicSettings:
@@ -99,28 +114,77 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         _ = payload
         return None
 
-    def make_chapter(*args: object, **kwargs: object) -> dict[str, object]:
-        _ = (args, kwargs)
+    def make_chapter(work_id: str, title: str, start_page: int, end_page: int) -> dict[str, object]:
+        _ = (work_id, title, start_page, end_page)
         return {"id": 1}
 
-    def make_snapshot(*args: object, **kwargs: object) -> dict[str, object]:
-        _ = (args, kwargs)
+    def make_snapshot(
+        work_id: str,
+        *,
+        action: str,
+        actor: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        _ = (work_id, action, actor, details)
         return {"version_id": "v1"}
 
-    def enqueue_moderation_review(*args: object, **kwargs: object) -> None:
-        _ = (args, kwargs)
+    def enqueue_moderation_review(
+        *,
+        content_type: str,
+        content_id: str,
+        uploader_username: str,
+        reason_type: str,
+        confidence: float,
+        min_threshold: float,
+        max_threshold: float,
+        moderation_payload: dict[str, object],
+        source_member: str = "",
+    ) -> None:
+        _ = (
+            content_type,
+            content_id,
+            uploader_username,
+            reason_type,
+            confidence,
+            min_threshold,
+            max_threshold,
+            moderation_payload,
+            source_member,
+        )
         return None
 
-    def always_true(*args: object, **kwargs: object) -> bool:
-        _ = (args, kwargs)
+    def delete_work_chapter_stub(work_id: str, chapter_id: int) -> bool:
+        _ = (work_id, chapter_id)
         return True
 
-    def get_work_none(*args: object, **kwargs: object) -> None:
-        _ = (args, kwargs)
+    def update_work_chapter_stub(
+        work_id: str,
+        chapter_id: int,
+        title: str,
+        start_page: int,
+        end_page: int,
+    ) -> bool:
+        _ = (work_id, chapter_id, title, start_page, end_page)
+        return True
+
+    def get_work_none(work_id: str) -> None:
+        _ = work_id
         return None
 
-    def empty_list(*args: object, **kwargs: object) -> list[object]:
-        _ = (args, kwargs)
+    def list_work_chapter_members_stub(chapter_id: int) -> list[str]:
+        _ = chapter_id
+        return []
+
+    def list_work_chapters_stub(work_id: str) -> list[dict[str, object]]:
+        _ = work_id
+        return []
+
+    def list_work_page_image_names_stub(work_id: str) -> list[str]:
+        _ = work_id
+        return []
+
+    def list_work_page_rows_stub(work_id: str) -> list[dict[str, object]]:
+        _ = work_id
         return []
 
     def slugify_value(value: object) -> str:
@@ -133,7 +197,7 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     setattr(settings_stub, "FanicSettings", RealFanicSettings)
     setattr(settings_stub, "CBZ_DIR", tmp_path / "cbz")
     setattr(settings_stub, "WORKS_DIR", tmp_path / "works")
-    setattr(settings_stub, "ensure_storage_dirs", noop)
+    setattr(settings_stub, "ensure_storage_dirs", ensure_storage_dirs_stub)
     setattr(settings_stub, "get_settings", get_settings_obj)
 
     moderation_stub = ModuleType("fanic.moderation")
@@ -172,17 +236,21 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     setattr(repository_stub, "add_work_chapter", make_chapter)
     setattr(repository_stub, "create_work_version_snapshot", make_snapshot)
     setattr(repository_stub, "count_uploaded_pages_for_user", lambda username: 0)
-    setattr(repository_stub, "delete_work_chapter", always_true)
+    setattr(repository_stub, "delete_work_chapter", delete_work_chapter_stub)
     setattr(repository_stub, "get_work", get_work_none)
-    setattr(repository_stub, "list_work_chapter_members", empty_list)
-    setattr(repository_stub, "list_work_chapters", empty_list)
-    setattr(repository_stub, "list_work_page_image_names", empty_list)
-    setattr(repository_stub, "list_work_page_rows", empty_list)
-    setattr(repository_stub, "replace_work_chapter_members", noop)
-    setattr(repository_stub, "replace_work_pages", noop)
-    setattr(repository_stub, "replace_work_tags", noop)
-    setattr(repository_stub, "update_work_chapter", always_true)
-    setattr(repository_stub, "upsert_work", noop)
+    setattr(repository_stub, "list_work_chapter_members", list_work_chapter_members_stub)
+    setattr(repository_stub, "list_work_chapters", list_work_chapters_stub)
+    setattr(repository_stub, "list_work_page_image_names", list_work_page_image_names_stub)
+    setattr(repository_stub, "list_work_page_rows", list_work_page_rows_stub)
+    setattr(
+        repository_stub,
+        "replace_work_chapter_members",
+        replace_work_chapter_members_stub,
+    )
+    setattr(repository_stub, "replace_work_pages", replace_work_pages_stub)
+    setattr(repository_stub, "replace_work_tags", replace_work_tags_stub)
+    setattr(repository_stub, "update_work_chapter", update_work_chapter_stub)
+    setattr(repository_stub, "upsert_work", upsert_work_stub)
 
     moderation_queue_stub = ModuleType("fanic.repository.moderation_queue")
     setattr(moderation_queue_stub, "enqueue_moderation_review", enqueue_moderation_review)
@@ -215,8 +283,8 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     media_stub = ModuleType("fanic.media")
     setattr(media_stub, "get_media_service", lambda: _MediaServiceStub())
-    setattr(media_stub, "delete_file", noop)
-    setattr(media_stub, "delete_tree", noop)
+    setattr(media_stub, "delete_file", lambda path, missing_ok=False: None)
+    setattr(media_stub, "delete_tree", lambda path, missing_ok=False: None)
     setattr(media_stub, "copy_file", lambda src, dst: dst)
     setattr(media_stub, "copy_tree", lambda src, dst: dst)
 

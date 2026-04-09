@@ -74,7 +74,8 @@ def test_dmca_post_rejects_missing_required_fields(
         "fanicsite_dmca_ex_post_invalid_test",
     )
 
-    def always_true(*_args: Any) -> bool:
+    def always_true(request: Any, response: Any | None = None) -> bool:
+        _ = (request, response)
         return True
 
     monkeypatch.setattr(module, "enforce_https_termination", always_true)
@@ -158,7 +159,8 @@ def test_dmca_post_persists_report_and_redirects(
 
     captured: dict[str, object] = {}
 
-    def always_true(*_args: Any) -> bool:
+    def always_true(request: Any, response: Any | None = None) -> bool:
+        _ = (request, response)
         return True
 
     def fake_current_user(request: Any) -> str:
@@ -169,8 +171,35 @@ def test_dmca_post_persists_report_and_redirects(
     monkeypatch.setattr(module, "validate_csrf", always_true)
     monkeypatch.setattr(module, "current_user", fake_current_user)
 
-    def fake_add_dmca_report(**kwargs: object) -> int:
-        captured.update(kwargs)
+    def fake_add_dmca_report(
+        *,
+        work_id: str | None,
+        work_title: str,
+        issue_type: str,
+        reporter_name: str,
+        reporter_email: str,
+        reason: str,
+        claimed_url: str,
+        evidence_url: str,
+        details: str,
+        reporter_username: str | None,
+        source_path: str,
+    ) -> int:
+        captured.update(
+            {
+                "work_id": work_id,
+                "work_title": work_title,
+                "issue_type": issue_type,
+                "reporter_name": reporter_name,
+                "reporter_email": reporter_email,
+                "reason": reason,
+                "claimed_url": claimed_url,
+                "evidence_url": evidence_url,
+                "details": details,
+                "reporter_username": reporter_username,
+                "source_path": source_path,
+            }
+        )
         return 17
 
     monkeypatch.setattr(module, "add_dmca_report", fake_add_dmca_report)

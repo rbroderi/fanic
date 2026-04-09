@@ -146,8 +146,8 @@ def test_moderate_image_bytes_raises_when_sidecar_unavailable(
         ),
     )
 
-    def _fake_urlopen(*args: object, **kwargs: object) -> object:
-        _ = (args, kwargs)
+    def _fake_urlopen(request: object, timeout: float) -> object:
+        _ = (request, timeout)
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(moderation, "urlopen", _fake_urlopen)
