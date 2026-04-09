@@ -2,17 +2,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
 
-
-def _load_schema_module() -> Any:
-    try:
-        import xmlschema  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise RuntimeError(
-            "Missing dependency 'xmlschema'. Run via uvx with --with xmlschema or install xmlschema."
-        ) from exc
-    return xmlschema
+import xmlschema
 
 
 def main(argv: list[str]) -> int:
@@ -27,7 +18,6 @@ def main(argv: list[str]) -> int:
         return 0
 
     try:
-        xmlschema = _load_schema_module()
         schema = xmlschema.XMLSchema(str(schema_path))
     except Exception as exc:  # pragma: no cover - tool/runtime failures
         print(f"Failed to initialize schema validator: {exc}")

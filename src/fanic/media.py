@@ -204,7 +204,7 @@ class BunnyStorageMediaBackend:
     read_api_key: str
     storage_zone: str
     write_api_key: str = ""
-    storage_base_url: str = "https://storage.bunnycdn.com"
+    storage_base_url: str = "https://ny.storage.bunnycdn.com"
     timeout_seconds: float = 30.0
     session: requests.Session = field(default_factory=requests.Session, repr=False)
 

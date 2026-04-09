@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import socket
@@ -13,6 +14,8 @@ from urllib.error import URLError
 from urllib.request import Request
 from urllib.request import urlopen
 
+from fanic.remote_mod_moderation import moderate_content_with_remote_mod
+from fanic.remote_mod_moderation import remote_mod_confidence_levels
 from fanic.settings import get_settings
 
 
@@ -36,7 +39,6 @@ _EXPLICIT_MAX_THRESHOLD = _SETTINGS.explicit_max_threshold
 _STYLE_MAX_CONFIDENCE_PHOTOREALISTIC = _SETTINGS.style_max_confidence_photorealistic
 _ALLOWED_STYLES = {"comic", "illustrated", "painterly", "anime", "cgi"}
 _LOGGER = logging.getLogger(__name__)
-_nsfw_detector_cache: object | None = None
 _style_classifier_cache: object | None = None
 
 
@@ -56,15 +58,27 @@ class _UnixHTTPConnection(HTTPConnection):
         self.sock = unix_socket
 
 
-def _get_nsfw_detector_module() -> object:
-    global _nsfw_detector_cache
-    detector = _nsfw_detector_cache
-    if detector is not None:
-        return detector
-    import fanic.nsfw_detector as detector_module
+def _mime_type_for_image_path(path: str) -> str:
+    suffix = Path(path).suffix.lower()
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".avif": "image/avif",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+    }
+    return str(mime_map.get(suffix, "image/jpeg"))
 
-    _nsfw_detector_cache = detector_module
-    return detector_module
+
+def _image_path_to_data_url(path: str) -> str:
+    image_bytes = Path(path).read_bytes()
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    mime_type = _mime_type_for_image_path(path)
+    return f"data:{mime_type};base64,{image_b64}"
 
 
 def _get_style_classifier_module() -> object:
@@ -333,12 +347,16 @@ def _moderate_image_bytes_via_sidecar(image_bytes: bytes, suffix: str = ".png") 
 
 
 def _nsfw_score_with_confidences(path: str) -> tuple[float, dict[str, float]]:
-    detector_module = _get_nsfw_detector_module()
-    score_fn = cast(
-        Callable[[str], tuple[float, dict[str, float]]],
-        getattr(detector_module, "nsfw_score_with_confidences"),
-    )
-    return score_fn(path)
+    try:
+        payload = moderate_content_with_remote_mod(image_url=_image_path_to_data_url(path))
+        confidences = remote_mod_confidence_levels(payload)
+        explicit_raw = confidences.get("explicit_confidence", 0.0)
+        explicit = float(explicit_raw)
+        explicit_clamped = max(0.0, min(1.0, explicit))
+        sfw = max(0.0, min(1.0, 1.0 - explicit_clamped))
+        return explicit_clamped, {"sfw": sfw, "explicit": explicit_clamped}
+    except Exception:
+        return 0.0, {"sfw": 0.0, "explicit": 0.0}
 
 
 def _classify_style_with_confidences(path: str) -> tuple[str, dict[str, float]]:
@@ -367,13 +385,11 @@ def initialize_moderation_models(*, force: bool = False) -> dict[str, bool]:
             "style_ready": False,
         }
 
-    detector_module = _get_nsfw_detector_module()
     classifier_module = _get_style_classifier_module()
 
-    init_nsfw = cast(Callable[[], bool], getattr(detector_module, "initialize_nsfw_model"))
     init_style = cast(Callable[[], bool], getattr(classifier_module, "initialize_style_model"))
 
-    nsfw_ready = init_nsfw()
+    nsfw_ready = True
     style_ready = init_style()
     return {
         "requested": True,

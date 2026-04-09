@@ -266,6 +266,98 @@ def test_non_admin_cannot_lower_explicit_rating(
     assert called["snapshotted"] is False
 
 
+def test_non_admin_cannot_raise_to_explicit_from_teen_rating(
+    load_route_module: Callable[[str, str], ModuleType],
+    dummy_request: Callable[..., Any],
+    dummy_response: Callable[[], ResponseLike],
+) -> None:
+    module = load_route_module(
+        "src/fanic/cylinder_sites/fanicsite/comic.ex.post.py",
+        "fanicsite_works_edit_post_explicit_promotion_lock_test",
+    )
+
+    def fake_get_work(work_id: str) -> dict[str, Any] | None:
+        _ = work_id
+        return {
+            "id": "work-1",
+            "title": "Locked Promotion",
+            "summary": "",
+            "rating": "Teen And Up Audiences",
+            "warnings": "",
+            "status": "in_progress",
+            "language": "en",
+            "uploader_username": "alice",
+        }
+
+    def fake_current_user(request: Any) -> str:
+        _ = request
+        return "alice"
+
+    def fake_can_view_work(username: str | None, work: dict[str, Any]) -> bool:
+        _ = (username, work)
+        return True
+
+    called: dict[str, bool] = {"updated": False, "snapshotted": False}
+
+    def fake_update_work_metadata(
+        work_id: str,
+        metadata: dict[str, object],
+        *,
+        editor_username: str,
+        edited_by_admin: bool,
+    ) -> None:
+        _ = (work_id, metadata, editor_username, edited_by_admin)
+        called["updated"] = True
+
+    def fake_create_work_version_snapshot(
+        work_id: str,
+        *,
+        action: str,
+        actor: str,
+        details: dict[str, object],
+    ) -> object:
+        _ = (work_id, action, actor, details)
+        called["snapshotted"] = True
+        return {}
+
+    deps = _comic_post_deps(
+        module,
+        get_work_func=fake_get_work,
+        current_user_func=fake_current_user,
+        role_for_user_func=_role_user,
+        can_view_work_func=fake_can_view_work,
+        update_work_metadata_func=fake_update_work_metadata,
+        create_work_version_snapshot_func=fake_create_work_version_snapshot,
+    )
+
+    request = dummy_request(
+        path="/comic/work-1/edit",
+        method="POST",
+        form={
+            "title": "Locked Promotion",
+            "rating": "Explicit",
+            "status": "in_progress",
+            "summary": "",
+            "warnings": "",
+            "language": "en",
+            "series": "",
+            "series_index": "",
+            "published_at": "",
+            "fandoms": "",
+            "relationships": "",
+            "characters": "",
+            "freeform_tags": "",
+        },
+    )
+    response = dummy_response()
+    result = module.main(request, response, deps=deps)
+
+    assert result.status_code == 303
+    assert result.headers["Location"] == "/comic/work-1/edit?msg=explicit-rating-locked"
+    assert called["updated"] is False
+    assert called["snapshotted"] is False
+
+
 def test_admin_can_lower_explicit_rating(
     load_route_module: Callable[[str, str], ModuleType],
     dummy_request: Callable[..., Any],

@@ -6,6 +6,10 @@ def is_explicit_rating(value: object) -> bool:
     return str(value).strip().casefold() == "explicit"
 
 
+def is_mature_rating(value: object) -> bool:
+    return str(value).strip().casefold() == "mature"
+
+
 def parse_series_index(raw_value: str) -> int | None:
     text = raw_value.strip()
     if not text:
@@ -47,7 +51,17 @@ def should_lock_explicit_demotion(
     current_rating: object,
     requested_rating: object,
 ) -> bool:
-    return (not is_admin) and is_explicit_rating(current_rating) and (not is_explicit_rating(requested_rating))
+    if is_admin:
+        return False
+    if is_explicit_rating(current_rating) and (not is_explicit_rating(requested_rating)):
+        return True
+    if (
+        is_explicit_rating(requested_rating)
+        and (not is_mature_rating(current_rating))
+        and (not is_explicit_rating(current_rating))
+    ):
+        return True
+    return False
 
 
 def build_metadata_from_form(

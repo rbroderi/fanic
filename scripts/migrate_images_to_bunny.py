@@ -197,7 +197,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--storage-api-base-url",
-        default="https://storage.bunnycdn.com",
+        default="https://ny.storage.bunnycdn.com",
         help=(
             "Bunny Storage API base URL. "
             "Use a regional endpoint when needed, for example "

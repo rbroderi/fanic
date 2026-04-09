@@ -48,7 +48,7 @@ def test_initialize_moderation_models_forces_initialization(
         "nsfw_ready": True,
         "style_ready": True,
     }
-    assert init_calls == ["nsfw", "style"]
+    assert init_calls == ["style"]
 
 
 def test_initialize_moderation_models_skips_when_sidecar_configured(

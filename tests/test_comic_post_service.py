@@ -68,3 +68,19 @@ def test_should_lock_explicit_demotion_logic() -> None:
         )
         is False
     )
+    assert (
+        should_lock_explicit_demotion(
+            is_admin=False,
+            current_rating="Teen And Up Audiences",
+            requested_rating="Explicit",
+        )
+        is True
+    )
+    assert (
+        should_lock_explicit_demotion(
+            is_admin=False,
+            current_rating="Mature",
+            requested_rating="Explicit",
+        )
+        is False
+    )

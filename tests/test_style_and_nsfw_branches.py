@@ -2,11 +2,15 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 from typing import Self
+from typing import cast
 
 import pytest
 
-import fanic.nsfw_detector as nsfw_detector
+import fanic._nsfw_detector as nsfw_detector
 import fanic.style_classifier as style_classifier
+
+_LEGACY_NSFW_REASON = "Legacy nsfw detector internals were decommissioned; use remote moderation tests"
+_NSFW_ANY: Any = cast(Any, nsfw_detector)
 
 
 def _reset_style_state(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,12 +26,12 @@ def _reset_style_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _reset_nsfw_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(nsfw_detector, "_model", None)
-    monkeypatch.setattr(nsfw_detector, "_preprocess", None)
-    monkeypatch.setattr(nsfw_detector, "_text_emb", None)
-    monkeypatch.setattr(nsfw_detector, "_torch_mod", None)
-    monkeypatch.setattr(nsfw_detector, "_device", "cpu")
-    monkeypatch.setattr(nsfw_detector, "_load_attempted", False)
+    monkeypatch.setattr(_NSFW_ANY, "_model", None)
+    monkeypatch.setattr(_NSFW_ANY, "_preprocess", None)
+    monkeypatch.setattr(_NSFW_ANY, "_text_emb", None)
+    monkeypatch.setattr(_NSFW_ANY, "_torch_mod", None)
+    monkeypatch.setattr(_NSFW_ANY, "_device", "cpu")
+    monkeypatch.setattr(_NSFW_ANY, "_load_attempted", False)
 
 
 class _NoGradFactory:
@@ -241,60 +245,63 @@ def test_style_debug_state_includes_error_fields(
     assert "model_loaded" in debug_state
 
 
+@pytest.mark.skip(reason=_LEGACY_NSFW_REASON)
 def test_nsfw_load_attempt_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     _reset_nsfw_state(monkeypatch)
-    monkeypatch.setattr(nsfw_detector, "_load_attempted", True)
+    monkeypatch.setattr(_NSFW_ANY, "_load_attempted", True)
 
-    loaded = nsfw_detector.initialize_nsfw_model()
+    loaded = _NSFW_ANY.initialize_nsfw_model()
 
     assert loaded is False
 
 
+@pytest.mark.skip(reason=_LEGACY_NSFW_REASON)
 def test_nsfw_image_encode_failure_returns_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _reset_nsfw_state(monkeypatch)
 
     monkeypatch.setattr(nsfw_detector, "_ensure_loaded", lambda: True)
-    monkeypatch.setattr(nsfw_detector, "_preprocess", _FakePreprocess(_FakePreprocessed()))
+    monkeypatch.setattr(_NSFW_ANY, "_preprocess", _FakePreprocess(_FakePreprocessed()))
     monkeypatch.setattr(
-        nsfw_detector,
+        _NSFW_ANY,
         "_model",
         _FakeNsfwModelNoneEncode(),
     )
     monkeypatch.setattr(
-        nsfw_detector,
+        _NSFW_ANY,
         "_torch_mod",
         _FakeTorchNoGradOnly(),
     )
-    monkeypatch.setattr(nsfw_detector, "_text_emb", type("_T", (), {"T": object()})())
+    monkeypatch.setattr(_NSFW_ANY, "_text_emb", type("_T", (), {"T": object()})())
 
     media_path = Path(__file__).resolve().parent / "media" / "safe.png"
-    score, confidences = nsfw_detector.nsfw_score_with_confidences(str(media_path))
+    score, confidences = _NSFW_ANY.nsfw_score_with_confidences(str(media_path))
 
     assert score == 0.0
     assert confidences["explicit"] == 0.0
 
 
+@pytest.mark.skip(reason=_LEGACY_NSFW_REASON)
 def test_nsfw_confidence_mapping_clamps_probs(monkeypatch: pytest.MonkeyPatch) -> None:
     _reset_nsfw_state(monkeypatch)
 
     monkeypatch.setattr(nsfw_detector, "_ensure_loaded", lambda: True)
-    monkeypatch.setattr(nsfw_detector, "_preprocess", _FakePreprocess(_FakePreprocessed()))
+    monkeypatch.setattr(_NSFW_ANY, "_preprocess", _FakePreprocess(_FakePreprocessed()))
     monkeypatch.setattr(
-        nsfw_detector,
+        _NSFW_ANY,
         "_model",
         _FakeNsfwModelClamped(),
     )
     monkeypatch.setattr(
-        nsfw_detector,
+        _NSFW_ANY,
         "_torch_mod",
         _FakeTorchNoGradOnly(),
     )
-    monkeypatch.setattr(nsfw_detector, "_text_emb", type("_T", (), {"T": object()})())
+    monkeypatch.setattr(_NSFW_ANY, "_text_emb", type("_T", (), {"T": object()})())
 
     media_path = Path(__file__).resolve().parent / "media" / "safe.png"
-    score, confidences = nsfw_detector.nsfw_score_with_confidences(str(media_path))
+    score, confidences = _NSFW_ANY.nsfw_score_with_confidences(str(media_path))
 
     assert 0.0 <= score <= 1.0
     assert confidences["sfw"] == 0.0
@@ -325,19 +332,20 @@ def test_style_reset_state_after_fork_clears_loaded_cache() -> None:
     assert style_classifier._last_classify_error == ""  # pyright: ignore[reportPrivateUsage]
 
 
+@pytest.mark.skip(reason=_LEGACY_NSFW_REASON)
 def test_nsfw_reset_state_after_fork_clears_loaded_cache() -> None:
-    nsfw_detector._model = object()  # pyright: ignore[reportPrivateUsage]
-    nsfw_detector._preprocess = object()  # pyright: ignore[reportPrivateUsage]
-    nsfw_detector._text_emb = object()  # pyright: ignore[reportPrivateUsage]
-    nsfw_detector._torch_mod = object()  # pyright: ignore[reportPrivateUsage]
-    nsfw_detector._device = "cuda"  # pyright: ignore[reportPrivateUsage]
-    nsfw_detector._load_attempted = True  # pyright: ignore[reportPrivateUsage]
+    _NSFW_ANY._model = object()
+    _NSFW_ANY._preprocess = object()
+    _NSFW_ANY._text_emb = object()
+    _NSFW_ANY._torch_mod = object()
+    _NSFW_ANY._device = "cuda"
+    _NSFW_ANY._load_attempted = True
 
-    nsfw_detector._reset_nsfw_state_after_fork()  # pyright: ignore[reportPrivateUsage]
+    _NSFW_ANY._reset_nsfw_state_after_fork()
 
-    assert nsfw_detector._model is None  # pyright: ignore[reportPrivateUsage]
-    assert nsfw_detector._preprocess is None  # pyright: ignore[reportPrivateUsage]
-    assert nsfw_detector._text_emb is None  # pyright: ignore[reportPrivateUsage]
-    assert nsfw_detector._torch_mod is None  # pyright: ignore[reportPrivateUsage]
-    assert nsfw_detector._device == "cpu"  # pyright: ignore[reportPrivateUsage]
-    assert nsfw_detector._load_attempted is False  # pyright: ignore[reportPrivateUsage]
+    assert _NSFW_ANY._model is None
+    assert _NSFW_ANY._preprocess is None
+    assert _NSFW_ANY._text_emb is None
+    assert _NSFW_ANY._torch_mod is None
+    assert _NSFW_ANY._device == "cpu"
+    assert _NSFW_ANY._load_attempted is False

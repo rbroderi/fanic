@@ -11,12 +11,14 @@ from typing import NotRequired
 from typing import TypedDict
 from typing import cast
 from urllib.parse import quote
+from urllib.parse import urlsplit
 
 import tomli_w
 
 from fanic.db import get_connection
 from fanic.media import delete_file
 from fanic.media import delete_tree
+from fanic.media import get_media_service
 from fanic.media import media_public_path_from_key
 from fanic.settings import CBZ_DIR
 from fanic.settings import WORKS_DIR
@@ -1206,12 +1208,61 @@ def delete_work(work_id: str) -> bool:
     if not work:
         return False
 
+    page_rows = list_work_page_rows(work_id)
+
     with get_connection() as connection:
         cursor = connection.execute("DELETE FROM works WHERE id = ?", (work_id,))
         if cursor.rowcount < 1:
             return False
 
+    media_service = get_media_service()
+    media_keys_to_delete: set[str] = set()
+
+    for page in page_rows:
+        image_name = str(page.get("image_filename", "")).strip()
+        if image_name:
+            media_keys_to_delete.add(media_service.comic_page_key(work_id, image_name))
+
+        thumb_name_obj = page.get("thumb_filename")
+        thumb_name = str(thumb_name_obj).strip() if thumb_name_obj is not None else ""
+        if thumb_name:
+            media_keys_to_delete.add(media_service.comic_thumb_key(work_id, thumb_name))
+
     cbz_path_text = str(work.get("cbz_path", "")).strip()
+    if cbz_path_text:
+        cbz_name = ""
+        if cbz_path_text.startswith("http://") or cbz_path_text.startswith("https://"):
+            cbz_name = Path(urlsplit(cbz_path_text).path).name
+        else:
+            cbz_name = Path(cbz_path_text).name
+
+        if cbz_name:
+            raw_name = cbz_name.strip()
+            encoded_name = quote(raw_name, safe="")
+            for filename in {raw_name, encoded_name}:
+                if filename:
+                    media_keys_to_delete.add(f"cbz/{filename}")
+                    media_keys_to_delete.add(f"cbz/{filename}.meta.json")
+                    media_keys_to_delete.add(f"{quote(work_id.strip(), safe='')}/downloads/{filename}")
+
+        parsed_path = urlsplit(cbz_path_text).path if "://" in cbz_path_text else cbz_path_text
+        static_tail = ""
+        if "/static/" in parsed_path:
+            static_tail = parsed_path.split("/static/", 1)[1].strip("/")
+        elif parsed_path.startswith("static/"):
+            static_tail = parsed_path[len("static/") :].strip("/")
+
+        if static_tail:
+            media_keys_to_delete.add(static_tail)
+            if static_tail.endswith(".cbz"):
+                media_keys_to_delete.add(f"{static_tail}.meta.json")
+
+    for media_key in media_keys_to_delete:
+        try:
+            media_service.delete(media_key)
+        except Exception:
+            pass
+
     if cbz_path_text:
         cbz_path = Path(cbz_path_text)
         try:

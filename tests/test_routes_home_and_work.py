@@ -412,6 +412,11 @@ def test_fanart_route_gallery_and_media(
         "list_fanart_items_by_uploader",
         fake_list_fanart_items_by_uploader,
     )
+    monkeypatch.setattr(
+        module,
+        "list_fanart_items",
+        lambda *_args, **_kwargs: fake_list_fanart_items_by_uploader("alice"),
+    )
     monkeypatch.setattr(module, "list_fanart_galleries_by_uploader", lambda *_: [])
     monkeypatch.setattr(module, "get_fanart_gallery_by_slug", lambda *_: None)
     monkeypatch.setattr(module, "list_fanart_gallery_item_ids", lambda *_: set())
@@ -603,6 +608,7 @@ def test_fanart_route_gallery_grouping_filter(
     ]
 
     monkeypatch.setattr(module, "list_fanart_items_by_uploader", lambda *_args, **_kwargs: works)
+    monkeypatch.setattr(module, "list_fanart_items", lambda *_args, **_kwargs: works)
     monkeypatch.setattr(
         module,
         "list_fanart_galleries_by_uploader",
@@ -1181,7 +1187,9 @@ def test_work_edit_route_renders_explicit_rating_lock_error(
 
     assert result.status_code == 200
     assert rendered["status_class"] == "error"
-    assert rendered["status_text"] == "Only admins can lower a work from Explicit to a lower rating."
+    assert rendered["status_text"] == (
+        "Only admins can lower Explicit, and non-admins can only raise to Explicit from Mature."
+    )
 
 
 def test_work_versions_route_renders_selected_version(

@@ -244,7 +244,7 @@ def status_for_edit_message(save_msg: str) -> StatusReplacements:
             css_class = "error"
             hidden_attr = ""
         case "explicit-rating-locked":
-            text = "Only admins can lower a work from Explicit to a lower rating."
+            text = "Only admins can lower Explicit, and non-admins can only raise to Explicit from Mature."
             css_class = "error"
             hidden_attr = ""
         case _:

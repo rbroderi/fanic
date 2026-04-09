@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import logging
@@ -34,6 +35,10 @@ from fanic.moderation import get_style_max_confidence_photorealistic
 from fanic.moderation import moderate_image
 from fanic.moderation import moderate_image_bytes
 from fanic.moderation import suggested_rating_for_nsfw
+from fanic.remote_mod_moderation import graphic_violence_manual_review_confidence
+from fanic.remote_mod_moderation import moderate_content_with_remote_mod
+from fanic.remote_mod_moderation import remote_mod_confidence_levels
+from fanic.remote_mod_moderation import suggested_rating_for_remote_mod_result
 from fanic.repository.moderation_queue import enqueue_moderation_review
 from fanic.repository.works import WorkChapterRow
 from fanic.repository.works import WorkPageRow
@@ -78,6 +83,15 @@ _BUNNY_SKIP_EXISTS_CHECK = (
     True if (_SETTINGS.media_backend.strip().lower() == "bunny" and _SETTINGS.media_bunny_skip_exists_check) else False
 )
 _LOGGER = logging.getLogger("fanic.ingest")
+
+_IMAGE_SUFFIX_TO_MIME: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".gif": "image/gif",
+}
 
 type ComicInfoValue = str | int | list[str]
 type ComicInfoMetadata = dict[str, ComicInfoValue]
@@ -808,9 +822,44 @@ def _wait_for_pending_uploads(pending_uploads: set[Future[None]]) -> None:
 def _elevate_rating(current: object, suggested: str | None) -> str:
     normalized_current = _normalize_rating(str(current if current else "Not Rated"))
     normalized_suggested = _normalize_rating(str(suggested if suggested else ""))
-    if normalized_suggested == "Explicit" and normalized_current != "Explicit":
-        return "Explicit"
+    rank = {
+        "Not Rated": 0,
+        "General Audiences": 1,
+        "Teen And Up Audiences": 2,
+        "Mature": 3,
+        "Explicit": 4,
+    }
+    current_rank = rank.get(normalized_current, 0)
+    suggested_rank = rank.get(normalized_suggested, 0)
+    if suggested_rank > current_rank:
+        return normalized_suggested
     return normalized_current
+
+
+def _remote_mod_assessment_for_image_bytes(
+    image_bytes: bytes,
+    *,
+    suffix: str,
+) -> dict[str, object]:
+    mime_type = _IMAGE_SUFFIX_TO_MIME.get(suffix.lower(), "image/jpeg")
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    image_data_url = f"data:{mime_type};base64,{image_b64}"
+    payload = moderate_content_with_remote_mod(image_url=image_data_url)
+    confidences = remote_mod_confidence_levels(payload)
+    return {
+        "suggested_rating": suggested_rating_for_remote_mod_result(payload),
+        "graphic_violence_manual_review_confidence": (graphic_violence_manual_review_confidence(payload)),
+        "graphic_violence_confidence": float(confidences.get("graphic_violence_confidence", 0.0)),
+        "payload": payload,
+    }
+
+
+def _remote_mod_assessment_for_path(image_path: Path) -> dict[str, object]:
+    image_bytes = image_path.read_bytes()
+    return _remote_mod_assessment_for_image_bytes(
+        image_bytes,
+        suffix=image_path.suffix,
+    )
 
 
 def ingest_cbz(
@@ -898,6 +947,7 @@ def ingest_cbz(
         pages: list[WorkPageRow] = []
         uploader_pages_before = count_uploaded_pages_for_user(uploader_username)
         max_nsfw_score = 0.0
+        max_remote_rating: str | None = None
         review_queue_items: list[dict[str, object]] = []
         progress: _NoopProgress | _AliveProgress = _NoopProgress()
         upload_executor: ThreadPoolExecutor | None = None
@@ -969,6 +1019,47 @@ def ingest_cbz(
                                 "moderation_payload": dict(moderation),
                             }
                         )
+                try:
+                    remote_assessment = _remote_mod_assessment_for_image_bytes(
+                        extracted,
+                        suffix=Path(member).suffix,
+                    )
+                    remote_suggested = str(
+                        remote_assessment.get("suggested_rating") if remote_assessment.get("suggested_rating") else ""
+                    ).strip()
+                    if remote_suggested:
+                        max_remote_rating = _elevate_rating(
+                            max_remote_rating if max_remote_rating else "Not Rated",
+                            remote_suggested,
+                        )
+                    remote_graphic_conf_obj = remote_assessment.get("graphic_violence_manual_review_confidence")
+                    remote_graphic_confidence = (
+                        float(remote_graphic_conf_obj) if isinstance(remote_graphic_conf_obj, (int, float)) else None
+                    )
+                    if remote_graphic_confidence is not None:
+                        payload_obj = remote_assessment.get("payload")
+                        moderation_payload = (
+                            {str(key): value for key, value in cast(dict[object, object], payload_obj).items()}
+                            if isinstance(payload_obj, dict)
+                            else {}
+                        )
+                        review_queue_items.append(
+                            {
+                                "source_member": member,
+                                "reason_type": "graphic-violence",
+                                "confidence": remote_graphic_confidence,
+                                "moderation_payload": moderation_payload,
+                            }
+                        )
+                except Exception:
+                    _LOGGER.exception(
+                        "CBZ page remote moderation rating suggestion failed",
+                        extra={
+                            "source_member": member,
+                            "page_index": index,
+                            "page_count": len(image_members),
+                        },
+                    )
                 max_nsfw_score = max(max_nsfw_score, moderation["nsfw_score"])
 
                 width = None
@@ -1074,7 +1165,7 @@ def ingest_cbz(
         rating_before = _normalize_rating(str(metadata.get("rating", "Not Rated")))
         rating_after = _elevate_rating(
             metadata.get("rating", "Not Rated"),
-            suggested_rating_for_nsfw(max_nsfw_score),
+            max_remote_rating if max_remote_rating else suggested_rating_for_nsfw(max_nsfw_score),
         )
         metadata["rating"] = rating_after
 
@@ -1121,12 +1212,20 @@ def ingest_cbz(
             min_threshold=(
                 _SETTINGS.style_min_confidence_photorealistic
                 if str(review_item.get("reason_type", "")) == "photorealistic"
-                else get_explicit_threshold()
+                else (
+                    _SETTINGS.graphic_violence_min_threshold
+                    if str(review_item.get("reason_type", "")) == "graphic-violence"
+                    else get_explicit_threshold()
+                )
             ),
             max_threshold=(
                 get_style_max_confidence_photorealistic()
                 if str(review_item.get("reason_type", "")) == "photorealistic"
-                else get_explicit_max_threshold()
+                else (
+                    _SETTINGS.graphic_violence_max_threshold
+                    if str(review_item.get("reason_type", "")) == "graphic-violence"
+                    else get_explicit_max_threshold()
+                )
             ),
             moderation_payload={
                 str(key): value
@@ -1321,7 +1420,30 @@ def ingest_editor_page(
     moderation = moderate_image(str(image_path))
     if not moderation["allow"]:
         raise ModerationBlockedError(dict(moderation))
-    auto_rating = suggested_rating_for_nsfw(moderation["nsfw_score"])
+    auto_rating: str | None = None
+    remote_graphic_review_confidence: float | None = None
+    remote_graphic_confidence = 0.0
+    remote_payload: dict[str, object] = {}
+    try:
+        remote_assessment = _remote_mod_assessment_for_path(image_path)
+        auto_rating = str(
+            remote_assessment.get("suggested_rating") if remote_assessment.get("suggested_rating") else ""
+        ).strip()
+        remote_graphic_review_obj = remote_assessment.get("graphic_violence_manual_review_confidence")
+        if isinstance(remote_graphic_review_obj, (int, float)):
+            remote_graphic_review_confidence = float(remote_graphic_review_obj)
+        remote_graphic_conf_obj = remote_assessment.get("graphic_violence_confidence", 0.0)
+        if isinstance(remote_graphic_conf_obj, (int, float)):
+            remote_graphic_confidence = float(remote_graphic_conf_obj)
+        payload_obj = remote_assessment.get("payload")
+        if isinstance(payload_obj, dict):
+            remote_payload = {str(key): value for key, value in cast(dict[object, object], payload_obj).items()}
+        else:
+            remote_payload = {}
+    except Exception:
+        _LOGGER.exception("Editor page remote moderation rating suggestion failed")
+    if not auto_rating:
+        auto_rating = suggested_rating_for_nsfw(moderation["nsfw_score"])
 
     existing_work = get_work(work_id) if work_id else None
     if work_id and not existing_work:
@@ -1503,6 +1625,7 @@ def ingest_editor_page(
         actor=uploader_username,
         details={"inserted_at": inserted_at_index, "page_count": len(all_pages)},
     )
+    manual_review_queued_count = 0
     if bool(moderation.get("manual_review_required", False)):
         reason_type = str(moderation.get("manual_review_reason", "")).strip()
         if reason_type:
@@ -1525,6 +1648,23 @@ def ingest_editor_page(
                 ),
                 moderation_payload={str(key): value for key, value in moderation.items()},
             )
+            manual_review_queued_count += 1
+    if remote_graphic_review_confidence is not None:
+        enqueue_moderation_review(
+            content_type="work",
+            content_id=resolved_work_id,
+            uploader_username=uploader_username,
+            source_member=f"editor-page-{inserted_at_index}",
+            reason_type="graphic-violence",
+            confidence=remote_graphic_review_confidence,
+            min_threshold=float(_SETTINGS.graphic_violence_min_threshold),
+            max_threshold=float(_SETTINGS.graphic_violence_max_threshold),
+            moderation_payload={
+                "remote_mod": remote_payload,
+                "graphic_violence_confidence": remote_graphic_confidence,
+            },
+        )
+        manual_review_queued_count += 1
 
     return {
         "work_id": resolved_work_id,
@@ -1541,7 +1681,7 @@ def ingest_editor_page(
         "rating_before": rating_before,
         "rating_after": chosen_rating,
         "rating_auto_elevated": chosen_rating != rating_before,
-        "manual_review_queued_count": 1 if bool(moderation.get("manual_review_required", False)) else 0,
+        "manual_review_queued_count": manual_review_queued_count,
     }
 
 
@@ -1592,6 +1732,17 @@ def editor_replace_page_image(
     moderation = moderate_image(str(image_path))
     if not moderation["allow"]:
         raise ModerationBlockedError(dict(moderation))
+
+    auto_rating: str | None = None
+    try:
+        remote_assessment = _remote_mod_assessment_for_path(image_path)
+        auto_rating = str(
+            remote_assessment.get("suggested_rating") if remote_assessment.get("suggested_rating") else ""
+        ).strip()
+    except Exception:
+        _LOGGER.exception("Editor replacement remote moderation rating suggestion failed")
+    if not auto_rating:
+        auto_rating = suggested_rating_for_nsfw(moderation["nsfw_score"])
 
     existing_work = _require_editor_owner(work_id, uploader_username)
     pages = list_work_page_rows(work_id)
@@ -1667,7 +1818,7 @@ def editor_replace_page_image(
     rating_before = _normalize_rating(str(existing_work.get("rating", "Not Rated")))
     rating_after = _elevate_rating(
         existing_work.get("rating", "Not Rated"),
-        suggested_rating_for_nsfw(moderation["nsfw_score"]),
+        auto_rating,
     )
     existing_work["rating"] = rating_after
     _reconcile_chapters_after_page_changes(work_id)

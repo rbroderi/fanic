@@ -1,10 +1,13 @@
+import base64
 import hashlib
+import logging
 import uuid
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 
 import pillow_avif  # noqa: F401 Register AVIF support with Pillow  # pyright: ignore[reportUnusedImport]
 from PIL import Image
@@ -17,6 +20,10 @@ from fanic.moderation import get_explicit_threshold
 from fanic.moderation import get_style_max_confidence_photorealistic
 from fanic.moderation import moderate_image
 from fanic.moderation import suggested_rating_for_nsfw
+from fanic.remote_mod_moderation import graphic_violence_manual_review_confidence
+from fanic.remote_mod_moderation import moderate_content_with_remote_mod
+from fanic.remote_mod_moderation import remote_mod_confidence_levels
+from fanic.remote_mod_moderation import suggested_rating_for_remote_mod_result
 from fanic.repository.fanart import create_fanart_item
 from fanic.repository.fanart import replace_fanart_item_tags
 from fanic.repository.moderation_queue import enqueue_moderation_review
@@ -34,6 +41,16 @@ _BUNNY_SKIP_EXISTS_CHECK = (
 _BUNNY_UPLOAD_WORKERS = (
     _SETTINGS.media_bunny_upload_workers if _SETTINGS.media_backend.strip().lower() == "bunny" else 1
 )
+_LOGGER = logging.getLogger("fanic.fanart")
+
+_IMAGE_SUFFIX_TO_MIME: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".gif": "image/gif",
+}
 
 
 def _render_image_bytes(image: Image.Image, *, fmt: str, quality: int) -> bytes:
@@ -94,9 +111,33 @@ def _normalize_rating(value: str) -> str:
 def _elevate_rating(current: str, suggested: str | None) -> str:
     normalized_current = _normalize_rating(current)
     normalized_suggested = _normalize_rating(suggested if suggested else "")
-    if normalized_suggested == "Explicit" and normalized_current != "Explicit":
-        return "Explicit"
+    rank = {
+        "Not Rated": 0,
+        "General Audiences": 1,
+        "Teen And Up Audiences": 2,
+        "Mature": 3,
+        "Explicit": 4,
+    }
+    current_rank = rank.get(normalized_current, 0)
+    suggested_rank = rank.get(normalized_suggested, 0)
+    if suggested_rank > current_rank:
+        return normalized_suggested
     return normalized_current
+
+
+def _remote_mod_assessment_for_path(image_path: Path) -> dict[str, object]:
+    mime_type = _IMAGE_SUFFIX_TO_MIME.get(image_path.suffix.lower(), "image/jpeg")
+    image_bytes = image_path.read_bytes()
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    image_data_url = f"data:{mime_type};base64,{image_b64}"
+    payload = moderate_content_with_remote_mod(image_url=image_data_url)
+    confidences = remote_mod_confidence_levels(payload)
+    return {
+        "suggested_rating": suggested_rating_for_remote_mod_result(payload),
+        "graphic_violence_manual_review_confidence": (graphic_violence_manual_review_confidence(payload)),
+        "graphic_violence_confidence": float(confidences.get("graphic_violence_confidence", 0.0)),
+        "payload": payload,
+    }
 
 
 def _content_addressed_rel_path(data: bytes, extension: str) -> str:
@@ -168,9 +209,34 @@ def ingest_fanart_image(
     if not moderation["allow"]:
         raise ModerationBlockedError(dict(moderation))
     rating_before = normalized_rating
+    remote_rating_suggestion: str | None = None
+    remote_graphic_review_confidence: float | None = None
+    remote_graphic_confidence = 0.0
+    remote_payload: dict[str, object] = {}
+    try:
+        remote_assessment = _remote_mod_assessment_for_path(image_path)
+        remote_rating_suggestion = str(
+            remote_assessment.get("suggested_rating") if remote_assessment.get("suggested_rating") else ""
+        ).strip()
+        remote_graphic_review_obj = remote_assessment.get("graphic_violence_manual_review_confidence")
+        if isinstance(remote_graphic_review_obj, (int, float)):
+            remote_graphic_review_confidence = float(remote_graphic_review_obj)
+        remote_graphic_conf_obj = remote_assessment.get("graphic_violence_confidence", 0.0)
+        if isinstance(remote_graphic_conf_obj, (int, float)):
+            remote_graphic_confidence = float(remote_graphic_conf_obj)
+        payload_obj = remote_assessment.get("payload")
+        if isinstance(payload_obj, dict):
+            remote_payload = {str(key): value for key, value in cast(dict[object, object], payload_obj).items()}
+        else:
+            remote_payload = {}
+    except Exception:
+        _LOGGER.exception("Remote moderation rating suggestion failed for fanart upload")
+
     normalized_rating = _elevate_rating(
         normalized_rating,
-        suggested_rating_for_nsfw(float(moderation["nsfw_score"])),
+        remote_rating_suggestion
+        if remote_rating_suggestion
+        else suggested_rating_for_nsfw(float(moderation["nsfw_score"])),
     )
 
     width: int | None = None
@@ -266,7 +332,26 @@ def ingest_fanart_image(
                 ),
                 moderation_payload={str(key): value for key, value in moderation.items()},
             )
+    if remote_graphic_review_confidence is not None:
+        enqueue_moderation_review(
+            content_type="fanart",
+            content_id=item_id,
+            uploader_username=normalized_uploader,
+            reason_type="graphic-violence",
+            confidence=remote_graphic_review_confidence,
+            min_threshold=float(_SETTINGS.graphic_violence_min_threshold),
+            max_threshold=float(_SETTINGS.graphic_violence_max_threshold),
+            moderation_payload={
+                "remote_mod": remote_payload,
+                "graphic_violence_confidence": remote_graphic_confidence,
+            },
+        )
     manual_review_reason = str(moderation.get("manual_review_reason", "")).strip()
+    if (not manual_review_reason) and remote_graphic_review_confidence is not None:
+        manual_review_reason = "graphic-violence"
+    manual_review_queued = bool(moderation.get("manual_review_required", False)) or (
+        remote_graphic_review_confidence is not None
+    )
 
     return {
         "item_id": item_id,
@@ -280,7 +365,7 @@ def ingest_fanart_image(
         "rating_before": rating_before,
         "rating_after": normalized_rating,
         "rating_auto_elevated": normalized_rating != rating_before,
-        "manual_review_queued": bool(moderation.get("manual_review_required", False)),
+        "manual_review_queued": manual_review_queued,
         "manual_review_reason": manual_review_reason,
         "explicit_min_threshold": get_explicit_threshold(),
         "explicit_max_threshold": get_explicit_max_threshold(),

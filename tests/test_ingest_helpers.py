@@ -42,6 +42,12 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     def get_explicit_threshold() -> float:
         return 0.8
 
+    def get_explicit_max_threshold() -> float:
+        return 0.95
+
+    def get_style_max_confidence_photorealistic() -> float:
+        return 0.99
+
     def moderate_image(path: str) -> dict[str, object]:
         _ = path
         return {
@@ -65,6 +71,34 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     def suggested_rating_for_nsfw(score: float) -> str | None:
         return "Explicit" if score >= 0.8 else None
 
+    def moderate_content_with_remote_mod(
+        *,
+        text: str | None = None,
+        image_url: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, object]:
+        _ = (text, image_url, model)
+        return {}
+
+    def suggested_rating_for_remote_mod_result(
+        payload: dict[str, object],
+    ) -> str | None:
+        _ = payload
+        return None
+
+    def remote_mod_confidence_levels(payload: dict[str, object]) -> dict[str, float]:
+        _ = payload
+        return {
+            "explicit_confidence": 0.0,
+            "graphic_violence_confidence": 0.0,
+        }
+
+    def graphic_violence_manual_review_confidence(
+        payload: dict[str, object],
+    ) -> float | None:
+        _ = payload
+        return None
+
     def make_chapter(*args: object, **kwargs: object) -> dict[str, object]:
         _ = (args, kwargs)
         return {"id": 1}
@@ -72,6 +106,10 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     def make_snapshot(*args: object, **kwargs: object) -> dict[str, object]:
         _ = (args, kwargs)
         return {"version_id": "v1"}
+
+    def enqueue_moderation_review(*args: object, **kwargs: object) -> None:
+        _ = (args, kwargs)
+        return None
 
     def always_true(*args: object, **kwargs: object) -> bool:
         _ = (args, kwargs)
@@ -100,9 +138,33 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     moderation_stub = ModuleType("fanic.moderation")
     setattr(moderation_stub, "get_explicit_threshold", get_explicit_threshold)
+    setattr(moderation_stub, "get_explicit_max_threshold", get_explicit_max_threshold)
+    setattr(
+        moderation_stub,
+        "get_style_max_confidence_photorealistic",
+        get_style_max_confidence_photorealistic,
+    )
     setattr(moderation_stub, "moderate_image", moderate_image)
     setattr(moderation_stub, "moderate_image_bytes", moderate_image_bytes)
     setattr(moderation_stub, "suggested_rating_for_nsfw", suggested_rating_for_nsfw)
+
+    remote_mod_stub = ModuleType("fanic.remote_mod_moderation")
+    setattr(
+        remote_mod_stub,
+        "moderate_content_with_remote_mod",
+        moderate_content_with_remote_mod,
+    )
+    setattr(remote_mod_stub, "remote_mod_confidence_levels", remote_mod_confidence_levels)
+    setattr(
+        remote_mod_stub,
+        "graphic_violence_manual_review_confidence",
+        graphic_violence_manual_review_confidence,
+    )
+    setattr(
+        remote_mod_stub,
+        "suggested_rating_for_remote_mod_result",
+        suggested_rating_for_remote_mod_result,
+    )
 
     repository_stub = ModuleType("fanic.repository")
     setattr(repository_stub, "WorkChapterRow", dict)
@@ -121,6 +183,9 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     setattr(repository_stub, "replace_work_tags", noop)
     setattr(repository_stub, "update_work_chapter", always_true)
     setattr(repository_stub, "upsert_work", noop)
+
+    moderation_queue_stub = ModuleType("fanic.repository.moderation_queue")
+    setattr(moderation_queue_stub, "enqueue_moderation_review", enqueue_moderation_review)
 
     db_stub = ModuleType("fanic.db")
     setattr(db_stub, "get_connection", get_connection_none)
@@ -157,8 +222,14 @@ def _load_ingest_with_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
     monkeypatch.setitem(sys.modules, "fanic.settings", settings_stub)
     monkeypatch.setitem(sys.modules, "fanic.moderation", moderation_stub)
+    monkeypatch.setitem(sys.modules, "fanic.remote_mod_moderation", remote_mod_stub)
     monkeypatch.setitem(sys.modules, "fanic.repository", repository_stub)
     monkeypatch.setitem(sys.modules, "fanic.repository.works", repository_stub)
+    monkeypatch.setitem(
+        sys.modules,
+        "fanic.repository.moderation_queue",
+        moderation_queue_stub,
+    )
     monkeypatch.setitem(sys.modules, "fanic.repository.shared", repository_stub)
     monkeypatch.setitem(sys.modules, "fanic.db", db_stub)
     monkeypatch.setitem(sys.modules, "fanic.utils", utils_stub)
@@ -240,6 +311,7 @@ def test_rating_normalization_and_elevation(monkeypatch: pytest.MonkeyPatch, tmp
     assert ingest._normalize_rating(" ") == "Not Rated"
 
     assert ingest._elevate_rating("General Audiences", "Explicit") == "Explicit"
+    assert ingest._elevate_rating("General Audiences", "Mature") == "Mature"
     assert ingest._elevate_rating("Explicit", "Teen And Up Audiences") == "Explicit"
 
 

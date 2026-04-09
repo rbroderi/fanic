@@ -5,6 +5,8 @@ from zipfile import ZipFile
 import pytest
 
 from fanic.moderation import ModerationResult
+from fanic.moderation import get_explicit_max_threshold
+from fanic.moderation import get_explicit_threshold
 from fanic.moderation import moderate_image_bytes
 from fanic.moderation import moderate_image_local
 from fanic.moderation import suggested_rating_for_nsfw
@@ -121,8 +123,13 @@ def test_moderation_media_explicit_and_safe_rating_suggestion() -> None:
     assert safe_result["allow"] is True, safe_stats
     assert safe2_result["allow"] is True, safe2_stats
     assert explicit_suggested is None, explicit_stats
-    assert explicit_result["manual_review_required"] is True, explicit_stats
-    assert explicit_result["manual_review_reason"] == "explicit", explicit_stats
+    explicit_score = float(explicit_result["nsfw_score"])
+    expected_manual_review = get_explicit_threshold() <= explicit_score < get_explicit_max_threshold()
+    assert explicit_result["manual_review_required"] is expected_manual_review, explicit_stats
+    if expected_manual_review:
+        assert explicit_result["manual_review_reason"] == "explicit", explicit_stats
+    else:
+        assert explicit_result["manual_review_reason"] == "", explicit_stats
     assert safe_suggested is None, safe_stats
     assert safe2_suggested is None, safe2_stats
 

@@ -53,3 +53,5 @@ tags-*
 
 fanic.db
 fanic.test.db
+remote_mod_moderation.py
+test_remote_mod_moderation.py

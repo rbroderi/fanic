@@ -730,10 +730,31 @@ def test_chapters_progress_and_delete_work_cleanup(
     work_dir.mkdir(parents=True, exist_ok=True)
     (work_dir / "placeholder.txt").write_text("x", encoding="utf-8")
 
+    class _SpyMediaService:
+        def __init__(self) -> None:
+            self.deleted_keys: list[str] = []
+
+        def comic_page_key(self, work_id: str, image_name: str) -> str:
+            return f"{work_id}/pages/{image_name}"
+
+        def comic_thumb_key(self, work_id: str, thumb_name: str) -> str:
+            return f"{work_id}/thumbs/{thumb_name}"
+
+        def delete(self, key: str) -> None:
+            self.deleted_keys.append(key)
+
+    spy_media_service = _SpyMediaService()
+    monkeypatch.setattr(repository._modules.works, "get_media_service", lambda: spy_media_service)
+
     assert repository.delete_work("work-1") is True
     assert repository.delete_work("work-1") is False
     assert cbz_path.exists() is False
     assert work_dir.exists() is False
+    assert "work-1/pages/p1.jpg" in spy_media_service.deleted_keys
+    assert "work-1/pages/p2.jpg" in spy_media_service.deleted_keys
+    assert "cbz/work-1.cbz" in spy_media_service.deleted_keys
+    assert "cbz/work-1.cbz.meta.json" in spy_media_service.deleted_keys
+    assert "work-1/downloads/work-1.cbz" in spy_media_service.deleted_keys
 
 
 def test_fanart_crud_and_lookup_helpers(

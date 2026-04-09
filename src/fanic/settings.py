@@ -161,7 +161,7 @@ class FanicSettings(BaseSettings):
     media_backend: str = "local"
     media_bunny_storage_zone: str = ""
     media_bunny_pull_zone: str = ""
-    media_bunny_storage_api_base_url: str = "https://storage.bunnycdn.com"
+    media_bunny_storage_api_base_url: str = "https://ny.storage.bunnycdn.com"
     media_bunny_api_key_ro: str = ""
     media_bunny_api_key_rw: str = ""
     media_bunny_upload_workers: int = 8
@@ -223,10 +223,14 @@ class FanicSettings(BaseSettings):
     explicit_min_threshold: float = 0.8
     explicit_max_threshold: float = 0.9
     explicit_threshold: float | None = None
+    graphic_violence_min_threshold: float = 0.8
+    graphic_violence_max_threshold: float = 0.9
     model_load_logs: bool
     moderation_sidecar_timeout_seconds: float = 180.0
     moderation_sidecar_token: str = ""
     moderation_sidecar_url: str = "unix:/run/fanic/fanic-moderation.sock"
+    remote_mod_api_key: str = ""
+    remote_mod_moderation_model: str = "omni-moderation-latest"
     nsfw_logit_scale: float
     photo_block_min_margin: float
     photoreal_min_confidence: float
@@ -373,6 +377,11 @@ class FanicSettings(BaseSettings):
             "moderation_secret",
         )
 
+    @field_validator("remote_mod_api_key", mode="before")
+    @classmethod
+    def _remote_mod_api_key_from_file(cls, value: Any) -> Any:
+        return _resolve_value_from_file(value, "FANIC_REMOTE_MOD_API_KEY_FILE", "remote_mod_key")
+
     @field_validator(
         "max_cbz_upload_bytes",
         "max_page_upload_bytes",
@@ -392,6 +401,8 @@ class FanicSettings(BaseSettings):
             self.explicit_min_threshold = float(self.explicit_threshold)
         if float(self.explicit_max_threshold) < float(self.explicit_min_threshold):
             raise ValueError("explicit_max_threshold must be >= explicit_min_threshold")
+        if float(self.graphic_violence_max_threshold) < float(self.graphic_violence_min_threshold):
+            raise ValueError("graphic_violence_max_threshold must be >= graphic_violence_min_threshold")
         if float(self.style_max_confidence_photorealistic) < float(self.style_min_confidence_photorealistic):
             raise ValueError("style_max_confidence_photorealistic must be >= style_min_confidence_photorealistic")
         return self

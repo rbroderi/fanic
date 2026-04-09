@@ -231,7 +231,7 @@ def _ensure_runtime_schema(connection: sqlite3.Connection) -> None:
             content_id TEXT NOT NULL,
             uploader_username TEXT NOT NULL,
             source_member TEXT NOT NULL DEFAULT '',
-            reason_type TEXT NOT NULL CHECK (reason_type IN ('explicit', 'photorealistic')),
+            reason_type TEXT NOT NULL CHECK (reason_type IN ('explicit', 'photorealistic', 'graphic-violence')),
             confidence REAL NOT NULL,
             min_threshold REAL NOT NULL,
             max_threshold REAL NOT NULL,

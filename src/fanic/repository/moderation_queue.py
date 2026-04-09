@@ -46,8 +46,8 @@ def enqueue_moderation_review(
         raise ValueError("content_type must be 'work' or 'fanart'")
     if not normalized_content_id:
         raise ValueError("content_id must not be empty")
-    if normalized_reason not in {"explicit", "photorealistic"}:
-        raise ValueError("reason_type must be 'explicit' or 'photorealistic'")
+    if normalized_reason not in {"explicit", "photorealistic", "graphic-violence"}:
+        raise ValueError("reason_type must be 'explicit', 'photorealistic', or 'graphic-violence'")
 
     moderation_json = json.dumps(moderation_payload, ensure_ascii=True, sort_keys=True)
 

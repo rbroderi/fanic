@@ -32,7 +32,8 @@ def _always_true(*_args: object, **_kwargs: object) -> bool:
     return True
 
 
-def _queue_items_stub(_status: str, _limit: int) -> list[dict[str, object]]:
+def _queue_items_stub(*, status: str = "pending", limit: int = 200) -> list[dict[str, object]]:
+    _ = (status, limit)
     return [
         {
             "id": 7,
