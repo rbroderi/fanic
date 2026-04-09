@@ -29,16 +29,11 @@ def test_initialize_moderation_models_forces_initialization(
     init_calls: list[str] = []
 
     class FakeModule:
-        def initialize_nsfw_model(self) -> bool:
-            init_calls.append("nsfw")
-            return True
-
         def initialize_style_model(self) -> bool:
             init_calls.append("style")
             return True
 
     fake = FakeModule()
-    monkeypatch.setattr(moderation, "_get_nsfw_detector_module", lambda: fake)
     monkeypatch.setattr(moderation, "_get_style_classifier_module", lambda: fake)
 
     result = moderation.initialize_moderation_models(force=True)

@@ -67,9 +67,10 @@ def _cbz_page_scores(cbz_path: Path) -> list[tuple[str, float]]:
         ("safe2.webp", True, "comic"),
         ("safe3.avif", True, "comic"),
         ("safe-marvel.jpg", True, "comic"),
+        ("graphic_violence.avif", True, "illustrated"),
         ("explicit.jpg", True, "comic"),
         ("photorealistic.jpg", False, "photorealistic"),
-        ("photorealistic-marvel.avif", True, "photorealistic"),
+        ("photorealistic-marvel.avif", True, "photorealistic"),  # manual review
     ],
 )
 def test_moderation_media_expected_outcomes(
@@ -92,11 +93,13 @@ def test_moderation_media_expected_outcomes(
         assert isinstance(result["nsfw_score"], float), stats_text
         assert result["reasons"] == [], stats_text
     elif expected_allow and expected_style == "photorealistic":
+        assert result["allow"] is True, stats_text
         assert result["manual_review_required"] is True, stats_text
         assert result["manual_review_reason"] == "photorealistic", stats_text
         assert float(result["manual_review_confidence"]) > 0.0, stats_text
     else:
         assert result["nsfw_score"] == 0.0, stats_text
+        assert result["manual_review_required"] is False, stats_text
         assert any("photorealistic image" in reason for reason in result["reasons"]), stats_text
 
 
@@ -141,6 +144,7 @@ def test_moderation_media_explicit_and_safe_rating_suggestion() -> None:
         "safe2.webp",
         "safe3.avif",
         "safe-marvel.jpg",
+        "graphic_violence.avif",
         "explicit.jpg",
     ],
 )
