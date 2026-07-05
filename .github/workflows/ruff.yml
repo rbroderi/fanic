@@ -24,13 +24,13 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Run ruff format
-        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89
         env:
           RUFF_OUTPUT_FORMAT: ""
         with:
           args: format --exclude typings src tests
 
       - name: Run ruff check
-        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89
         with:
           args: check --exclude typings src tests
